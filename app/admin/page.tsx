@@ -33,10 +33,12 @@ export default async function AdminPage() {
         .eq("status", "pending")
         .order("created_at", { ascending: false });
 
-    const { data: customers = [] } = await supabase
+    const { data: customersData } = await supabase
         .from("customers")
         .select("*")
         .order("created_at", { ascending: false });
+
+    const customers = customersData ?? [];
 
     const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
 

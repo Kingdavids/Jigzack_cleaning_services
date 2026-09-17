@@ -8,6 +8,7 @@ import {
     ClipboardList,
     Clock3,
     LayoutDashboard,
+    type LucideIcon,
     MapPinned,
     Settings,
     Truck,
@@ -162,16 +163,18 @@ export default async function EmployeePage() {
                         </div>
 
                         <nav className="space-y-2">
-                            {[
-                                [LayoutDashboard, "Overview"],
-                                [ClipboardList, "My Tasks"],
-                                [Truck, "Routes"],
-                                [CalendarDays, "Schedule"],
-                                [Users, "Team"],
-                                [Settings, "Settings"],
-                            ].map(([Icon, label]) => (
+                            {(
+                                [
+                                    [LayoutDashboard, "Overview"],
+                                    [ClipboardList, "My Tasks"],
+                                    [Truck, "Routes"],
+                                    [CalendarDays, "Schedule"],
+                                    [Users, "Team"],
+                                    [Settings, "Settings"],
+                                ] as [LucideIcon, string][]
+                            ).map(([Icon, label]) => (
                                 <button
-                                    key={label as string}
+                                    key={label}
                                     className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left transition ${
                                         label === "Overview"
                                             ? "bg-orange-500/20 text-white ring-1 ring-orange-400/30"

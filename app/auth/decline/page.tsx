@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     ArrowLeft,
@@ -14,6 +15,14 @@ import {
 } from "lucide-react";
 
 export default function DeclinePage() {
+    return (
+        <Suspense fallback={null}>
+            <DeclineContent />
+        </Suspense>
+    );
+}
+
+function DeclineContent() {
     const searchParams = useSearchParams();
     const role = searchParams.get("role") === "employee" ? "employee" : "customer";
 
