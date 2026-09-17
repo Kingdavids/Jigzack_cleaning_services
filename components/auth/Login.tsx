@@ -1,21 +1,20 @@
 'use client';
 
 import React, { useState } from "react";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import client from "@/api/client";
+import { createClient } from "@/utils/supabase/client";
+
+type AppRole = "admin" | "employee" | "customer";
+type ProfileStatus = "pending" | "approved" | "declined";
 
 export default function Login() {
     const [isLoading, setIsLoading] = useState(false);
+    const router = useRouter();
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -25,25 +24,79 @@ export default function Login() {
         const password = String(form.get("password") || "");
 
         if (!email || !password) {
-            toast.error("Please fill all fields");
+            toast.error("Please fill in all fields");
             return;
         }
+
+        const supabase = createClient();
 
         try {
             setIsLoading(true);
 
-            const { data, error } = await client.auth.signInWithPassword({
+            const { error: loginError } = await supabase.auth.signInWithPassword({
                 email,
                 password,
             });
 
-            if (error) {
-                toast.error(error.message || "Unable to login, please try again");
+            if (loginError) {
+                toast.error(loginError.message || "Unable to login, please try again");
                 return;
             }
 
-            toast.success("Logged in successfully!");
-            return data;
+            const {
+                data: { user },
+                error: userError,
+            } = await supabase.auth.getUser();
+
+            if (userError || !user) {
+                toast.error("Login succeeded, but user details could not be loaded.");
+                return;
+            }
+
+            const { data: profile, error: profileError } = await supabase
+                .from("profiles")
+                .select("role, status, full_name")
+                .eq("id", user.id)
+                .single();
+
+            if (profileError || !profile) {
+                toast.error("Profile not found for this account.");
+                return;
+            }
+
+            const role = profile.role as AppRole;
+            const status = profile.status as ProfileStatus;
+
+            if (status === "pending") {
+                toast.message("Your account is still pending approval.");
+                router.refresh();
+                router.push("/auth/pending");
+                return;
+            }
+
+            if (status === "declined") {
+                toast.error("Your account access has been declined.");
+                router.refresh();
+                router.push("/auth/decline");
+                return;
+            }
+
+            toast.success(`Welcome back${profile.full_name ? `, ${profile.full_name}` : ""}!`);
+
+            if (role === "admin") {
+                router.refresh();
+                router.push("/admin");
+                return;
+            }
+
+            if (role === "employee") {
+                router.refresh();
+                router.push("/employee");
+                return;
+            }
+
+            router.refresh();
+            router.push("/customer");
         } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
@@ -52,22 +105,30 @@ export default function Login() {
     };
 
     return (
-        <Card className="border-white/10 bg-white/5 backdrop-blur-xl shadow-xl rounded-3xl overflow-hidden">
-            {/* subtle top glow */}
-            <div className="h-1 w-full bg-gradient-to-r from-amber-300 via-orange-500 to-amber-200" />
-
-            <CardHeader className="pb-2">
-                <CardTitle className="text-2xl font-black tracking-tight text-white">
+        <>
+            <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-2xl md:text-3xl font-black tracking-tight text-white">
                     Welcome back
                 </CardTitle>
-                <CardDescription className="text-white/70">
-                    Enter your email and password to log in.
+                <CardDescription className="text-white/65">
+                    Sign in to continue to your dashboard.
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="pt-4">
+            <CardContent className="px-0 pb-0">
                 <form onSubmit={handleLogin} className="space-y-5">
-                    {/* Email */}
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
+                            Access
+                        </p>
+                        <p className="mt-1 text-sm text-white/70">
+                            Your account will be routed automatically as{" "}
+                            <span className="font-semibold text-amber-300">Admin</span>,{" "}
+                            <span className="font-semibold text-amber-300">Employee</span>, or{" "}
+                            <span className="font-semibold text-amber-300">Customer</span> based on your saved profile.
+                        </p>
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="email" className="text-white/80">
                             Email
@@ -78,20 +139,16 @@ export default function Login() {
                             type="email"
                             placeholder="example@gmail.com"
                             autoComplete="email"
-                            className="bg-white/10 border-white/10 text-white placeholder:text-white/40
-                         focus-visible:ring-amber-300/70 focus-visible:ring-offset-0
-                         rounded-xl h-11"
+                            className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
                     </div>
 
-                    {/* Password */}
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <Label htmlFor="password" className="text-white/80">
                                 Password
                             </Label>
 
-                            {/* Optional: wire this later */}
                             <button
                                 type="button"
                                 className="text-xs font-semibold text-amber-300 hover:text-amber-200 transition"
@@ -106,30 +163,23 @@ export default function Login() {
                             name="password"
                             type="password"
                             autoComplete="current-password"
-                            className="bg-white/10 border-white/10 text-white placeholder:text-white/40
-                         focus-visible:ring-amber-300/70 focus-visible:ring-offset-0
-                         rounded-xl h-11"
+                            className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
                     </div>
 
-                    {/* Submit */}
                     <Button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full h-11 rounded-xl font-bold text-black
-                       bg-amber-400 hover:bg-amber-300
-                       disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="h-12 w-full rounded-xl bg-amber-400 font-bold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                         {isLoading ? "Logging in..." : "Login"}
                     </Button>
 
-                    {/* Small helper */}
-                    <p className="text-center text-xs text-white/60">
-                        Use a valid account to continue. Need access?{" "}
-                        <span className="text-amber-300 font-semibold">Sign up</span>.
+                    <p className="text-center text-xs text-white/55 leading-5">
+                        Use the email and password linked to your approved account.
                     </p>
                 </form>
             </CardContent>
-        </Card>
+        </>
     );
 }

@@ -1,55 +1,72 @@
 'use client';
 
 import React, { useState } from "react";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
-} from "@/components/ui/card";
+import { useRouter } from "next/navigation";
+import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import client from "@/api/client";
+import { createClient } from "@/utils/supabase/client";
+
+type SignupRole = "customer" | "employee";
 
 export default function Signup() {
-    const [email, setEmail] = useState("");
-    const [phone, setPhone] = useState("");
-    const [password, setPassword] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [showPassword, setShowPassword] = useState(false);
+    const router = useRouter();
 
     const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
-        const cleanEmail = email.trim();
-        const cleanPhone = phone.trim();
+        const form = new FormData(e.currentTarget);
+        const fullName = String(form.get("fullName") || "").trim();
+        const email = String(form.get("email") || "").trim();
+        const password = String(form.get("password") || "");
+        const role = String(form.get("role") || "customer") as SignupRole;
 
-        if (!cleanEmail || !cleanPhone || !password) {
-            toast.error("Please fill all fields");
+        const supabase = createClient();
+
+        if (!fullName || !email || !password || !role) {
+            toast.error("Please fill in all fields");
+            return;
+        }
+
+        if (password.length < 6) {
+            toast.error("Password must be at least 6 characters");
             return;
         }
 
         try {
             setIsLoading(true);
 
-            const { data, error } = await client.auth.signUp({
-                email: cleanEmail,
+            const origin =
+                typeof window !== "undefined" ? window.location.origin : "";
+
+            const { error: signUpError } = await supabase.auth.signUp({
+                email,
                 password,
                 options: {
-                    data: { phone: cleanPhone },
+                    emailRedirectTo: `${origin}/auth/callback?next=/auth/complete-signup`,
+                    data: {
+                        full_name: fullName,
+                        role,
+                    },
                 },
             });
 
-            if (error) {
-                toast.error(error.message || "Unable to create account, please try again");
+            if (signUpError) {
+                toast.error(signUpError.message || "Unable to create account");
                 return;
             }
 
-            toast.success("Account created successfully!");
-            return data;
+            toast.success("Account created successfully. Please verify your email to continue.");
+
+            if (role === "customer") {
+                router.push("/auth/customer-setup");
+                return;
+            }
+
+            router.push("/auth/pending?role=employee");
         } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
@@ -58,110 +75,90 @@ export default function Signup() {
     };
 
     return (
-        <Card className="border-white/10 bg-white/5 backdrop-blur-xl shadow-xl rounded-3xl overflow-hidden">
-            {/* subtle top glow */}
-            <div className="h-1 w-full bg-gradient-to-r from-amber-300 via-orange-500 to-amber-200" />
-
-            <CardHeader className="pb-2">
-                <CardTitle className="text-2xl font-black tracking-tight text-white">
-                    Create your account
+        <>
+            <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-2xl md:text-3xl font-black tracking-tight text-white">
+                    Create account
                 </CardTitle>
-                <CardDescription className="text-white/70">
-                    Get started in a minute — simple, secure, reliable.
+                <CardDescription className="text-white/65">
+                    Register as a customer or employee.
                 </CardDescription>
             </CardHeader>
 
-            <CardContent className="pt-4">
+            <CardContent className="px-0 pb-0">
                 <form onSubmit={handleSignup} className="space-y-5">
-                    {/* Email */}
+                    <div className="space-y-2">
+                        <Label htmlFor="fullName" className="text-white/80">
+                            Full name
+                        </Label>
+                        <Input
+                            id="fullName"
+                            name="fullName"
+                            type="text"
+                            placeholder="Your full name"
+                            className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
+                        />
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="email" className="text-white/80">
                             Email
                         </Label>
                         <Input
                             id="email"
+                            name="email"
                             type="email"
                             placeholder="example@gmail.com"
                             autoComplete="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            className="bg-white/10 border-white/10 text-white placeholder:text-white/40
-                         focus-visible:ring-amber-300/70 focus-visible:ring-offset-0
-                         rounded-xl h-11"
+                            className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
                     </div>
 
-                    {/* Phone */}
                     <div className="space-y-2">
-                        <Label htmlFor="phone" className="text-white/80">
-                            Phone Number
+                        <Label htmlFor="password" className="text-white/80">
+                            Password
                         </Label>
                         <Input
-                            id="phone"
-                            type="tel"
-                            inputMode="tel"
-                            placeholder="08012345678"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="bg-white/10 border-white/10 text-white placeholder:text-white/40
-                         focus-visible:ring-amber-300/70 focus-visible:ring-offset-0
-                         rounded-xl h-11"
-                        />
-                        <p className="text-xs text-white/55">
-                            We’ll only use this for account/security updates.
-                        </p>
-                    </div>
-
-                    {/* Password */}
-                    <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="password" className="text-white/80">
-                                Password
-                            </Label>
-
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword((s) => !s)}
-                                className="text-xs font-semibold text-amber-300 hover:text-amber-200 transition"
-                            >
-                                {showPassword ? "Hide" : "Show"}
-                            </button>
-                        </div>
-
-                        <Input
                             id="password"
-                            type={showPassword ? "text" : "password"}
+                            name="password"
+                            type="password"
                             autoComplete="new-password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="bg-white/10 border-white/10 text-white placeholder:text-white/40
-                         focus-visible:ring-amber-300/70 focus-visible:ring-offset-0
-                         rounded-xl h-11"
+                            className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
-
-                        <p className="text-xs text-white/55">
-                            Use at least 8 characters for a stronger password.
-                        </p>
                     </div>
 
-                    {/* Submit */}
+                    <div className="space-y-2">
+                        <Label htmlFor="role" className="text-white/80">
+                            Account type
+                        </Label>
+                        <select
+                            id="role"
+                            name="role"
+                            defaultValue="customer"
+                            className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-3 text-white outline-none"
+                        >
+                            <option value="customer" className="bg-slate-900">
+                                Customer
+                            </option>
+                            <option value="employee" className="bg-slate-900">
+                                Employee
+                            </option>
+                        </select>
+                    </div>
+
                     <Button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full h-11 rounded-xl font-bold text-black
-                       bg-amber-400 hover:bg-amber-300
-                       disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="h-12 w-full rounded-xl bg-amber-400 font-bold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-70"
                     >
                         {isLoading ? "Creating account..." : "Create account"}
                     </Button>
 
-                    <p className="text-center text-xs text-white/60">
-                        By creating an account, you agree to our{" "}
-                        <span className="text-amber-300 font-semibold">Terms</span> &{" "}
-                        <span className="text-amber-300 font-semibold">Privacy Policy</span>.
+                    <p className="text-center text-xs text-white/55 leading-5">
+                        New accounts require email verification and admin approval before dashboard access.
                     </p>
                 </form>
             </CardContent>
-        </Card>
+        </>
     );
 }

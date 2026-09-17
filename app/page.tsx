@@ -3,6 +3,7 @@
 import useAuth from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import About from "@/components/About";
+import Navbar from "@/components/Navbar";
 
 export default function Home() {
     const { user, loading } = useAuth();
@@ -15,6 +16,8 @@ export default function Home() {
 
     return (
         <div className="min-h-screen bg-slate-950">
+            <Navbar />
+            <main className="pt-28">
             {/* HOME HERO – FULL WIDTH */}
             <section id="home" className="relative min-h-screen w-full overflow-hidden scroll-mt-28">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-500" />
@@ -379,7 +382,7 @@ export default function Home() {
                     </div>
                 </div>
             </section>
-
+    </main>
         </div>
     );
 }

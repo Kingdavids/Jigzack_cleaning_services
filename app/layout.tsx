@@ -1,22 +1,18 @@
 'use client'
 import "./globals.css";
 
-import {AuthProvider} from "@/components/context/AuthProvider";
-import { Toaster} from "sonner";
-import Navbar from "@/components/Navbar";
+import { AuthProvider } from "@/components/context/AuthProvider";
+import { Toaster } from "sonner";
 
-
-export default function RootLayout({children}) {
-
-  return (
-    <html lang="en">
-      <body>
-      <Navbar />
-      <div className="pt-28">
-      <AuthProvider>{children}</AuthProvider>
-      <Toaster />
-      </div>
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }) {
+    return (
+        <html lang="en">
+        <body className="bg-slate-950 text-white">
+        <AuthProvider>
+            {children}
+            <Toaster />
+        </AuthProvider>
+        </body>
+        </html>
+    );
 }
