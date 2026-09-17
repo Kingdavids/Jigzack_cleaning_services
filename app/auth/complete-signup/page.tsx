@@ -47,7 +47,7 @@ export default async function CompleteSignupPage() {
     }
 
     if (role === "employee") {
-        redirect("/auth/pending?role=employee");
+        redirect("/auth/employee-setup");
     }
 
     redirect("/auth/pending");

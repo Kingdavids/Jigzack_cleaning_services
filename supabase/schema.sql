@@ -119,6 +119,36 @@ create policy "customers_all_admin" on public.customers
     for all using (public.is_admin()) with check (public.is_admin());
 
 -- ============================================================
+-- employees
+-- Contact/verification profile for an employee-role user,
+-- submitted via /auth/employee-setup before admin approval.
+-- ============================================================
+create table public.employees (
+    id uuid primary key default gen_random_uuid(),
+    profile_id uuid references public.profiles (id) on delete set null,
+    full_name text not null,
+    phone text,
+    address text,
+    lga text,
+    state text,
+    created_at timestamptz not null default now()
+);
+
+create unique index employees_profile_id_key on public.employees (profile_id);
+
+alter table public.employees enable row level security;
+
+create policy "employees_select_own" on public.employees
+    for select using (auth.uid() = profile_id);
+
+-- The employee-setup form inserts its own row right after signup.
+create policy "employees_insert_own" on public.employees
+    for insert with check (auth.uid() = profile_id);
+
+create policy "employees_all_admin" on public.employees
+    for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
 -- tasks
 -- Service/pickup work orders. customer_id / employee_id point
 -- at profiles.id (not customers.id) — matches the app's queries.

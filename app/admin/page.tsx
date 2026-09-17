@@ -87,6 +87,19 @@ export default async function AdminPage() {
             .map((c) => [c.profile_id as string, c])
     );
 
+    const { data: employeesData } = await supabase
+        .from("employees")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    const employees = employeesData ?? [];
+
+    const employeeDetailsByProfileId = Object.fromEntries(
+        employees
+            .filter((e) => e.profile_id)
+            .map((e) => [e.profile_id as string, e])
+    );
+
     const { data: unpaidPaymentsData } = await supabase
         .from("payments")
         .select("amount, status")
@@ -185,6 +198,7 @@ export default async function AdminPage() {
                     <ApprovalsList
                         users={pendingUsers ?? []}
                         customerDetailsByProfileId={customerDetailsByProfileId}
+                        employeeDetailsByProfileId={employeeDetailsByProfileId}
                     />
                 </SectionCard>
 

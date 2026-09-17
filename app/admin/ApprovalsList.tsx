@@ -26,12 +26,22 @@ interface CustomerDetails {
     special_notes: string | null;
 }
 
+interface EmployeeDetails {
+    full_name: string;
+    phone: string | null;
+    address: string | null;
+    lga: string | null;
+    state: string | null;
+}
+
 export default function ApprovalsList({
                                           users,
                                           customerDetailsByProfileId = {},
+                                          employeeDetailsByProfileId = {},
                                       }: {
     users: PendingUser[];
     customerDetailsByProfileId?: Record<string, CustomerDetails>;
+    employeeDetailsByProfileId?: Record<string, EmployeeDetails>;
 }) {
     const supabase = createClient();
     const router = useRouter();
@@ -61,6 +71,11 @@ export default function ApprovalsList({
                 const details =
                     user.role === "customer"
                         ? customerDetailsByProfileId[user.id]
+                        : undefined;
+
+                const employeeDetails =
+                    user.role === "employee"
+                        ? employeeDetailsByProfileId[user.id]
                         : undefined;
 
                 return (
@@ -146,6 +161,36 @@ export default function ApprovalsList({
                                 ) : (
                                     <p className="text-sm text-amber-300/80">
                                         This customer hasn&apos;t submitted their property setup form
+                                        yet — no details to review.
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
+                        {user.role === "employee" && (
+                            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                                {employeeDetails ? (
+                                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                                        <div>
+                                            <dt className="text-white/40">Phone</dt>
+                                            <dd>{employeeDetails.phone || "Not provided"}</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-white/40">LGA / State</dt>
+                                            <dd>
+                                                {[employeeDetails.lga, employeeDetails.state]
+                                                    .filter(Boolean)
+                                                    .join(", ") || "Not provided"}
+                                            </dd>
+                                        </div>
+                                        <div className="sm:col-span-2">
+                                            <dt className="text-white/40">Address</dt>
+                                            <dd>{employeeDetails.address || "Not provided"}</dd>
+                                        </div>
+                                    </dl>
+                                ) : (
+                                    <p className="text-sm text-amber-300/80">
+                                        This employee hasn&apos;t submitted their verification details
                                         yet — no details to review.
                                     </p>
                                 )}
