@@ -61,12 +61,10 @@ export default function Signup() {
 
             toast.success("Account created successfully. Please verify your email to continue.");
 
-            if (role === "customer") {
-                router.push("/auth/customer-setup");
-                return;
-            }
-
-            router.push("/auth/pending?role=employee");
+            // Customer property setup requires an active session, which only
+            // exists after the confirmation link is clicked — complete-signup
+            // routes customers to /auth/customer-setup once that's true.
+            router.push(`/auth/pending?role=${role}`);
         } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
