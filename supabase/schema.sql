@@ -210,6 +210,30 @@ create policy "payments_all_admin" on public.payments
     for all using (public.is_admin()) with check (public.is_admin());
 
 -- ============================================================
+-- messages
+-- Admin-to-user messages, shown on the admin dashboard and
+-- (eventually) on the recipient's own dashboard.
+-- ============================================================
+create table public.messages (
+    id uuid primary key default gen_random_uuid(),
+    from_profile_id uuid references public.profiles (id) on delete set null,
+    to_profile_id uuid references public.profiles (id) on delete cascade,
+    subject text not null,
+    body text not null,
+    created_at timestamptz not null default now()
+);
+
+alter table public.messages enable row level security;
+
+create policy "messages_select_own" on public.messages
+    for select using (auth.uid() = from_profile_id or auth.uid() = to_profile_id);
+
+-- Only admin has a compose UI today; broaden this if customers/
+-- employees ever get one.
+create policy "messages_all_admin" on public.messages
+    for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
 -- storage: task-photos bucket
 -- Public read (the UI renders image_url directly in <img>),
 -- employees can only upload into their own "{uid}/..." folder,

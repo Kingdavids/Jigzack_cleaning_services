@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { redirect } from "next/navigation";
+import PrintButton from "@/components/dashboard/PrintButton";
 
 function naira(value: number) {
     return `₦${value.toLocaleString()}`;
@@ -144,12 +145,7 @@ export default async function CustomerInvoicePage({
                 </div>
 
                 <div className="mt-10 flex justify-end">
-                    <button
-                        onClick={() => window.print()}
-                        className="rounded-xl bg-black px-5 py-3 text-white print:hidden"
-                    >
-                        Download / Print Invoice
-                    </button>
+                    <PrintButton />
                 </div>
             </div>
         </div>
