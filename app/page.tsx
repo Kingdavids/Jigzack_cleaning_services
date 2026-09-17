@@ -25,7 +25,7 @@ export default function Home() {
                 <div
                     className="absolute inset-0 opacity-40 mix-blend-overlay"
                     style={{
-                        backgroundImage: "url('/images/jigzack-hero.jpg')",
+                        backgroundImage: "url('/images/fleet-truck-street.jpg')",
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                     }}
@@ -102,7 +102,7 @@ export default function Home() {
                         <div className="group rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 hover:-translate-y-1 hover:shadow-[0_25px_60px_-30px_rgba(245,158,11,0.45)] animate-riseIn [animation-delay:120ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
-                                    src="/images/commercial-waste.jpg"
+                                    src="/images/fleet-truck-front.jpg"
                                     alt="Commercial waste disposal"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"
