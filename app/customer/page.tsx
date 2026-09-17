@@ -7,6 +7,16 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import { sendMessageToAdmin } from "@/lib/messaging-actions";
+
+type MessageRow = {
+    id: string;
+    subject: string;
+    body: string;
+    created_at: string;
+    from_profile: { full_name: string | null } | null;
+    to_profile: { full_name: string | null } | null;
+};
 
 function formatDate(value: string | null | undefined) {
     if (!value) return "Not available";
@@ -58,6 +68,15 @@ export default async function CustomerPage() {
         .eq("customer_id", profile.id)
         .order("created_at", { ascending: false });
 
+    const { data: messagesData } = await supabase
+        .from("messages")
+        .select(
+            "id, subject, body, created_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+        )
+        .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
     if (pickupsError) console.error("Pickups error:", pickupsError.message);
     if (invoicesError) console.error("Invoices error:", invoicesError.message);
     if (uploadsError) console.error("Uploads error:", uploadsError.message);
@@ -65,6 +84,7 @@ export default async function CustomerPage() {
     const pickups = pickupsData ?? [];
     const invoices = invoicesData ?? [];
     const uploads = uploadsData ?? [];
+    const messages = (messagesData ?? []) as unknown as MessageRow[];
 
     const now = new Date();
 
@@ -212,6 +232,60 @@ export default async function CustomerPage() {
                         ))}
                     </div>
                 )}
+            </SectionCard>
+
+            <SectionCard title="Messages" description="Contact the Jigzack team">
+                <div className="space-y-4">
+                    {messages.length === 0 ? (
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                            No messages yet.
+                        </div>
+                    ) : (
+                        messages.map((message) => (
+                            <div
+                                key={message.id}
+                                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+                            >
+                                <p className="font-bold">{message.subject}</p>
+                                <p className="text-sm text-white/50 mt-1">
+                                    {message.from_profile?.full_name ?? "You"} →{" "}
+                                    {message.to_profile?.full_name ?? "Admin"}
+                                </p>
+                                <p className="text-sm text-white/70 mt-3">{message.body}</p>
+                            </div>
+                        ))
+                    )}
+
+                    <form
+                        action={sendMessageToAdmin}
+                        className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-5"
+                    >
+                        <p className="text-xs uppercase tracking-[0.2em] text-white/45">
+                            Send a message to Admin
+                        </p>
+
+                        <input
+                            name="subject"
+                            placeholder="Subject"
+                            required
+                            className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
+                        />
+
+                        <textarea
+                            name="body"
+                            placeholder="Message"
+                            required
+                            className="min-h-[90px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+                        />
+
+                        <button
+                            type="submit"
+                            className="w-full rounded-2xl bg-amber-400 px-4 py-2.5 font-bold text-black transition hover:bg-amber-300"
+                        >
+                            Send Message
+                        </button>
+                    </form>
+                </div>
             </SectionCard>
         </DashboardShell>
     );

@@ -20,6 +20,7 @@ import { LogOut  } from "lucide-react";
 import { createClient as createBrowserClient } from "@/utils/supabase/client";
 import LogoutButton from "@/components/dashboard/LogoutButton";
 import { endTask, startTask, uploadTaskPhoto } from "@/app/employee/actions";
+import { sendMessageToAdmin } from "@/lib/messaging-actions";
 
 type TaskRow = {
     id: string;
@@ -40,6 +41,15 @@ type UploadRow = {
     image_url: string | null;
     task_title?: string | null;
     created_at?: string | null;
+};
+
+type MessageRow = {
+    id: string;
+    subject: string;
+    body: string;
+    created_at: string;
+    from_profile: { full_name: string | null } | null;
+    to_profile: { full_name: string | null } | null;
 };
 
 function statusVariant(status: string) {
@@ -123,6 +133,17 @@ export default async function EmployeePage() {
     }
 
     const uploads: UploadRow[] = uploadData ?? [];
+
+    const { data: messagesData } = await supabase
+        .from("messages")
+        .select(
+            "id, subject, body, created_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+        )
+        .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+    const messages = (messagesData ?? []) as unknown as MessageRow[];
 
     const completed = tasks.filter(
         (t) => (t.status ?? "").toLowerCase() === "completed"
@@ -545,6 +566,63 @@ export default async function EmployeePage() {
                                                 </div>
                                             ))
                                         )}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-[28px] border border-white/10 bg-white/5 text-white shadow-2xl backdrop-blur-xl">
+                                    <div className="border-b border-white/10 p-6">
+                                        <h3 className="text-xl font-semibold">Messages</h3>
+                                    </div>
+                                    <div className="space-y-4 p-6">
+                                        {messages.length === 0 ? (
+                                            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
+                                                No messages yet.
+                                            </div>
+                                        ) : (
+                                            messages.map((message) => (
+                                                <div
+                                                    key={message.id}
+                                                    className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                                                >
+                                                    <p className="font-bold">{message.subject}</p>
+                                                    <p className="text-sm text-white/50 mt-1">
+                                                        {message.from_profile?.full_name ?? "You"} →{" "}
+                                                        {message.to_profile?.full_name ?? "Admin"}
+                                                    </p>
+                                                    <p className="text-sm text-white/70 mt-3">{message.body}</p>
+                                                </div>
+                                            ))
+                                        )}
+
+                                        <form
+                                            action={sendMessageToAdmin}
+                                            className="space-y-3 rounded-2xl border border-white/10 bg-black/20 p-4"
+                                        >
+                                            <p className="text-xs uppercase tracking-[0.15em] text-white/45">
+                                                Send a message to Admin
+                                            </p>
+
+                                            <input
+                                                name="subject"
+                                                placeholder="Subject"
+                                                required
+                                                className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
+                                            />
+
+                                            <textarea
+                                                name="body"
+                                                placeholder="Message"
+                                                required
+                                                className="min-h-[80px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+                                            />
+
+                                            <button
+                                                type="submit"
+                                                className="w-full rounded-2xl bg-orange-500 px-4 py-2.5 font-bold text-white transition hover:bg-orange-400"
+                                            >
+                                                Send Message
+                                            </button>
+                                        </form>
                                     </div>
                                 </div>
                             </div>

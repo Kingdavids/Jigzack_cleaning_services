@@ -228,10 +228,49 @@ alter table public.messages enable row level security;
 create policy "messages_select_own" on public.messages
     for select using (auth.uid() = from_profile_id or auth.uid() = to_profile_id);
 
--- Only admin has a compose UI today; broaden this if customers/
--- employees ever get one.
 create policy "messages_all_admin" on public.messages
     for all using (public.is_admin()) with check (public.is_admin());
+
+-- Lets any authenticated user look up who to message without needing
+-- read access to the admin's profiles row (which RLS otherwise blocks
+-- for non-admins).
+create or replace function public.default_admin_id()
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select id from public.profiles
+    where role = 'admin' and status = 'approved'
+    order by created_at asc
+    limit 1;
+$$;
+
+-- Bypasses RLS internally so the insert policy below can check "is the
+-- recipient an approved admin?" without needing read access to that
+-- profiles row (a plain `exists` subquery here would still be subject
+-- to the caller's own profiles RLS and silently evaluate to false).
+create or replace function public.is_approved_admin(target_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select exists (
+        select 1 from public.profiles
+        where id = target_id and role = 'admin' and status = 'approved'
+    );
+$$;
+
+-- Customers/employees can message an approved admin (support-style
+-- contact), but not each other -- the recipient must be an admin.
+create policy "messages_insert_to_admin" on public.messages
+    for insert with check (
+        auth.uid() = from_profile_id
+        and public.is_approved_admin(to_profile_id)
+    );
 
 -- ============================================================
 -- storage: task-photos bucket
