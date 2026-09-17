@@ -1,5 +1,6 @@
 'use client';
 
+import Link from "next/link";
 import useAuth from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import About from "@/components/About";
@@ -20,29 +21,47 @@ export default function Home() {
             <main className="pt-28">
             {/* HOME HERO – FULL WIDTH */}
             <section id="home" className="relative min-h-screen w-full overflow-hidden scroll-mt-28">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-500" />
-
                 <div
-                    className="absolute inset-0 opacity-40 mix-blend-overlay"
+                    className="absolute inset-0"
                     style={{
                         backgroundImage: "url('/images/fleet-truck-street.jpg')",
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                     }}
                 />
+                <div className="absolute inset-0 bg-gradient-to-b from-slate-950/85 via-slate-950/75 to-slate-950" />
 
                 <div className="relative z-10 min-h-screen w-full flex items-center justify-center px-6 md:px-10">
-                    <div className="max-w-2xl w-full bg-white/10 border border-white/25 backdrop-blur-xl rounded-3xl shadow-2xl px-6 py-10 md:px-12 md:py-12 text-center">
-                        <h1 className="text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white drop-shadow-xl mb-4 transition-transform duration-500 ease-out hover:scale-105">
+                    <div className="max-w-2xl w-full text-center">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-amber-300">
+                            LAWMA Approved
+                        </span>
+
+                        <h1 className="mt-6 text-4xl md:text-5xl lg:text-6xl font-black tracking-tight text-white">
                             Jigzack Cleaning Services<span className="text-amber-300">.</span>
                         </h1>
 
-                        <p className="text-lg md:text-xl text-orange-50/95 font-medium mb-6">
+                        <p className="mt-4 text-lg md:text-xl text-white/80 font-medium">
                             Smart Waste Solutions for a Cleaner, Greener Tomorrow.
                         </p>
 
-                        <div className="text-base md:text-lg text-orange-50/90 leading-relaxed space-y-4 max-w-xl mx-auto">
+                        <div className="mt-4 text-base md:text-lg text-white/60 leading-relaxed max-w-xl mx-auto">
                             <About />
+                        </div>
+
+                        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+                            <Link
+                                href="/auth"
+                                className="rounded-xl bg-amber-400 px-6 py-3 font-bold text-black transition hover:bg-amber-300"
+                            >
+                                Get Started
+                            </Link>
+                            <Link
+                                href="/#services"
+                                className="rounded-xl border border-white/15 bg-white/5 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                            >
+                                Our Services
+                            </Link>
                         </div>
                     </div>
                 </div>
