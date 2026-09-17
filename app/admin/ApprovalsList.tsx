@@ -81,7 +81,7 @@ export default function ApprovalsList({
                 return (
                     <div
                         key={user.id}
-                        className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl"
+                        className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
                     >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                             <div>

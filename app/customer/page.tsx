@@ -128,13 +128,13 @@ export default async function CustomerPage() {
             </div>
 
             <div className="grid gap-6 2xl:grid-cols-2">
-                <SectionCard title="Upcoming Pickup" description="Your next scheduled service">
+                <SectionCard id="tasks" title="Upcoming Pickup" description="Your next scheduled service">
                     {!nextPickup ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                             No upcoming pickup scheduled.
                         </div>
                     ) : (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5">
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                             <div className="flex items-start justify-between gap-4">
                                 <div>
                                     <p className="font-bold text-lg">{nextPickup.title ?? "Scheduled Pickup"}</p>
@@ -156,7 +156,7 @@ export default async function CustomerPage() {
 
                 <SectionCard title="Service Photos" description="Before and after task uploads">
                     {uploads.length === 0 ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                             No service photos uploaded yet.
                         </div>
                     ) : (
@@ -164,7 +164,7 @@ export default async function CustomerPage() {
                             {uploads.slice(0, 6).map((upload) => (
                                 <div
                                     key={upload.id}
-                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow"
+                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow"
                                 >
                                     {upload.image_url ? (
                                         <img
@@ -193,9 +193,9 @@ export default async function CustomerPage() {
                 </SectionCard>
             </div>
 
-            <SectionCard title="Invoices" description="Download and review your billing records">
+            <SectionCard id="payments" title="Invoices" description="Download and review your billing records">
                 {invoices.length === 0 ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                         No invoices available.
                     </div>
                 ) : (
@@ -203,7 +203,7 @@ export default async function CustomerPage() {
                         {invoices.map((invoice) => (
                             <div
                                 key={invoice.id}
-                                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+                                className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
                             >
                                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                     <div>
@@ -234,17 +234,17 @@ export default async function CustomerPage() {
                 )}
             </SectionCard>
 
-            <SectionCard title="Messages" description="Contact the Jigzack team">
+            <SectionCard id="messages" title="Messages" description="Contact the Jigzack team">
                 <div className="space-y-4">
                     {messages.length === 0 ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                             No messages yet.
                         </div>
                     ) : (
                         messages.map((message) => (
                             <div
                                 key={message.id}
-                                className="rounded-3xl border border-white/10 bg-white/[0.04] p-5"
+                                className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
                             >
                                 <p className="font-bold">{message.subject}</p>
                                 <p className="text-sm text-white/50 mt-1">

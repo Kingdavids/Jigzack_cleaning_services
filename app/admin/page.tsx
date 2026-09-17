@@ -192,6 +192,7 @@ export default async function AdminPage() {
 
             <div className="grid gap-6 2xl:grid-cols-2">
                 <SectionCard
+                    id="approvals"
                     title="Signup approvals"
                     description="Approve or decline new users."
                 >
@@ -203,19 +204,20 @@ export default async function AdminPage() {
                 </SectionCard>
 
                 <SectionCard
+                    id="tasks"
                     title="Task progress"
                     description="Live overview of assigned service tasks."
                 >
                     <div className="space-y-4">
                         {tasks.length === 0 ? (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                                 No tasks yet.
                             </div>
                         ) : (
                             tasks.map((task) => (
                                 <div
                                     key={task.id}
-                                    className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl shadow transition hover:border-amber-300/20"
+                                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
                                 >
                                     <div className="flex flex-col gap-3 md:flex-row md:justify-between">
                                         <div>
@@ -319,6 +321,7 @@ export default async function AdminPage() {
 
             <div className="grid gap-6 2xl:grid-cols-2">
                 <SectionCard
+                    id="customers"
                     title="Customers"
                     description="Customer records, service activity, and balances."
                 >
@@ -336,7 +339,7 @@ export default async function AdminPage() {
                             {customers.map((customer) => (
                                 <tr
                                     key={customer.id}
-                                    className="border-t border-white/5 hover:bg-white/[0.04] transition"
+                                    className="border-t border-white/5 hover:bg-white/[0.03] transition"
                                 >
                                     <td className="py-4">
                                         <p className="font-semibold">{customer.full_name}</p>
@@ -362,19 +365,20 @@ export default async function AdminPage() {
                 </SectionCard>
 
                 <SectionCard
+                    id="uploads"
                     title="Task uploads"
                     description="Photos uploaded by employees."
                 >
                     <div className="grid gap-4 md:grid-cols-2">
                         {uploads.length === 0 ? (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                                 No uploads yet.
                             </div>
                         ) : (
                             uploads.map((upload) => (
                                 <div
                                     key={upload.id}
-                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow transition hover:-translate-y-1 hover:border-amber-300/20"
+                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] transition hover:border-white/20"
                                 >
                                     <img
                                         src={upload.image_url}
@@ -396,17 +400,17 @@ export default async function AdminPage() {
             </div>
 
             <div className="grid gap-6 2xl:grid-cols-2">
-                <SectionCard title="Messages" description="Recent communication">
+                <SectionCard id="messages" title="Messages" description="Recent communication">
                     <div className="space-y-4">
                         {messages.length === 0 ? (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                                 No messages yet.
                             </div>
                         ) : (
                             messages.map((message) => (
                                 <div
                                     key={message.id}
-                                    className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl transition hover:border-amber-300/20"
+                                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
                                 >
                                     <p className="font-bold">{message.subject}</p>
                                     <p className="text-sm text-white/50 mt-1">
@@ -466,17 +470,17 @@ export default async function AdminPage() {
                     </div>
                 </SectionCard>
 
-                <SectionCard title="Payments" description="Recent transactions">
+                <SectionCard id="payments" title="Payments" description="Recent transactions">
                     <div className="space-y-4">
                         {payments.length === 0 ? (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/60">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                                 No invoices yet.
                             </div>
                         ) : (
                             payments.map((payment) => (
                                 <div
                                     key={payment.id}
-                                    className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl transition hover:border-amber-300/20"
+                                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
                                 >
                                     <div className="flex justify-between items-center">
                                         <div>
