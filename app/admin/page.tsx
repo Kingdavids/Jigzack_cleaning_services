@@ -80,7 +80,16 @@ export default async function AdminPage() {
         .order("created_at", { ascending: false });
 
     const customers = customersData ?? [];
-    const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
+
+    const { data: unpaidPaymentsData } = await supabase
+        .from("payments")
+        .select("amount, status")
+        .neq("status", "paid");
+
+    const totalBalance = (unpaidPaymentsData ?? []).reduce(
+        (sum, p) => sum + Number(p.amount ?? 0),
+        0
+    );
 
     const { data: directoryData } = await supabase
         .from("profiles")
