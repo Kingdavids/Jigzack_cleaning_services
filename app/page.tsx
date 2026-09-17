@@ -257,10 +257,6 @@ export default function Home() {
                                         </div>
                                     ))}
                                 </div>
-
-                                <p className="mt-3 text-xs text-white/55">
-                                    Replace <span className="text-amber-300 font-semibold">team-1.jpg … team-5.jpg</span> with your real team image file names inside <span className="text-amber-300 font-semibold">/public/images</span>.
-                                </p>
                             </div>
 
                             {/* Testimonials slider */}
