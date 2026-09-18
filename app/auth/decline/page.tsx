@@ -62,19 +62,10 @@ function DeclineContent() {
     const MainIcon = content.icon;
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,_#060606_0%,_#0b0c0f_35%,_#111318_65%,_#161922_100%)] text-white">
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="absolute left-[8%] top-[12%] h-52 w-52 animate-pulse rounded-full bg-red-400/10 blur-3xl" />
-                <div className="absolute right-[10%] top-[18%] h-72 w-72 animate-pulse rounded-full bg-orange-400/10 blur-3xl [animation-delay:700ms]" />
-                <div className="absolute bottom-[10%] left-[16%] h-48 w-48 animate-pulse rounded-full bg-white/5 blur-3xl [animation-delay:1200ms]" />
-
-                <div className="absolute left-[14%] top-[28%] h-2 w-2 rounded-full bg-red-300/70 shadow-[0_0_22px_rgba(252,165,165,0.9)] animate-bounce" />
-                <div className="absolute right-[18%] top-[32%] h-2.5 w-2.5 rounded-full bg-orange-300/70 shadow-[0_0_22px_rgba(253,186,116,0.9)] animate-bounce [animation-delay:400ms]" />
-            </div>
-
-            <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 md:px-6 lg:px-8">
+        <div className="min-h-screen bg-[#0a0a0b] text-white">
+            <div className="mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10 md:px-6 lg:px-8">
                 <div className="grid w-full gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-                    <div className="rounded-[36px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:p-10">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-7 md:p-10">
                         <div className="inline-flex items-center gap-2 rounded-full border border-red-300/20 bg-red-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-300">
                             <CircleAlert className="h-4 w-4" />
                             {content.badge}
@@ -91,7 +82,7 @@ function DeclineContent() {
                         <div className="mt-8 flex flex-wrap gap-3">
                             <Link
                                 href="/"
-                                className="rounded-2xl border border-white/12 bg-white/6 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 hover:border-white/20"
+                                className="rounded-2xl border border-white/12 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/10 hover:border-white/20"
                             >
                                 <span className="inline-flex items-center gap-2">
                                     <ArrowLeft className="h-4 w-4" />
@@ -141,7 +132,7 @@ function DeclineContent() {
                             </div>
                         </div>
 
-                        <div className="mt-8 rounded-[30px] border border-white/10 bg-black/20 p-5">
+                        <div className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5">
                             <p className="text-xs uppercase tracking-[0.22em] text-white/40">
                                 What you can do next
                             </p>
@@ -168,14 +159,9 @@ function DeclineContent() {
                         </div>
                     </div>
 
-                    <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:p-10">
-                        <div className="relative mx-auto mt-4 flex h-32 w-32 items-center justify-center">
-                            <div className="absolute h-32 w-32 animate-pulse rounded-full bg-red-400/10 blur-2xl" />
-                            <div className="absolute h-28 w-28 rounded-full border border-white/10 bg-white/[0.04]" />
-                            <div className="absolute h-20 w-20 rounded-full border border-red-300/20 bg-red-400/10" />
-                            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-transparent">
-                                <MainIcon className="h-10 w-10 animate-pulse text-red-300" />
-                            </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-7 md:p-10">
+                        <div className="mx-auto mt-4 flex h-20 w-20 items-center justify-center rounded-2xl bg-red-400/10">
+                            <MainIcon className="h-9 w-9 text-red-300" />
                         </div>
 
                         <div className="mt-8 text-center">
@@ -224,7 +210,7 @@ function DeclineContent() {
                                 >
                                     <div
                                         className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
-                                            item.done ? "bg-red-400/15" : "bg-white/6"
+                                            item.done ? "bg-red-400/15" : "bg-white/[0.03]"
                                         }`}
                                     >
                                         {item.done ? (
@@ -253,7 +239,7 @@ function DeclineContent() {
                             <div className="mt-4 flex flex-wrap gap-3">
                                 <a
                                     href="mailto:support@jigzack.com"
-                                    className="rounded-2xl border border-white/10 bg-white/6 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                                    className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
                                 >
                                     <span className="inline-flex items-center gap-2">
                                         <Mail className="h-4 w-4" />

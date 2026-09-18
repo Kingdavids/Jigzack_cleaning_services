@@ -157,7 +157,7 @@ function SectionCard({
     children: React.ReactNode;
 }) {
     return (
-        <section className="rounded-[28px] border border-white/10 bg-white/6 p-5 shadow-2xl backdrop-blur-xl md:p-6">
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
             <div className="mb-6 flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-400/15 ring-1 ring-amber-300/20">
                     <Icon className="h-5 w-5 text-amber-300" />
@@ -276,15 +276,15 @@ export default function CustomerSetupPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(250,204,21,0.18),_transparent_26%),linear-gradient(180deg,_#0a0a0a_0%,_#101114_100%)] text-white">
+        <div className="min-h-screen bg-[#0a0a0b] text-white">
             <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 lg:px-8">
                 <div className="mb-6 grid gap-5 lg:grid-cols-[1.1fr_0.65fr]">
-                    <div className="rounded-[30px] border border-white/10 bg-white/6 p-6 shadow-2xl backdrop-blur-xl md:p-8">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
                         <div className="flex flex-wrap items-center gap-3">
               <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-amber-300">
                 Jigzack Customer Setup
               </span>
-                            <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs text-white/60">
+                            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-white/60">
                 Step 1 of 2
               </span>
                         </div>
@@ -317,7 +317,7 @@ export default function CustomerSetupPage() {
                         </div>
                     </div>
 
-                    <div className="rounded-[30px] border border-white/10 bg-white/6 p-6 shadow-2xl backdrop-blur-xl">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
                         <p className="text-xs uppercase tracking-[0.2em] text-white/45">Completion</p>
                         <div className="mt-4 flex items-end justify-between gap-4">
                             <div>

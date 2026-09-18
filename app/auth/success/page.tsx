@@ -24,18 +24,11 @@ export default function SuccessPage({
     }, [role, router]);
 
     return (
-        <div className="relative min-h-screen flex items-center justify-center bg-[#0b0c0f] text-white overflow-hidden">
-
-            {/* glow */}
-            <div className="absolute inset-0">
-                <div className="absolute left-[10%] top-[20%] h-56 w-56 bg-green-400/10 blur-3xl rounded-full animate-pulse" />
-                <div className="absolute right-[10%] bottom-[20%] h-64 w-64 bg-emerald-400/10 blur-3xl rounded-full animate-pulse delay-700" />
-            </div>
-
-            <div className="relative text-center max-w-xl px-6">
+        <div className="min-h-screen flex items-center justify-center bg-[#0a0a0b] text-white">
+            <div className="text-center max-w-xl px-6">
                 <div className="flex justify-center">
-                    <div className="h-24 w-24 rounded-full bg-green-400/10 flex items-center justify-center">
-                        <CheckCircle2 className="h-10 w-10 text-green-300 animate-pulse" />
+                    <div className="h-20 w-20 rounded-2xl bg-green-400/10 flex items-center justify-center">
+                        <CheckCircle2 className="h-9 w-9 text-green-300" />
                     </div>
                 </div>
 
