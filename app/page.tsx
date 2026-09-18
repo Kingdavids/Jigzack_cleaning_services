@@ -5,6 +5,8 @@ import useAuth from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import About from "@/components/About";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import { Home as HomeIcon, Building2, Recycle } from "lucide-react";
 
 export default function Home() {
     const { user, loading } = useAuth();
@@ -67,6 +69,23 @@ export default function Home() {
                 </div>
             </section>
 
+            {/* TRUST / STATS STRIP */}
+            <section className="border-y border-white/10 bg-[#06060a] px-6 py-10 md:px-10">
+                <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 text-center md:grid-cols-4">
+                    {[
+                        { value: "LAWMA", label: "Approved operator" },
+                        { value: "2,450+", label: "Domestic facilities serviced" },
+                        { value: "680+", label: "Commercial facilities serviced" },
+                        { value: "2 Cities", label: "Lagos & Port Harcourt" },
+                    ].map((stat) => (
+                        <div key={stat.label}>
+                            <p className="text-2xl font-black text-amber-300 md:text-3xl">{stat.value}</p>
+                            <p className="mt-1 text-xs text-white/50 md:text-sm">{stat.label}</p>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
             {/* OUR SERVICES SECTION */}
             <section id="services" className="relative scroll-mt-28 px-6 md:px-10 py-20 overflow-hidden">
                 {/* Animated service-bg image */}
@@ -101,6 +120,9 @@ export default function Home() {
                                     loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                                <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">
+                                    <HomeIcon className="h-4 w-4" />
+                                </div>
                             </div>
 
                             <h3 className="mt-5 text-xl font-bold">
@@ -127,6 +149,9 @@ export default function Home() {
                                     loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                                <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">
+                                    <Building2 className="h-4 w-4" />
+                                </div>
                             </div>
 
                             <h3 className="mt-5 text-xl font-bold">
@@ -153,6 +178,9 @@ export default function Home() {
                                     loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
+                                <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">
+                                    <Recycle className="h-4 w-4" />
+                                </div>
                             </div>
 
                             <h3 className="mt-5 text-xl font-bold">
@@ -398,6 +426,7 @@ export default function Home() {
                 </div>
             </section>
     </main>
+            <Footer />
         </div>
     );
 }
