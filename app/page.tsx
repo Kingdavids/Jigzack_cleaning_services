@@ -216,7 +216,7 @@ export default function Home() {
                 <div className="relative max-w-6xl mx-auto text-white">
                     <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
                         {/* Left: Story */}
-                        <div className="animate-riseIn">
+                        <div className="min-w-0 animate-riseIn">
                             <h2 className="text-3xl md:text-4xl font-black">
                                 About Us<span className="text-amber-300">.</span>
                             </h2>
@@ -257,7 +257,7 @@ export default function Home() {
                         </div>
 
                         {/* Right: Team slider + testimonials */}
-                        <div className="space-y-6">
+                        <div className="min-w-0 space-y-6">
                             {/* Team slider */}
                             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 animate-riseIn [animation-delay:120ms]">
                                 <div className="flex items-end justify-between gap-4">
