@@ -1,7 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { redirect } from "next/navigation";
-import { Clock3, MapPinned } from "lucide-react";
+import { Clock3, MapPinned, Truck, ClipboardList, CheckCircle2, AlertTriangle } from "lucide-react";
 
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
@@ -121,21 +121,25 @@ export default async function EmployeePage() {
         >
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
+                    icon={Truck}
                     label="Assigned Pickups"
                     value={String(tasks.length)}
                     helper="Total assigned tasks"
                 />
                 <StatCard
+                    icon={ClipboardList}
                     label="Pending Jobs"
                     value={String(pending)}
                     helper="Includes scheduled and active"
                 />
                 <StatCard
+                    icon={CheckCircle2}
                     label="Completed"
                     value={String(completed)}
                     helper="Finished service tasks"
                 />
                 <StatCard
+                    icon={AlertTriangle}
                     label="High Priority"
                     value={String(highPriority)}
                     helper="Urgent work orders"

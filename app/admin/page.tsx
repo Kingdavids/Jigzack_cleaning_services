@@ -7,6 +7,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import { createInvoice, createTask, sendMessage } from "./actions";
+import { UserCheck, Users, Briefcase, Wallet } from "lucide-react";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -169,21 +170,25 @@ export default async function AdminPage() {
         >
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
+                    icon={UserCheck}
                     label="Pending approvals"
                     value={String(pendingUsers?.length ?? 0)}
                     helper="Users waiting for admin approval"
                 />
                 <StatCard
+                    icon={Users}
                     label="Total customers"
                     value={String(customers.length)}
                     helper="Active and inactive clients"
                 />
                 <StatCard
+                    icon={Briefcase}
                     label="Employees"
                     value={String(employeeOptions.length)}
                     helper="Approved field staff and supervisors"
                 />
                 <StatCard
+                    icon={Wallet}
                     label="Outstanding balance"
                     value={`₦${totalBalance.toLocaleString()}`}
                     helper="Total unpaid customer balances"

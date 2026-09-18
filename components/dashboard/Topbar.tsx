@@ -25,7 +25,10 @@ export default function Topbar({
             <div className="px-4 py-4 md:px-6 lg:px-8">
                 <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h1 className="text-xl font-bold tracking-tight md:text-2xl">{title}</h1>
+                        <h1 className="text-xl font-bold tracking-tight md:text-2xl">
+                            {title}
+                            <span className="text-amber-300">.</span>
+                        </h1>
                         <p className="mt-0.5 text-sm text-white/50">{subtitle}</p>
                     </div>
 

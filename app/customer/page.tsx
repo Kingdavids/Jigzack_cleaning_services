@@ -8,6 +8,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import { sendMessageToAdmin } from "@/lib/messaging-actions";
+import { CalendarClock, CalendarCheck, Camera, Wallet } from "lucide-react";
 
 type MessageRow = {
     id: string;
@@ -106,21 +107,25 @@ export default async function CustomerPage() {
         >
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
+                    icon={CalendarCheck}
                     label="Last Serviced"
                     value={customer?.last_serviced ? formatDate(customer.last_serviced) : "Not available"}
                     helper="Most recent completed pickup"
                 />
                 <StatCard
+                    icon={CalendarClock}
                     label="Next Pickup"
                     value={nextPickup?.scheduled_date ? formatDate(nextPickup.scheduled_date) : "Not scheduled"}
                     helper="Nearest upcoming service date"
                 />
                 <StatCard
+                    icon={Camera}
                     label="Photos"
                     value={String(uploads.length)}
                     helper="Before and after service uploads"
                 />
                 <StatCard
+                    icon={Wallet}
                     label="Outstanding Balance"
                     value={`₦${outstandingBalance.toLocaleString()}`}
                     helper="Current unpaid invoices"
