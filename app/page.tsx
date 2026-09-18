@@ -58,7 +58,7 @@ export default function Home() {
                             </Link>
                             <Link
                                 href="/#services"
-                                className="rounded-xl border border-white/15 bg-white/5 px-6 py-3 font-semibold text-white transition hover:bg-white/10"
+                                className="rounded-xl border border-white/15 bg-white/[0.03] px-6 py-3 font-semibold text-white transition hover:bg-white/10"
                             >
                                 Our Services
                             </Link>
@@ -92,7 +92,7 @@ export default function Home() {
                     {/* Service cards */}
                     <div className="mt-10 grid gap-6 md:grid-cols-3">
                         {/* Domestic */}
-                        <div className="group rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 hover:-translate-y-1 hover:shadow-[0_25px_60px_-30px_rgba(245,158,11,0.45)] animate-riseIn">
+                        <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
                                     src="/images/domestic-waste.jpg"
@@ -118,7 +118,7 @@ export default function Home() {
                         </div>
 
                         {/* Commercial */}
-                        <div className="group rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 hover:-translate-y-1 hover:shadow-[0_25px_60px_-30px_rgba(245,158,11,0.45)] animate-riseIn [animation-delay:120ms]">
+                        <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:120ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
                                     src="/images/fleet-truck-front.jpg"
@@ -144,7 +144,7 @@ export default function Home() {
                         </div>
 
                         {/* Eco-friendly */}
-                        <div className="group rounded-2xl border border-white/10 bg-white/5 p-5 md:p-6 backdrop-blur transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 hover:-translate-y-1 hover:shadow-[0_25px_60px_-30px_rgba(245,158,11,0.45)] animate-riseIn [animation-delay:240ms]">
+                        <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:240ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
                                     src="/images/plastic-waste.jpg"
@@ -217,11 +217,11 @@ export default function Home() {
 
                             {/* Stats (edit numbers here) */}
                             <div className="mt-8 grid grid-cols-2 gap-4">
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Domestic facilities serviced</p>
                                     <p className="mt-2 text-3xl font-black text-amber-300">2,450+</p>
                                 </div>
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Commercial facilities serviced</p>
                                     <p className="mt-2 text-3xl font-black text-amber-300">680+</p>
                                 </div>
@@ -231,7 +231,7 @@ export default function Home() {
                         {/* Right: Team slider + testimonials */}
                         <div className="space-y-6">
                             {/* Team slider */}
-                            <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-5 md:p-6 shadow-xl animate-riseIn [animation-delay:120ms]">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 animate-riseIn [animation-delay:120ms]">
                                 <div className="flex items-end justify-between gap-4">
                                     <div>
                                         <h3 className="text-xl md:text-2xl font-black">
@@ -256,7 +256,7 @@ export default function Home() {
                                     ].map((m, i) => (
                                         <div
                                             key={i}
-                                            className="min-w-[240px] snap-start group rounded-2xl border border-white/10 bg-white/5 overflow-hidden hover:bg-white/10 transition"
+                                            className="min-w-[240px] snap-start group rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden hover:bg-white/10 transition"
                                         >
                                             <div className="relative h-40 overflow-hidden">
                                                 <img
@@ -279,7 +279,7 @@ export default function Home() {
                             </div>
 
                             {/* Testimonials slider */}
-                            <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-5 md:p-6 shadow-xl animate-riseIn [animation-delay:240ms]">
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 animate-riseIn [animation-delay:240ms]">
                                 <h3 className="text-xl md:text-2xl font-black">
                                     Testimonials<span className="text-amber-300">.</span>
                                 </h3>
@@ -307,7 +307,7 @@ export default function Home() {
                                     ].map((t, i) => (
                                         <div
                                             key={i}
-                                            className="min-w-[280px] snap-start rounded-2xl border border-white/10 bg-white/5 p-5 hover:bg-white/10 transition"
+                                            className="min-w-[280px] snap-start rounded-2xl border border-white/10 bg-white/[0.03] p-5 hover:bg-white/10 transition"
                                         >
                                             <p className="text-white/80 leading-relaxed">“{t.quote}”</p>
                                             <p className="mt-4 text-sm font-bold text-amber-300">{t.name}</p>
@@ -347,16 +347,16 @@ export default function Home() {
                             </p>
 
                             <div className="mt-8 grid gap-4">
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Email</p>
                                     <p className="mt-1 text-lg font-bold text-amber-300">info@jigzack.com</p>
                                 </div>
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Phone</p>
                                     <p className="mt-1 text-lg font-bold text-amber-300">+234 (000) 000 0000</p>
                                 </div>
 
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Operating cities</p>
                                     <p className="mt-1 text-white/85 font-semibold">
                                         Lagos • Port Harcourt • Nationwide outreach programs
@@ -366,7 +366,7 @@ export default function Home() {
                         </div>
 
                         {/* Right: mini “contact card” */}
-                        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur p-6 md:p-8 shadow-xl animate-riseIn [animation-delay:160ms]">
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 md:p-8 animate-riseIn [animation-delay:160ms]">
                             <h3 className="text-2xl font-black">
                                 Let’s schedule your service<span className="text-amber-300">.</span>
                             </h3>
@@ -389,7 +389,7 @@ export default function Home() {
                                     Call Now
                                 </a>
 
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white/70">
+                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
                                     Fast response • Flexible plans • Competitive monthly rates
                                 </div>
                             </div>

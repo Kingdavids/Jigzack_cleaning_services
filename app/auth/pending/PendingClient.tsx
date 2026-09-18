@@ -9,7 +9,6 @@ import {
     CheckCircle2,
     LoaderCircle,
     MailCheck,
-    Settings,
     ShieldCheck,
     Sparkles,
     UserRound,
@@ -139,21 +138,10 @@ export default function PendingClient({
     const effectiveStage = emailVerified ? Math.max(activeStage, 2) : activeStage;
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[linear-gradient(180deg,_#060606_0%,_#0b0c0f_35%,_#111318_65%,_#161922_100%)] text-white">
-            <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                <div className="absolute left-[6%] top-[10%] h-52 w-52 animate-pulse rounded-full bg-amber-400/10 blur-3xl" />
-                <div className="absolute right-[8%] top-[16%] h-72 w-72 animate-pulse rounded-full bg-orange-400/10 blur-3xl [animation-delay:600ms]" />
-                <div className="absolute bottom-[8%] left-[15%] h-56 w-56 animate-pulse rounded-full bg-yellow-300/10 blur-3xl [animation-delay:1200ms]" />
-                <div className="absolute bottom-[18%] right-[12%] h-44 w-44 animate-pulse rounded-full bg-white/5 blur-3xl [animation-delay:900ms]" />
-
-                <div className="absolute left-[12%] top-[24%] h-2 w-2 rounded-full bg-amber-300/70 shadow-[0_0_22px_rgba(252,211,77,0.9)] animate-bounce" />
-                <div className="absolute right-[18%] top-[30%] h-2.5 w-2.5 rounded-full bg-orange-300/70 shadow-[0_0_22px_rgba(253,186,116,0.9)] animate-bounce [animation-delay:300ms]" />
-                <div className="absolute left-[22%] bottom-[22%] h-1.5 w-1.5 rounded-full bg-white/60 shadow-[0_0_18px_rgba(255,255,255,0.8)] animate-bounce [animation-delay:700ms]" />
-            </div>
-
-            <div className="relative mx-auto flex min-h-screen max-w-7xl items-center px-4 py-10 md:px-6 lg:px-8">
+        <div className="min-h-screen bg-[#0a0a0b] text-white">
+            <div className="mx-auto flex min-h-screen max-w-7xl items-center px-4 py-10 md:px-6 lg:px-8">
                 <div className="grid w-full gap-6 lg:grid-cols-[1.1fr_0.92fr]">
-                    <div className="rounded-[36px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:p-10">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-7 md:p-10">
                         <div className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-300">
                             <Sparkles className="h-4 w-4" />
                             {content.badge}
@@ -241,26 +229,9 @@ export default function PendingClient({
                         </div>
                     </div>
 
-                    <div className="relative overflow-hidden rounded-[36px] border border-white/10 bg-white/[0.06] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.35)] backdrop-blur-2xl md:p-10">
-                        <div className="pointer-events-none absolute right-6 top-6 opacity-25">
-                            <Settings className="h-16 w-16 text-amber-300 animate-spin [animation-duration:14s]" />
-                        </div>
-
-                        <div className="pointer-events-none absolute right-16 top-20 opacity-20">
-                            <Settings className="h-10 w-10 text-white animate-spin [animation-duration:10s] [animation-direction:reverse]" />
-                        </div>
-
-                        <div className="pointer-events-none absolute left-[-18px] bottom-12 opacity-10">
-                            <Settings className="h-24 w-24 text-white animate-spin [animation-duration:18s]" />
-                        </div>
-
-                        <div className="relative mx-auto mt-2 flex h-32 w-32 items-center justify-center">
-                            <div className="absolute h-32 w-32 animate-pulse rounded-full bg-amber-400/10 blur-2xl" />
-                            <div className="absolute h-28 w-28 rounded-full border border-white/10 bg-white/[0.04]" />
-                            <div className="absolute h-20 w-20 rounded-full border border-amber-300/20 bg-amber-400/10" />
-                            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-transparent">
-                                <MainIcon className="h-10 w-10 animate-pulse text-amber-300" />
-                            </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-7 md:p-10">
+                        <div className="mx-auto mt-2 flex h-20 w-20 items-center justify-center rounded-2xl bg-amber-400/10">
+                            <MainIcon className="h-9 w-9 text-amber-300" />
                         </div>
 
                         <div className="mt-8 text-center">

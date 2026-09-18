@@ -21,10 +21,8 @@ export default function Auth() {
     }, [defaultTab]);
 
     return (
-        <section className="relative overflow-hidden rounded-[28px] border border-white/12 bg-white/8 backdrop-blur-2xl shadow-[0_30px_80px_-30px_rgba(0,0,0,0.85)]">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(251,191,36,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(249,115,22,0.10),transparent_25%)]" />
-
-            <div className="relative px-5 py-6 md:px-7 md:py-8">
+        <section className="rounded-2xl border border-white/10 bg-white/[0.03]">
+            <div className="px-5 py-6 md:px-7 md:py-8">
                 <div className="mb-6 text-center">
                     <p className="text-white/70 text-xs md:text-sm font-semibold tracking-[0.25em] uppercase">
                         Welcome to
@@ -40,7 +38,7 @@ export default function Auth() {
                 </div>
 
                 <Tabs value={tab} onValueChange={setTab} className="w-full">
-                    <TabsList className="relative grid w-full grid-cols-2 rounded-2xl border border-white/10 bg-white/8 p-1 overflow-hidden">
+                    <TabsList className="relative grid w-full grid-cols-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1 overflow-hidden">
                         <div
                             className={[
                                 "absolute top-1 left-1 h-[calc(100%-0.5rem)] w-[calc(50%-0.25rem)]",
