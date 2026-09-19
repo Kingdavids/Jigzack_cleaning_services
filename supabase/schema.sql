@@ -101,6 +101,9 @@ create table public.customers (
     waste_type text,
     special_notes text,
     facility_details jsonb,
+    registration_fee_paid boolean not null default false,
+    registration_fee_reference text,
+    registration_fee_paid_at timestamptz,
     created_at timestamptz not null default now()
 );
 
@@ -117,6 +120,25 @@ create policy "customers_insert_own" on public.customers
 
 create policy "customers_all_admin" on public.customers
     for all using (public.is_admin()) with check (public.is_admin());
+
+-- Bypasses RLS so a paying customer can mark their own registration
+-- fee paid after a verified Paystack transaction, without a broad
+-- update policy that would let them edit any other column (balance,
+-- status, etc.) on their own row.
+create or replace function public.mark_registration_fee_paid(p_reference text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    update public.customers
+    set registration_fee_paid = true,
+        registration_fee_reference = p_reference,
+        registration_fee_paid_at = now()
+    where profile_id = auth.uid();
+end;
+$$;
 
 -- ============================================================
 -- employees

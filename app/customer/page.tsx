@@ -45,6 +45,10 @@ export default async function CustomerPage() {
 
     const customer = customerData ?? null;
 
+    if (customer && !customer.registration_fee_paid) {
+        redirect("/auth/registration-fee");
+    }
+
     const { data: pickupsData, error: pickupsError } = await supabase
         .from("tasks")
         .select("*")
