@@ -7,17 +7,11 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
-import { sendMessageToAdmin } from "@/lib/messaging-actions";
+import SendMessageForm from "@/components/dashboard/SendMessageForm";
+import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
+import MarkMessagesReadOnView from "@/components/dashboard/MarkMessagesReadOnView";
+import { deleteMessage, replyToMessage, sendMessageToAdmin } from "@/lib/messaging-actions";
 import { CalendarClock, CalendarCheck, Camera, Wallet } from "lucide-react";
-
-type MessageRow = {
-    id: string;
-    subject: string;
-    body: string;
-    created_at: string;
-    from_profile: { full_name: string | null } | null;
-    to_profile: { full_name: string | null } | null;
-};
 
 function formatDate(value: string | null | undefined) {
     if (!value) return "Not available";
@@ -72,11 +66,11 @@ export default async function CustomerPage() {
     const { data: messagesData } = await supabase
         .from("messages")
         .select(
-            "id, subject, body, created_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
         )
         .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(50);
 
     if (pickupsError) console.error("Pickups error:", pickupsError.message);
     if (invoicesError) console.error("Invoices error:", invoicesError.message);
@@ -86,6 +80,8 @@ export default async function CustomerPage() {
     const invoices = invoicesData ?? [];
     const uploads = uploadsData ?? [];
     const messages = (messagesData ?? []) as unknown as MessageRow[];
+
+    const unreadCount = messages.filter((m) => m.to_profile_id === profile.id && !m.read_at).length;
 
     const now = new Date();
 
@@ -103,8 +99,10 @@ export default async function CustomerPage() {
         <DashboardShell
             role="customer"
             title="Customer Dashboard"
-            subtitle="Track service history, upcoming pickups, photos, and invoices."
+            subtitle={`Welcome back, ${profile.full_name ?? customer?.full_name ?? "there"} — track service history, upcoming pickups, photos, and invoices.`}
+            unreadCount={unreadCount}
         >
+            <MarkMessagesReadOnView unreadCount={unreadCount} />
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     icon={CalendarCheck}
@@ -241,34 +239,14 @@ export default async function CustomerPage() {
 
             <SectionCard id="messages" title="Messages" description="Contact the Jigzack team">
                 <div className="space-y-4">
-                    {messages.length === 0 ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-                            No messages yet.
-                        </div>
-                    ) : (
-                        messages.map((message) => (
-                            <div
-                                key={message.id}
-                                className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
-                            >
-                                <p className="font-bold">{message.subject}</p>
-                                <p className="text-sm text-white/50 mt-1">
-                                    {message.from_profile?.full_name ?? "You"} →{" "}
-                                    {message.to_profile?.full_name ?? "Admin"}
-                                </p>
-                                <p className="text-sm text-white/70 mt-3">{message.body}</p>
-                            </div>
-                        ))
-                    )}
+                    <MessageThreadList
+                        messages={messages}
+                        currentProfileId={profile.id}
+                        replyAction={replyToMessage}
+                        deleteAction={deleteMessage}
+                    />
 
-                    <form
-                        action={sendMessageToAdmin}
-                        className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-5"
-                    >
-                        <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-                            Send a message to Admin
-                        </p>
-
+                    <SendMessageForm action={sendMessageToAdmin} label="Send a message to Admin">
                         <input
                             name="subject"
                             placeholder="Subject"
@@ -282,14 +260,7 @@ export default async function CustomerPage() {
                             required
                             className="min-h-[90px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
                         />
-
-                        <button
-                            type="submit"
-                            className="w-full rounded-2xl bg-amber-400 px-4 py-2.5 font-bold text-black transition hover:bg-amber-300"
-                        >
-                            Send Message
-                        </button>
-                    </form>
+                    </SendMessageForm>
                 </div>
             </SectionCard>
         </DashboardShell>

@@ -57,6 +57,17 @@ export async function uploadTaskPhoto(formData: FormData) {
 
     if (!taskId || !photoType || !file || file.size === 0) return;
 
+    const { data: task, error: taskError } = await supabase
+        .from("tasks")
+        .select("title, customer_id")
+        .eq("id", taskId)
+        .single();
+
+    if (taskError) {
+        console.error("Could not load task for upload:", taskError.message);
+        return;
+    }
+
     const fileExt = file.name.split(".").pop();
     const filePath = `${profile.id}/${taskId}-${photoType}-${Date.now()}.${fileExt}`;
 
@@ -75,14 +86,22 @@ export async function uploadTaskPhoto(formData: FormData) {
         .from("task-photos")
         .getPublicUrl(filePath);
 
-    await supabase.from("uploads").insert({
+    const { error: insertError } = await supabase.from("uploads").insert({
         task_id: taskId,
         employee_id: profile.id,
+        customer_id: task?.customer_id ?? null,
+        task_title: task?.title ?? null,
         image_url: publicUrlData.publicUrl,
         photo_type: photoType, // "before" or "after"
         created_at: new Date().toISOString(),
     });
 
+    if (insertError) {
+        console.error("Uploads insert error:", insertError.message);
+        return;
+    }
+
     revalidatePath("/employee");
     revalidatePath("/admin");
+    revalidatePath("/customer");
 }

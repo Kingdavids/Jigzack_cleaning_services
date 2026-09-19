@@ -6,7 +6,11 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import SendMessageForm from "@/components/dashboard/SendMessageForm";
+import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
+import MarkMessagesReadOnView from "@/components/dashboard/MarkMessagesReadOnView";
 import { createInvoice, createTask, sendMessage } from "./actions";
+import { deleteMessage, replyToMessage } from "@/lib/messaging-actions";
 import { UserCheck, Users, Briefcase, Wallet } from "lucide-react";
 
 type ProfileRef = { full_name: string | null } | null;
@@ -34,15 +38,6 @@ type PaymentRow = {
     invoice_month: string | null;
     created_at: string;
     customer: ProfileRef;
-};
-
-type MessageRow = {
-    id: string;
-    subject: string;
-    body: string;
-    created_at: string;
-    from_profile: ProfileRef;
-    to_profile: ProfileRef;
 };
 
 function formatDate(value: string | null | undefined) {
@@ -155,19 +150,23 @@ export default async function AdminPage() {
     const { data: messagesData } = await supabase
         .from("messages")
         .select(
-            "id, subject, body, created_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
         )
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(50);
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
+
+    const unreadCount = messages.filter((m) => m.to_profile_id === profile.id && !m.read_at).length;
 
     return (
         <DashboardShell
             role="admin"
             title="Admin Dashboard"
             subtitle="Manage operations, approvals, customers, tasks, uploads, messages, and payments."
+            unreadCount={unreadCount}
         >
+            <MarkMessagesReadOnView unreadCount={unreadCount} />
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     icon={UserCheck}
@@ -260,12 +259,11 @@ export default async function AdminPage() {
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <select
                                     name="customerId"
-                                    required
                                     defaultValue=""
                                     className="h-11 w-full rounded-xl border border-white/10 bg-[#141518] px-3 text-sm text-white outline-none"
                                 >
-                                    <option value="" disabled>
-                                        Select customer
+                                    <option value="">
+                                        No customer (internal task)
                                     </option>
                                     {customerOptions.map((c) => (
                                         <option key={c.id} value={c.id}>
@@ -407,34 +405,14 @@ export default async function AdminPage() {
             <div className="grid gap-6 2xl:grid-cols-2">
                 <SectionCard id="messages" title="Messages" description="Recent communication">
                     <div className="space-y-4">
-                        {messages.length === 0 ? (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-                                No messages yet.
-                            </div>
-                        ) : (
-                            messages.map((message) => (
-                                <div
-                                    key={message.id}
-                                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
-                                >
-                                    <p className="font-bold">{message.subject}</p>
-                                    <p className="text-sm text-white/50 mt-1">
-                                        {message.from_profile?.full_name ?? "Admin"} →{" "}
-                                        {message.to_profile?.full_name ?? "Unknown recipient"}
-                                    </p>
-                                    <p className="text-sm text-white/70 mt-3">{message.body}</p>
-                                </div>
-                            ))
-                        )}
+                        <MessageThreadList
+                            messages={messages}
+                            currentProfileId={profile.id}
+                            replyAction={replyToMessage}
+                            deleteAction={deleteMessage}
+                        />
 
-                        <form
-                            action={sendMessage}
-                            className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-5"
-                        >
-                            <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-                                Send message
-                            </p>
-
+                        <SendMessageForm action={sendMessage} label="Send message">
                             <select
                                 name="toProfileId"
                                 required
@@ -444,11 +422,18 @@ export default async function AdminPage() {
                                 <option value="" disabled>
                                     Select recipient
                                 </option>
-                                {directory.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.full_name} ({p.role})
-                                    </option>
-                                ))}
+                                <optgroup label="Broadcast">
+                                    <option value="__all_customers__">All Customers</option>
+                                    <option value="__all_employees__">All Employees</option>
+                                    <option value="__all_users__">All Customers &amp; Employees</option>
+                                </optgroup>
+                                <optgroup label="Individual">
+                                    {directory.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.full_name} ({p.role})
+                                        </option>
+                                    ))}
+                                </optgroup>
                             </select>
 
                             <input
@@ -464,14 +449,7 @@ export default async function AdminPage() {
                                 required
                                 className="min-h-[90px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
                             />
-
-                            <button
-                                type="submit"
-                                className="w-full rounded-2xl bg-amber-400 px-4 py-2.5 font-bold text-black transition hover:bg-amber-300"
-                            >
-                                Send Message
-                            </button>
-                        </form>
+                        </SendMessageForm>
                     </div>
                 </SectionCard>
 

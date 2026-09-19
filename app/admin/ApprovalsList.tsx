@@ -14,6 +14,7 @@ interface PendingUser {
 
 interface CustomerDetails {
     full_name: string;
+    email: string | null;
     phone: string | null;
     whatsapp_number: string | null;
     address: string | null;
@@ -21,10 +22,31 @@ interface CustomerDetails {
     state: string | null;
     landmark: string | null;
     property_type: string | null;
+    property_class: string | null;
     preferred_pickup_frequency: string | null;
     waste_type: string | null;
     special_notes: string | null;
+    facility_details: Record<string, string> | null;
 }
+
+const FACILITY_LABELS: Record<string, string> = {
+    duplexCount: "Duplex",
+    flatsCount: "Flats",
+    miniFlatsCount: "Mini flats",
+    shopsCount: "Shops",
+    domesticOthers: "Other domestic",
+    supermarketsCount: "Supermarkets",
+    complexesCount: "Complexes",
+    beachesCount: "Beaches",
+    marketsCount: "Markets",
+    hotelsCount: "Hotels",
+    schoolsCount: "Schools",
+    carWashBarsCount: "Car wash / bars",
+    blockIndustryCount: "Block industry",
+    eateryCount: "Eatery",
+    workshopCount: "Workshop",
+    commercialOthers: "Other commercial",
+};
 
 interface EmployeeDetails {
     full_name: string;
@@ -114,50 +136,83 @@ export default function ApprovalsList({
                         {user.role === "customer" && (
                             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
                                 {details ? (
-                                    <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-                                        <div>
-                                            <dt className="text-white/40">Phone</dt>
-                                            <dd>{details.phone || "Not provided"}</dd>
-                                        </div>
-                                        <div>
-                                            <dt className="text-white/40">WhatsApp</dt>
-                                            <dd>{details.whatsapp_number || "Not provided"}</dd>
-                                        </div>
-                                        <div className="sm:col-span-2">
-                                            <dt className="text-white/40">Address</dt>
-                                            <dd>
-                                                {details.address || "Not provided"}
-                                                {details.landmark ? ` (near ${details.landmark})` : ""}
-                                            </dd>
-                                        </div>
-                                        <div>
-                                            <dt className="text-white/40">LGA / State</dt>
-                                            <dd>
-                                                {[details.lga, details.state].filter(Boolean).join(", ") ||
-                                                    "Not provided"}
-                                            </dd>
-                                        </div>
-                                        <div>
-                                            <dt className="text-white/40">Property type</dt>
-                                            <dd className="capitalize">
-                                                {details.property_type || "Not provided"}
-                                            </dd>
-                                        </div>
-                                        <div>
-                                            <dt className="text-white/40">Pickup frequency</dt>
-                                            <dd>{details.preferred_pickup_frequency || "Not provided"}</dd>
-                                        </div>
-                                        <div>
-                                            <dt className="text-white/40">Waste type</dt>
-                                            <dd>{details.waste_type || "Not provided"}</dd>
-                                        </div>
-                                        {details.special_notes && (
-                                            <div className="sm:col-span-2">
-                                                <dt className="text-white/40">Notes</dt>
-                                                <dd>{details.special_notes}</dd>
+                                    <>
+                                        <dl className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                                            <div>
+                                                <dt className="text-white/40">Email</dt>
+                                                <dd>{details.email || "Not provided"}</dd>
                                             </div>
-                                        )}
-                                    </dl>
+                                            <div>
+                                                <dt className="text-white/40">Phone</dt>
+                                                <dd>{details.phone || "Not provided"}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-white/40">WhatsApp</dt>
+                                                <dd>{details.whatsapp_number || "Not provided"}</dd>
+                                            </div>
+                                            <div className="sm:col-span-2">
+                                                <dt className="text-white/40">Address</dt>
+                                                <dd>
+                                                    {details.address || "Not provided"}
+                                                    {details.landmark ? ` (near ${details.landmark})` : ""}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-white/40">LGA / State</dt>
+                                                <dd>
+                                                    {[details.lga, details.state].filter(Boolean).join(", ") ||
+                                                        "Not provided"}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-white/40">Property type</dt>
+                                                <dd className="capitalize">
+                                                    {details.property_type || "Not provided"}
+                                                </dd>
+                                            </div>
+                                            {details.property_class && (
+                                                <div>
+                                                    <dt className="text-white/40">Property class</dt>
+                                                    <dd>{details.property_class}</dd>
+                                                </div>
+                                            )}
+                                            <div>
+                                                <dt className="text-white/40">Pickup frequency</dt>
+                                                <dd>{details.preferred_pickup_frequency || "Not provided"}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-white/40">Waste type</dt>
+                                                <dd>{details.waste_type || "Not provided"}</dd>
+                                            </div>
+                                            {details.special_notes && (
+                                                <div className="sm:col-span-2">
+                                                    <dt className="text-white/40">Notes</dt>
+                                                    <dd>{details.special_notes}</dd>
+                                                </div>
+                                            )}
+                                        </dl>
+
+                                        {details.facility_details &&
+                                            Object.entries(details.facility_details).some(([, v]) => v) && (
+                                                <div className="mt-4 border-t border-white/10 pt-4">
+                                                    <p className="text-xs uppercase tracking-[0.15em] text-white/40">
+                                                        Facility details
+                                                    </p>
+                                                    <dl className="mt-2 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                                                        {Object.entries(details.facility_details)
+                                                            .filter(([, value]) => value)
+                                                            .map(([key, value]) => (
+                                                                <div key={key}>
+                                                                    <dt className="text-white/40">
+                                                                        {FACILITY_LABELS[key] ?? key}
+                                                                    </dt>
+                                                                    <dd>{value}</dd>
+                                                                </div>
+                                                            ))}
+                                                    </dl>
+                                                </div>
+                                            )}
+                                    </>
                                 ) : (
                                     <p className="text-sm text-amber-300/80">
                                         This customer hasn&apos;t submitted their property setup form

@@ -19,15 +19,15 @@ export async function createTask(formData: FormData) {
     const supabase = await createClient();
 
     const title = String(formData.get("title") || "").trim();
-    const customerId = String(formData.get("customerId") || "");
+    const customerId = String(formData.get("customerId") || "") || null;
     const employeeId = String(formData.get("employeeId") || "");
     const scheduledDate = String(formData.get("scheduledDate") || "") || null;
     const zone = String(formData.get("zone") || "").trim() || null;
     const priority = String(formData.get("priority") || "low");
 
-    if (!title || !customerId || !employeeId) return;
+    if (!title || !employeeId) return;
 
-    await supabase.from("tasks").insert({
+    const { error } = await supabase.from("tasks").insert({
         title,
         customer_id: customerId,
         employee_id: employeeId,
@@ -35,6 +35,11 @@ export async function createTask(formData: FormData) {
         zone,
         priority,
     });
+
+    if (error) {
+        console.error("createTask insert error:", error.message);
+        return;
+    }
 
     revalidatePath("/admin");
     revalidatePath("/employee");
@@ -52,18 +57,34 @@ export async function createInvoice(formData: FormData) {
 
     if (!customerId || !amount) return;
 
-    await supabase.from("payments").insert({
+    const { error } = await supabase.from("payments").insert({
         customer_id: customerId,
         amount,
         description,
         invoice_month: invoiceMonth,
     });
 
+    if (error) {
+        console.error("createInvoice insert error:", error.message);
+        return;
+    }
+
     revalidatePath("/admin");
     revalidatePath("/customer");
 }
 
-export async function sendMessage(formData: FormData) {
+export type MessageActionState = { success: boolean; error?: string } | null;
+
+const BROADCAST_ROLES: Record<string, ("customer" | "employee")[]> = {
+    __all_customers__: ["customer"],
+    __all_employees__: ["employee"],
+    __all_users__: ["customer", "employee"],
+};
+
+export async function sendMessage(
+    _prevState: MessageActionState,
+    formData: FormData
+): Promise<MessageActionState> {
     const profile = await requireAdmin();
     const supabase = await createClient();
 
@@ -71,14 +92,62 @@ export async function sendMessage(formData: FormData) {
     const subject = String(formData.get("subject") || "").trim();
     const body = String(formData.get("body") || "").trim();
 
-    if (!toProfileId || !subject || !body) return;
+    if (!toProfileId || !subject || !body) {
+        return { success: false, error: "Recipient, subject, and message are required." };
+    }
 
-    await supabase.from("messages").insert({
+    const broadcastRoles = BROADCAST_ROLES[toProfileId];
+
+    if (broadcastRoles) {
+        const { data: recipients, error: recipientsError } = await supabase
+            .from("profiles")
+            .select("id")
+            .in("role", broadcastRoles)
+            .eq("status", "approved");
+
+        if (recipientsError) {
+            console.error("broadcast recipients error:", recipientsError.message);
+            return { success: false, error: "Could not load recipients. Please try again." };
+        }
+
+        if (!recipients || recipients.length === 0) {
+            return { success: false, error: "No approved recipients found for this broadcast." };
+        }
+
+        const rows = recipients.map((r) => ({
+            from_profile_id: profile.id,
+            to_profile_id: r.id,
+            subject,
+            body,
+        }));
+
+        const { error } = await supabase.from("messages").insert(rows);
+
+        if (error) {
+            console.error("broadcast insert error:", error.message);
+            return { success: false, error: "Could not send broadcast. Please try again." };
+        }
+
+        revalidatePath("/admin");
+        revalidatePath("/employee");
+        revalidatePath("/customer");
+
+        return { success: true };
+    }
+
+    const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: toProfileId,
         subject,
         body,
     });
 
+    if (error) {
+        console.error("sendMessage insert error:", error.message);
+        return { success: false, error: "Could not send message. Please try again." };
+    }
+
     revalidatePath("/admin");
+
+    return { success: true };
 }

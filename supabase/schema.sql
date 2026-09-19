@@ -250,8 +250,12 @@ create table public.messages (
     to_profile_id uuid references public.profiles (id) on delete cascade,
     subject text not null,
     body text not null,
+    parent_message_id uuid references public.messages (id) on delete set null,
+    read_at timestamptz,
     created_at timestamptz not null default now()
 );
+
+create index messages_parent_message_id_idx on public.messages (parent_message_id);
 
 alter table public.messages enable row level security;
 
@@ -260,6 +264,15 @@ create policy "messages_select_own" on public.messages
 
 create policy "messages_all_admin" on public.messages
     for all using (public.is_admin()) with check (public.is_admin());
+
+-- Either side of a conversation can delete their own sent message.
+create policy "messages_delete_own" on public.messages
+    for delete using (auth.uid() = from_profile_id);
+
+-- Recipients can update (mark read) messages addressed to them.
+create policy "messages_update_own_inbox" on public.messages
+    for update using (auth.uid() = to_profile_id)
+    with check (auth.uid() = to_profile_id);
 
 -- Lets any authenticated user look up who to message without needing
 -- read access to the admin's profiles row (which RLS otherwise blocks

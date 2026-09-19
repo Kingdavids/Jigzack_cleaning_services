@@ -1,15 +1,17 @@
 'use client';
 
 import { useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { Bell, LogOut } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 
 export default function Topbar({
                                    title,
                                    subtitle,
+                                   unreadCount = 0,
                                }: {
     title: string;
     subtitle: string;
+    unreadCount?: number;
 }) {
     const router = useRouter();
 
@@ -32,13 +34,28 @@ export default function Topbar({
                         <p className="mt-0.5 text-sm text-white/50">{subtitle}</p>
                     </div>
 
-                    <button
-                        onClick={handleLogout}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/10 hover:text-white"
-                    >
-                        <LogOut size={16} />
-                        Logout
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <a
+                            href="#messages"
+                            aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}
+                            className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+                        >
+                            <Bell size={18} />
+                            {unreadCount > 0 && (
+                                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                                    {unreadCount > 9 ? "9+" : unreadCount}
+                                </span>
+                            )}
+                        </a>
+
+                        <button
+                            onClick={handleLogout}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white/80 transition hover:bg-white/10 hover:text-white"
+                        >
+                            <LogOut size={16} />
+                            Logout
+                        </button>
+                    </div>
                 </div>
             </div>
         </header>

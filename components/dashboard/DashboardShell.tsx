@@ -9,6 +9,7 @@ interface DashboardShellProps {
     role: UserRole;
     title: string;
     subtitle: string;
+    unreadCount?: number;
     children: ReactNode;
 }
 
@@ -16,6 +17,7 @@ export default function DashboardShell({
                                            role,
                                            title,
                                            subtitle,
+                                           unreadCount,
                                            children,
                                        }: DashboardShellProps) {
     return (
@@ -24,7 +26,7 @@ export default function DashboardShell({
                 <Sidebar role={role} />
 
                 <div className="flex min-h-screen flex-col">
-                    <Topbar title={title} subtitle={subtitle} />
+                    <Topbar title={title} subtitle={subtitle} unreadCount={unreadCount} />
 
                     <main className="flex-1 px-4 py-6 md:px-6 lg:px-8">
                         <div className="mx-auto max-w-7xl space-y-5">{children}</div>
