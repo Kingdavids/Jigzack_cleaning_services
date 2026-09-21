@@ -1,9 +1,10 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu } from "lucide-react";
+import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import type { UserRole } from "@/lib/dashboard-types";
 
@@ -24,13 +25,16 @@ export default function Topbar({
 }) {
     const router = useRouter();
     const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+    const [justArrived, setJustArrived] = useState(false);
+    const arrivedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         setUnreadCount(initialUnreadCount);
     }, [initialUnreadCount]);
 
     // Keeps the bell badge live across every dashboard page, not just the
-    // messages page itself -- a new message should bump it immediately.
+    // messages page itself, and surfaces a toast + a brief bell-ring --
+    // a quiet number changing in the corner is too easy to miss.
     useEffect(() => {
         const supabase = createClient();
 
@@ -39,7 +43,28 @@ export default function Topbar({
             .on(
                 "postgres_changes",
                 { event: "INSERT", schema: "public", table: "messages", filter: `to_profile_id=eq.${profileId}` },
-                () => setUnreadCount((c) => c + 1)
+                async (payload) => {
+                    setUnreadCount((c) => c + 1);
+
+                    setJustArrived(true);
+                    if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
+                    arrivedTimeout.current = setTimeout(() => setJustArrived(false), 1600);
+
+                    const newMessage = payload.new as { subject: string; from_profile_id: string };
+                    const { data: sender } = await supabase
+                        .from("profiles")
+                        .select("full_name")
+                        .eq("id", newMessage.from_profile_id)
+                        .single();
+
+                    toast.message(`New message from ${sender?.full_name ?? "someone"}`, {
+                        description: newMessage.subject,
+                        action: {
+                            label: "View",
+                            onClick: () => router.push(`/${role}/messages`),
+                        },
+                    });
+                }
             )
             .on(
                 "postgres_changes",
@@ -54,8 +79,9 @@ export default function Topbar({
 
         return () => {
             supabase.removeChannel(channel);
+            if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
         };
-    }, [profileId]);
+    }, [profileId, role, router]);
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -91,11 +117,15 @@ export default function Topbar({
                         <Link
                             href={`/${role}/messages`}
                             aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}
-                            className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+                            className={`relative inline-flex h-11 w-11 items-center justify-center rounded-xl border text-white/80 transition hover:bg-white/10 hover:text-white ${
+                                unreadCount > 0
+                                    ? "border-amber-400/30 bg-amber-400/10"
+                                    : "border-white/10 bg-white/5"
+                            }`}
                         >
-                            <Bell size={18} />
+                            <Bell size={18} className={justArrived ? "bell-ring" : ""} />
                             {unreadCount > 0 && (
-                                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                                <span className="absolute -right-1 -top-1 flex h-5 min-w-5 animate-pulse items-center justify-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
                                     {unreadCount > 9 ? "9+" : unreadCount}
                                 </span>
                             )}
