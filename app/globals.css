@@ -342,3 +342,55 @@ html {
   animation: contactPanel 18s ease-in-out infinite;
   will-change: transform;
 }
+
+/* Preloader: garbage truck driving in place -- spinning wheels, a gentle
+   bounce, trailing exhaust puffs, and a moving dashed "road" line. */
+@keyframes preloaderWheelSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.preloader-wheel {
+  animation: preloaderWheelSpin 0.6s linear infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes preloaderBounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.preloader-truck {
+  animation: preloaderBounce 1.1s ease-in-out infinite;
+}
+
+@keyframes preloaderPuff {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  25% { opacity: 0.55; }
+  100% { opacity: 0; transform: translate(-26px, -10px) scale(1.3); }
+}
+.preloader-puff {
+  animation: preloaderPuff 1.5s ease-out infinite;
+}
+.preloader-puff-1 { animation-delay: 0s; }
+.preloader-puff-2 { animation-delay: 0.5s; }
+.preloader-puff-3 { animation-delay: 1s; }
+
+@keyframes preloaderRoad {
+  from { background-position: 0 0; }
+  to { background-position: -40px 0; }
+}
+.preloader-road {
+  background-image: repeating-linear-gradient(to right, rgba(251, 191, 36, 0.6) 0 14px, transparent 14px 24px);
+  animation: preloaderRoad 0.5s linear infinite;
+}
+
+@keyframes preloaderEllipsis {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75%, 100% { content: "..."; }
+}
+.preloader-ellipsis::after {
+  content: "";
+  animation: preloaderEllipsis 1.4s steps(1) infinite;
+}
