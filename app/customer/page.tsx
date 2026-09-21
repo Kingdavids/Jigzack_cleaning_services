@@ -52,6 +52,7 @@ export default async function CustomerPage() {
     return (
         <DashboardShell
             role="customer"
+            profileId={profile.id}
             title="Customer Dashboard"
             subtitle={`Welcome back, ${profile.full_name ?? customer?.full_name ?? "there"} — track service history, upcoming pickups, photos, and invoices.`}
             unreadCount={unreadCount}

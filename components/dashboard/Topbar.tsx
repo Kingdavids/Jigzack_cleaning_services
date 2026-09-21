@@ -1,6 +1,7 @@
 'use client';
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
@@ -9,17 +10,52 @@ import type { UserRole } from "@/lib/dashboard-types";
 export default function Topbar({
                                    title,
                                    subtitle,
-                                   unreadCount = 0,
+                                   unreadCount: initialUnreadCount = 0,
                                    role,
+                                   profileId,
                                    onOpenMenu,
                                }: {
     title: string;
     subtitle: string;
     unreadCount?: number;
     role: UserRole;
+    profileId: string;
     onOpenMenu: () => void;
 }) {
     const router = useRouter();
+    const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+
+    useEffect(() => {
+        setUnreadCount(initialUnreadCount);
+    }, [initialUnreadCount]);
+
+    // Keeps the bell badge live across every dashboard page, not just the
+    // messages page itself -- a new message should bump it immediately.
+    useEffect(() => {
+        const supabase = createClient();
+
+        const channel = supabase
+            .channel(`unread-badge-${profileId}`)
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "messages", filter: `to_profile_id=eq.${profileId}` },
+                () => setUnreadCount((c) => c + 1)
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "messages", filter: `to_profile_id=eq.${profileId}` },
+                (payload) => {
+                    if ((payload.new as { read_at: string | null }).read_at) {
+                        setUnreadCount((c) => Math.max(0, c - 1));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [profileId]);
 
     const handleLogout = async () => {
         const supabase = createClient();

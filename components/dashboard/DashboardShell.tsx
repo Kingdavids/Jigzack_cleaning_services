@@ -7,6 +7,7 @@ import Topbar from "./Topbar";
 
 interface DashboardShellProps {
     role: UserRole;
+    profileId: string;
     title: string;
     subtitle: string;
     unreadCount?: number;
@@ -15,6 +16,7 @@ interface DashboardShellProps {
 
 export default function DashboardShell({
                                            role,
+                                           profileId,
                                            title,
                                            subtitle,
                                            unreadCount,
@@ -33,6 +35,7 @@ export default function DashboardShell({
                         subtitle={subtitle}
                         unreadCount={unreadCount}
                         role={role}
+                        profileId={profileId}
                         onOpenMenu={() => setMobileNavOpen(true)}
                     />
 

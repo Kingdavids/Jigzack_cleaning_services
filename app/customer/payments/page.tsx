@@ -18,6 +18,7 @@ export default async function CustomerPaymentsPage() {
     return (
         <DashboardShell
             role="customer"
+            profileId={profile.id}
             title="Invoices"
             subtitle="Download and review your billing records."
             unreadCount={unreadCount}

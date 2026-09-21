@@ -68,6 +68,19 @@ create policy "profiles_select_own" on public.profiles
 create policy "profiles_select_admin" on public.profiles
     for select using (public.is_admin());
 
+-- Lets a message thread's other party resolve to a real name instead of
+-- silently returning null (RLS otherwise blocks a non-admin from reading
+-- e.g. the admin's profiles row, which the messages UI joins against to
+-- show who a thread is with).
+create policy "profiles_select_message_counterpart" on public.profiles
+    for select using (
+        exists (
+            select 1 from public.messages
+            where (messages.from_profile_id = profiles.id and messages.to_profile_id = auth.uid())
+               or (messages.to_profile_id = profiles.id and messages.from_profile_id = auth.uid())
+        )
+    );
+
 -- Admin approves/declines signups (ApprovalsList updates status only).
 create policy "profiles_update_admin" on public.profiles
     for update using (public.is_admin())
@@ -336,6 +349,11 @@ create policy "messages_insert_to_admin" on public.messages
         auth.uid() = from_profile_id
         and public.is_approved_admin(to_profile_id)
     );
+
+-- Lets dashboard clients subscribe to live INSERT/UPDATE/DELETE events
+-- on their own messages (scoped by the messages_select_own RLS policy
+-- above) instead of polling or waiting for a page reload.
+alter publication supabase_realtime add table public.messages;
 
 -- ============================================================
 -- storage: task-photos bucket

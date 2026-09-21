@@ -1,10 +1,11 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
-import type { MessageActionState } from "@/lib/messaging-actions";
+import { ChevronDown, Trash2 } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+import { markMessagesRead, type MessageActionState } from "@/lib/messaging-actions";
 
 export type MessageRow = {
     id: string;
@@ -20,6 +21,20 @@ export type MessageRow = {
 };
 
 type ReplyAction = (prevState: MessageActionState, formData: FormData) => Promise<MessageActionState>;
+
+function formatWhen(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    const sameDay = date.toDateString() === now.toDateString();
+
+    if (sameDay) {
+        return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+
+    return date.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
 
 function ReplySubmit() {
     const { pending } = useFormStatus();
@@ -50,7 +65,12 @@ function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: R
     }, [state]);
 
     return (
-        <form ref={formRef} action={formAction} className="mt-3 flex gap-2">
+        <form
+            ref={formRef}
+            action={formAction}
+            onClick={(e) => e.stopPropagation()}
+            className="mt-3 flex gap-2"
+        >
             <input type="hidden" name="parentMessageId" value={parentId} />
             <input
                 name="body"
@@ -73,6 +93,7 @@ function DeleteForm({
     return (
         <form
             action={deleteAction}
+            onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => {
                 if (!confirm("Delete this message?")) {
                     e.preventDefault();
@@ -95,40 +116,30 @@ function MessageBubble({
                             message,
                             currentProfileId,
                             deleteAction,
-                            showSubject,
                         }: {
     message: MessageRow;
     currentProfileId: string;
     deleteAction: (formData: FormData) => void;
-    showSubject: boolean;
 }) {
     const canDelete = message.from_profile_id === currentProfileId;
 
     return (
         <div>
             <div className="flex items-start justify-between gap-3">
-                {showSubject ? (
-                    <p className="text-sm font-bold">{message.subject}</p>
-                ) : (
-                    <p className="text-xs font-semibold text-white/60">
-                        {message.from_profile?.full_name ?? "You"}
-                    </p>
-                )}
+                <p className="text-xs font-semibold text-white/60">
+                    {message.from_profile_id === currentProfileId
+                        ? "You"
+                        : message.from_profile?.full_name ?? "Unknown"}
+                </p>
                 {canDelete && <DeleteForm messageId={message.id} deleteAction={deleteAction} />}
             </div>
-            {showSubject && (
-                <p className="mt-1 text-xs text-white/50">
-                    {message.from_profile?.full_name ?? "You"} →{" "}
-                    {message.to_profile?.full_name ?? "Admin"}
-                </p>
-            )}
             <p className="mt-2 text-sm text-white/70">{message.body}</p>
         </div>
     );
 }
 
 export default function MessageThreadList({
-                                               messages,
+                                               messages: initialMessages,
                                                currentProfileId,
                                                replyAction,
                                                deleteAction,
@@ -138,16 +149,104 @@ export default function MessageThreadList({
     replyAction: ReplyAction;
     deleteAction: (formData: FormData) => void;
 }) {
-    const roots = messages.filter((m) => !m.parent_message_id);
-    const repliesByRoot = new Map<string, MessageRow[]>();
+    const [messages, setMessages] = useState(initialMessages);
+    const [openThreadId, setOpenThreadId] = useState<string | null>(null);
 
-    messages
-        .filter((m) => m.parent_message_id)
-        .forEach((m) => {
-            const list = repliesByRoot.get(m.parent_message_id as string) ?? [];
-            list.push(m);
-            repliesByRoot.set(m.parent_message_id as string, list);
-        });
+    useEffect(() => {
+        setMessages(initialMessages);
+    }, [initialMessages]);
+
+    // Live-updates the thread list as messages arrive or get deleted, instead
+    // of requiring a page reload to see anything sent/received after load.
+    useEffect(() => {
+        const supabase = createClient();
+
+        // A raw postgres_changes payload only has the bare message row --
+        // no from_profile/to_profile names -- so re-fetch it with the same
+        // embedded select the initial page load used before adding it in.
+        const fetchAndAdd = async (id: string) => {
+            const { data } = await supabase
+                .from("messages")
+                .select(
+                    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+                )
+                .eq("id", id)
+                .single();
+
+            if (!data) return;
+
+            const row = data as unknown as MessageRow;
+            setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+        };
+
+        const channel = supabase
+            .channel(`messages-thread-list-${currentProfileId}`)
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "messages", filter: `to_profile_id=eq.${currentProfileId}` },
+                (payload) => {
+                    fetchAndAdd((payload.new as { id: string }).id);
+                    // MarkMessagesReadOnView only covers the count at initial
+                    // load -- a message arriving live while this list is
+                    // already open would otherwise stay unread forever.
+                    markMessagesRead();
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "messages", filter: `from_profile_id=eq.${currentProfileId}` },
+                (payload) => fetchAndAdd((payload.new as { id: string }).id)
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "messages" },
+                (payload) => {
+                    const deletedId = (payload.old as { id?: string }).id;
+                    if (!deletedId) return;
+                    setMessages((prev) => prev.filter((m) => m.id !== deletedId));
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "messages", filter: `to_profile_id=eq.${currentProfileId}` },
+                (payload) => {
+                    const updated = payload.new as { id: string; read_at: string | null };
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === updated.id ? { ...m, read_at: updated.read_at } : m))
+                    );
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentProfileId]);
+
+    const repliesByRoot = useMemo(() => {
+        const map = new Map<string, MessageRow[]>();
+        messages
+            .filter((m) => m.parent_message_id)
+            .forEach((m) => {
+                const list = map.get(m.parent_message_id as string) ?? [];
+                list.push(m);
+                map.set(m.parent_message_id as string, list);
+            });
+        return map;
+    }, [messages]);
+
+    const roots = useMemo(() => {
+        return messages
+            .filter((m) => !m.parent_message_id)
+            .map((root) => {
+                const replies = (repliesByRoot.get(root.id) ?? []).sort(
+                    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
+                const latest = replies.length > 0 ? replies[replies.length - 1] : root;
+                return { root, replies, latest };
+            })
+            .sort((a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime());
+    }, [repliesByRoot, messages]);
 
     if (roots.length === 0) {
         return (
@@ -158,36 +257,81 @@ export default function MessageThreadList({
     }
 
     return (
-        <div className="space-y-4">
-            {roots.map((root) => {
-                const replies = (repliesByRoot.get(root.id) ?? []).sort(
-                    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-                );
+        <div className="space-y-3">
+            {roots.map(({ root, replies, latest }) => {
+                const isOpen = openThreadId === root.id;
+                const counterpart =
+                    root.from_profile_id === currentProfileId
+                        ? root.to_profile?.full_name
+                        : root.from_profile?.full_name;
+                const isUnread = !root.read_at && root.to_profile_id === currentProfileId;
 
                 return (
-                    <div key={root.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                        <MessageBubble
-                            message={root}
-                            currentProfileId={currentProfileId}
-                            deleteAction={deleteAction}
-                            showSubject
-                        />
+                    <div
+                        key={root.id}
+                        className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition hover:border-white/20"
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setOpenThreadId(isOpen ? null : root.id)}
+                            className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                        >
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />}
+                                    <p className="truncate text-sm font-bold">{root.subject}</p>
+                                    {replies.length > 0 && (
+                                        <span className="shrink-0 text-xs text-white/40">
+                                            ({replies.length + 1})
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="mt-1 truncate text-xs text-white/50">
+                                    {counterpart ?? "Unknown"}
+                                </p>
+                                <p className="mt-1 truncate text-sm text-white/60">{latest.body}</p>
+                            </div>
 
-                        {replies.length > 0 && (
-                            <div className="mt-3 space-y-3 border-l border-white/10 pl-4">
-                                {replies.map((reply) => (
+                            <div className="flex shrink-0 flex-col items-end gap-2">
+                                <span className="text-xs text-white/40">{formatWhen(latest.created_at)}</span>
+                                <ChevronDown
+                                    className={`h-4 w-4 text-white/40 transition-transform duration-300 ${
+                                        isOpen ? "rotate-180" : ""
+                                    }`}
+                                />
+                            </div>
+                        </button>
+
+                        <div
+                            className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+                                isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+                            }`}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="space-y-3 border-t border-white/10 p-4">
                                     <MessageBubble
-                                        key={reply.id}
-                                        message={reply}
+                                        message={root}
                                         currentProfileId={currentProfileId}
                                         deleteAction={deleteAction}
-                                        showSubject={false}
                                     />
-                                ))}
-                            </div>
-                        )}
 
-                        <ReplyForm parentId={root.id} replyAction={replyAction} />
+                                    {replies.length > 0 && (
+                                        <div className="space-y-3 border-l border-white/10 pl-4">
+                                            {replies.map((reply) => (
+                                                <MessageBubble
+                                                    key={reply.id}
+                                                    message={reply}
+                                                    currentProfileId={currentProfileId}
+                                                    deleteAction={deleteAction}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <ReplyForm parentId={root.id} replyAction={replyAction} />
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             })}

@@ -5,7 +5,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import { UserCheck, Users, Briefcase, Wallet } from "lucide-react";
 
 export default async function AdminPage() {
-    const { unreadCount } = await requireDashboardAccess("admin");
+    const { profile, unreadCount } = await requireDashboardAccess("admin");
     const supabase = await createClient();
 
     const { data: pendingUsers } = await supabase
@@ -37,6 +37,7 @@ export default async function AdminPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Admin Dashboard"
             subtitle="Manage operations, approvals, customers, tasks, uploads, messages, and payments."
             unreadCount={unreadCount}

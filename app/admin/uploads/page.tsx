@@ -12,7 +12,7 @@ type UploadRow = {
 };
 
 export default async function AdminUploadsPage() {
-    const { supabase, unreadCount } = await requireDashboardAccess("admin");
+    const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     const { data: uploadsData } = await supabase
         .from("uploads")
@@ -25,6 +25,7 @@ export default async function AdminUploadsPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Task Uploads"
             subtitle="Photos uploaded by employees."
             unreadCount={unreadCount}

@@ -32,6 +32,7 @@ export default async function AdminMessagesPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Messages"
             subtitle="Recent communication."
             unreadCount={unreadCount}

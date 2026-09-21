@@ -4,7 +4,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 
 export default async function AdminApprovalsPage() {
-    const { supabase, unreadCount } = await requireDashboardAccess("admin");
+    const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     const { data: pendingUsers } = await supabase
         .from("profiles")
@@ -37,6 +37,7 @@ export default async function AdminApprovalsPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Signup Approvals"
             subtitle="Approve or decline new users."
             unreadCount={unreadCount}

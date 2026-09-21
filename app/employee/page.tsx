@@ -25,6 +25,7 @@ export default async function EmployeePage() {
     return (
         <DashboardShell
             role="employee"
+            profileId={profile.id}
             title="Employee Dashboard"
             subtitle="Track pickups, upload photos, and stay in touch with admin."
             unreadCount={unreadCount}

@@ -15,7 +15,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default async function AdminCustomersPage() {
-    const { supabase, unreadCount } = await requireDashboardAccess("admin");
+    const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     const { data: customersData } = await supabase
         .from("customers")
@@ -27,6 +27,7 @@ export default async function AdminCustomersPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Customers"
             subtitle="Customer records, service activity, and balances."
             unreadCount={unreadCount}

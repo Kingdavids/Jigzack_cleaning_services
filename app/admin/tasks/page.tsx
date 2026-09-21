@@ -27,7 +27,7 @@ function formatDate(value: string | null | undefined) {
 }
 
 export default async function AdminTasksPage() {
-    const { supabase, unreadCount } = await requireDashboardAccess("admin");
+    const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     const { data: directoryData } = await supabase
         .from("profiles")
@@ -53,6 +53,7 @@ export default async function AdminTasksPage() {
     return (
         <DashboardShell
             role="admin"
+            profileId={profile.id}
             title="Task Progress"
             subtitle="Live overview of assigned service tasks."
             unreadCount={unreadCount}

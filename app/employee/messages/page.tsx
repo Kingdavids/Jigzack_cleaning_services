@@ -23,6 +23,7 @@ export default async function EmployeeMessagesPage() {
     return (
         <DashboardShell
             role="employee"
+            profileId={profile.id}
             title="Messages"
             subtitle="Contact admin."
             unreadCount={unreadCount}

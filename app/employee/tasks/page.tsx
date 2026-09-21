@@ -44,6 +44,7 @@ export default async function EmployeeTasksPage() {
     return (
         <DashboardShell
             role="employee"
+            profileId={profile.id}
             title="Assigned Tasks"
             subtitle="Live overview of your service work orders."
             unreadCount={unreadCount}

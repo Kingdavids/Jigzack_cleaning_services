@@ -21,7 +21,7 @@ function formatDate(value: string | null) {
 }
 
 export default async function EmployeeUploadsPage() {
-    const { supabase, unreadCount } = await requireDashboardAccess("employee");
+    const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");
 
     const { data: uploadData } = await supabase
         .from("uploads")
@@ -34,6 +34,7 @@ export default async function EmployeeUploadsPage() {
     return (
         <DashboardShell
             role="employee"
+            profileId={profile.id}
             title="Task Uploads"
             subtitle="Recent before/after photos across the team."
             unreadCount={unreadCount}

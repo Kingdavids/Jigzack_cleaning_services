@@ -23,6 +23,7 @@ export default async function CustomerMessagesPage() {
     return (
         <DashboardShell
             role="customer"
+            profileId={profile.id}
             title="Messages"
             subtitle="Contact the Jigzack team."
             unreadCount={unreadCount}

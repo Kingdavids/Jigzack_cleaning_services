@@ -44,6 +44,7 @@ export default async function CustomerTasksPage() {
     return (
         <DashboardShell
             role="customer"
+            profileId={profile.id}
             title="My Tasks"
             subtitle="Your next scheduled service and service photos."
             unreadCount={unreadCount}
