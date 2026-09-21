@@ -41,9 +41,11 @@ export async function createTask(formData: FormData) {
         return;
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/admin/tasks");
     revalidatePath("/employee");
+    revalidatePath("/employee/tasks");
     revalidatePath("/customer");
+    revalidatePath("/customer/tasks");
 }
 
 export async function createInvoice(formData: FormData) {
@@ -69,8 +71,9 @@ export async function createInvoice(formData: FormData) {
         return;
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/admin/payments");
     revalidatePath("/customer");
+    revalidatePath("/customer/payments");
 }
 
 export type MessageActionState = { success: boolean; error?: string } | null;
@@ -128,9 +131,9 @@ export async function sendMessage(
             return { success: false, error: "Could not send broadcast. Please try again." };
         }
 
-        revalidatePath("/admin");
-        revalidatePath("/employee");
-        revalidatePath("/customer");
+        revalidatePath("/admin/messages");
+        revalidatePath("/employee/messages");
+        revalidatePath("/customer/messages");
 
         return { success: true };
     }
@@ -147,7 +150,7 @@ export async function sendMessage(
         return { success: false, error: "Could not send message. Please try again." };
     }
 
-    revalidatePath("/admin");
+    revalidatePath("/admin/messages");
 
     return { success: true };
 }

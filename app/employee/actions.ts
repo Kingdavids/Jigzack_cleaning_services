@@ -21,8 +21,8 @@ export async function startTask(formData: FormData) {
         .eq("id", taskId)
         .eq("employee_id", profile.id);
 
-    revalidatePath("/employee");
-    revalidatePath("/admin");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/admin/tasks");
 }
 
 export async function endTask(formData: FormData) {
@@ -43,8 +43,10 @@ export async function endTask(formData: FormData) {
         .eq("employee_id", profile.id);
 
     revalidatePath("/employee");
-    revalidatePath("/admin");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/admin/tasks");
     revalidatePath("/customer");
+    revalidatePath("/customer/tasks");
 }
 
 export async function uploadTaskPhoto(formData: FormData) {
@@ -101,7 +103,8 @@ export async function uploadTaskPhoto(formData: FormData) {
         return;
     }
 
-    revalidatePath("/employee");
-    revalidatePath("/admin");
+    revalidatePath("/employee/uploads");
+    revalidatePath("/admin/uploads");
     revalidatePath("/customer");
+    revalidatePath("/customer/tasks");
 }

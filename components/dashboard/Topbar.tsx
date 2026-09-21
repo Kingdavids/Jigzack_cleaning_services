@@ -1,17 +1,23 @@
 'use client';
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Menu } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
+import type { UserRole } from "@/lib/dashboard-types";
 
 export default function Topbar({
                                    title,
                                    subtitle,
                                    unreadCount = 0,
+                                   role,
+                                   onOpenMenu,
                                }: {
     title: string;
     subtitle: string;
     unreadCount?: number;
+    role: UserRole;
+    onOpenMenu: () => void;
 }) {
     const router = useRouter();
 
@@ -26,17 +32,28 @@ export default function Topbar({
         <header className="sticky top-0 z-30 border-b border-white/10 bg-[#0a0a0b]/90 backdrop-blur">
             <div className="px-4 py-4 md:px-6 lg:px-8">
                 <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-                            {title}
-                            <span className="text-amber-300">.</span>
-                        </h1>
-                        <p className="mt-0.5 text-sm text-white/50">{subtitle}</p>
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={onOpenMenu}
+                            aria-label="Open menu"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 lg:hidden"
+                        >
+                            <Menu size={18} />
+                        </button>
+
+                        <div>
+                            <h1 className="text-xl font-bold tracking-tight md:text-2xl">
+                                {title}
+                                <span className="text-amber-300">.</span>
+                            </h1>
+                            <p className="mt-0.5 text-sm text-white/50">{subtitle}</p>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <a
-                            href="#messages"
+                        <Link
+                            href={`/${role}/messages`}
                             aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}
                             className="relative inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
                         >
@@ -46,7 +63,7 @@ export default function Topbar({
                                     {unreadCount > 9 ? "9+" : unreadCount}
                                 </span>
                             )}
-                        </a>
+                        </Link>
 
                         <button
                             onClick={handleLogout}

@@ -39,9 +39,9 @@ export async function sendMessageToAdmin(
         return { success: false, error: "Could not send message. Please try again." };
     }
 
-    revalidatePath("/employee");
-    revalidatePath("/customer");
-    revalidatePath("/admin");
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
+    revalidatePath("/admin/messages");
 
     return { success: true };
 }
@@ -93,9 +93,9 @@ export async function replyToMessage(
         return { success: false, error: "Could not send reply. Please try again." };
     }
 
-    revalidatePath("/employee");
-    revalidatePath("/customer");
-    revalidatePath("/admin");
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
+    revalidatePath("/admin/messages");
 
     return { success: true };
 }
@@ -128,7 +128,7 @@ export async function deleteMessage(formData: FormData) {
         return;
     }
 
-    revalidatePath("/employee");
-    revalidatePath("/customer");
-    revalidatePath("/admin");
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
+    revalidatePath("/admin/messages");
 }
