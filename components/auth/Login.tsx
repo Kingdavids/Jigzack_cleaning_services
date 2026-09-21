@@ -2,10 +2,12 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 
@@ -149,19 +151,17 @@ export default function Login() {
                                 Password
                             </Label>
 
-                            <button
-                                type="button"
+                            <Link
+                                href="/auth/forgot-password"
                                 className="text-xs font-semibold text-amber-300 hover:text-amber-200 transition"
-                                onClick={() => toast.message("Forgot password flow coming soon")}
                             >
                                 Forgot password?
-                            </button>
+                            </Link>
                         </div>
 
-                        <Input
+                        <PasswordInput
                             id="password"
                             name="password"
-                            type="password"
                             autoComplete="current-password"
                             className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />

@@ -6,6 +6,7 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from "@/component
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 
@@ -116,10 +117,9 @@ export default function Signup() {
                         <Label htmlFor="password" className="text-white/80">
                             Password
                         </Label>
-                        <Input
+                        <PasswordInput
                             id="password"
                             name="password"
-                            type="password"
                             autoComplete="new-password"
                             className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
