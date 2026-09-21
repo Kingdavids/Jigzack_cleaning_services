@@ -22,6 +22,8 @@ export type MessageRow = {
 
 type ReplyAction = (prevState: MessageActionState, formData: FormData) => Promise<MessageActionState>;
 
+const PAGE_SIZE = 8;
+
 function formatWhen(value: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
@@ -164,6 +166,7 @@ export default function MessageThreadList({
 }) {
     const [messages, setMessages] = useState(initialMessages);
     const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+    const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
     useEffect(() => {
         setMessages(initialMessages);
@@ -256,10 +259,16 @@ export default function MessageThreadList({
                     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
                 const latest = replies.length > 0 ? replies[replies.length - 1] : root;
-                return { root, replies, latest };
+                // Any message in the thread addressed to me can be the unread
+                // one -- not just the root -- otherwise a fresh reply on an
+                // already-read thread would never show as unread.
+                const isUnread = [root, ...replies].some(
+                    (m) => m.to_profile_id === currentProfileId && !m.read_at
+                );
+                return { root, replies, latest, isUnread };
             })
             .sort((a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime());
-    }, [repliesByRoot, messages]);
+    }, [repliesByRoot, messages, currentProfileId]);
 
     if (roots.length === 0) {
         return (
@@ -269,20 +278,26 @@ export default function MessageThreadList({
         );
     }
 
+    const visibleRoots = roots.slice(0, visibleCount);
+    const remaining = roots.length - visibleRoots.length;
+
     return (
         <div className="space-y-3">
-            {roots.map(({ root, replies, latest }) => {
+            {visibleRoots.map(({ root, replies, latest, isUnread }) => {
                 const isOpen = openThreadId === root.id;
                 const counterpart =
                     root.from_profile_id === currentProfileId
                         ? root.to_profile?.full_name
                         : root.from_profile?.full_name;
-                const isUnread = !root.read_at && root.to_profile_id === currentProfileId;
 
                 return (
                     <div
                         key={root.id}
-                        className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03] transition hover:border-white/20"
+                        className={`overflow-hidden rounded-xl border transition ${
+                            isUnread
+                                ? "border-amber-400/30 bg-amber-400/[0.06] hover:border-amber-400/50"
+                                : "border-white/10 bg-white/[0.03] hover:border-white/20"
+                        }`}
                     >
                         <button
                             type="button"
@@ -291,8 +306,16 @@ export default function MessageThreadList({
                         >
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                    {isUnread && <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />}
-                                    <p className="truncate text-sm font-bold">{root.subject}</p>
+                                    {isUnread && (
+                                        <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.2)]" />
+                                    )}
+                                    <p
+                                        className={`truncate text-sm ${
+                                            isUnread ? "font-bold text-white" : "font-medium text-white/70"
+                                        }`}
+                                    >
+                                        {root.subject}
+                                    </p>
                                     {replies.length > 0 && (
                                         <span className="shrink-0 text-xs text-white/40">
                                             ({replies.length + 1})
@@ -302,11 +325,21 @@ export default function MessageThreadList({
                                 <p className="mt-1 truncate text-xs text-white/50">
                                     {counterpart ?? "Unknown"}
                                 </p>
-                                <p className="mt-1 truncate text-sm text-white/60">{latest.body}</p>
+                                <p
+                                    className={`mt-1 truncate text-sm ${
+                                        isUnread ? "text-white/75" : "text-white/40"
+                                    }`}
+                                >
+                                    {latest.body}
+                                </p>
                             </div>
 
                             <div className="flex shrink-0 flex-col items-end gap-2">
-                                <span className="text-xs text-white/40">{formatWhen(latest.created_at)}</span>
+                                <span
+                                    className={`text-xs ${isUnread ? "font-semibold text-amber-300" : "text-white/40"}`}
+                                >
+                                    {formatWhen(latest.created_at)}
+                                </span>
                                 <ChevronDown
                                     className={`h-4 w-4 text-white/40 transition-transform duration-300 ${
                                         isOpen ? "rotate-180" : ""
@@ -346,6 +379,16 @@ export default function MessageThreadList({
                     </div>
                 );
             })}
+
+            {remaining > 0 && (
+                <button
+                    type="button"
+                    onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+                    className="w-full rounded-xl border border-white/10 bg-white/[0.03] py-3 text-sm font-semibold text-white/60 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                >
+                    Show {Math.min(remaining, PAGE_SIZE)} more ({remaining} remaining)
+                </button>
+            )}
         </div>
     );
 }
