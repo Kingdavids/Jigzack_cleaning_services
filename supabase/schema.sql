@@ -310,19 +310,21 @@ create policy "messages_update_own_inbox" on public.messages
     with check (auth.uid() = to_profile_id);
 
 -- Lets any authenticated user look up who to message without needing
--- read access to the admin's profiles row (which RLS otherwise blocks
--- for non-admins).
-create or replace function public.default_admin_id()
-returns uuid
+-- read access to the admin profiles rows (which RLS otherwise blocks
+-- for non-admins). Returns every approved admin, not just one -- a
+-- "contact admin" message is fanned out to all of them (the same
+-- fan-out shape as an admin's own broadcast to all customers/employees)
+-- rather than always landing on whichever admin account happens to be
+-- oldest, where a second admin would never see it at all.
+create or replace function public.approved_admin_ids()
+returns uuid[]
 language sql
 security definer
 set search_path = public
 stable
 as $$
-    select id from public.profiles
-    where role = 'admin' and status = 'approved'
-    order by created_at asc
-    limit 1;
+    select coalesce(array_agg(id), '{}') from public.profiles
+    where role = 'admin' and status = 'approved';
 $$;
 
 -- Bypasses RLS internally so the insert policy below can check "is the

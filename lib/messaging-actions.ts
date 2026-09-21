@@ -20,19 +20,24 @@ export async function sendMessageToAdmin(
         return { success: false, error: "Subject and message are required." };
     }
 
-    const { data: adminId, error: adminIdError } = await supabase.rpc("default_admin_id");
+    const { data: adminIds, error: adminIdsError } = await supabase.rpc("approved_admin_ids");
 
-    if (adminIdError || !adminId) {
-        console.error("default_admin_id RPC error:", adminIdError?.message);
+    if (adminIdsError || !adminIds || adminIds.length === 0) {
+        console.error("approved_admin_ids RPC error:", adminIdsError?.message);
         return { success: false, error: "Could not reach admin. Please try again." };
     }
 
-    const { error: insertError } = await supabase.from("messages").insert({
+    // Every admin gets their own copy so whichever one is actually working
+    // sees it and gets the live alert -- not just whichever admin account
+    // happens to be oldest.
+    const rows = (adminIds as string[]).map((adminId) => ({
         from_profile_id: profile.id,
         to_profile_id: adminId,
         subject,
         body,
-    });
+    }));
+
+    const { error: insertError } = await supabase.from("messages").insert(rows);
 
     if (insertError) {
         console.error("messages insert error:", insertError.message);
