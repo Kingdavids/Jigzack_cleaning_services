@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
 
 const NAV_LINKS = [
-    { href: '/#home', label: 'Home' },
-    { href: '/#services', label: 'Our Services' },
-    { href: '/#about', label: 'About Us' },
-    { href: '/#contact', label: 'Contact Us' },
+    { href: '/', label: 'Home' },
+    { href: '/services', label: 'Our Services' },
+    { href: '/about', label: 'About Us' },
+    { href: '/contact', label: 'Contact Us' },
 ];
 
 export default function Navbar() {
@@ -19,7 +19,7 @@ export default function Navbar() {
             <div className="mx-auto max-w-7xl px-6 py-4 md:px-10">
                 <div className="flex items-center justify-between gap-6">
                     <Link
-                        href="/#home"
+                        href="/"
                         onClick={() => setOpen(false)}
                         className="shrink-0 text-xl font-extrabold tracking-tight text-amber-500"
                     >
@@ -47,7 +47,7 @@ export default function Navbar() {
                         </Link>
 
                         <Link
-                            href="/#services"
+                            href="/services"
                             className="rounded-xl bg-amber-500 px-5 py-2 font-semibold text-black shadow-lg transition hover:bg-amber-300"
                         >
                             Learn more
@@ -94,7 +94,7 @@ export default function Navbar() {
                         </Link>
 
                         <Link
-                            href="/#services"
+                            href="/services"
                             onClick={() => setOpen(false)}
                             className="rounded-xl bg-amber-500 px-5 py-2.5 text-center font-semibold text-black shadow-lg transition hover:bg-amber-300"
                         >

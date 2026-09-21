@@ -7,7 +7,7 @@ export default function Footer() {
             <div className="mx-auto max-w-7xl px-6 py-14 md:px-10">
                 <div className="grid gap-10 md:grid-cols-[1.3fr_0.7fr_0.7fr_1fr]">
                     <div>
-                        <Link href="/#home" className="text-xl font-extrabold tracking-tight text-amber-500">
+                        <Link href="/" className="text-xl font-extrabold tracking-tight text-amber-500">
                             Jigzack<span className="text-amber-300">.</span>
                         </Link>
                         <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
@@ -22,10 +22,10 @@ export default function Footer() {
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Explore</p>
                         <div className="mt-4 flex flex-col gap-3 text-sm">
-                            <Link href="/#home" className="text-white/65 transition hover:text-amber-300">Home</Link>
-                            <Link href="/#services" className="text-white/65 transition hover:text-amber-300">Our Services</Link>
-                            <Link href="/#about" className="text-white/65 transition hover:text-amber-300">About Us</Link>
-                            <Link href="/#contact" className="text-white/65 transition hover:text-amber-300">Contact Us</Link>
+                            <Link href="/" className="text-white/65 transition hover:text-amber-300">Home</Link>
+                            <Link href="/services" className="text-white/65 transition hover:text-amber-300">Our Services</Link>
+                            <Link href="/about" className="text-white/65 transition hover:text-amber-300">About Us</Link>
+                            <Link href="/contact" className="text-white/65 transition hover:text-amber-300">Contact Us</Link>
                         </div>
                     </div>
 
