@@ -5,7 +5,6 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
-import MarkMessagesReadOnView from "@/components/dashboard/MarkMessagesReadOnView";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -37,8 +36,6 @@ export default async function AdminMessagesPage() {
             subtitle="Recent communication."
             unreadCount={unreadCount}
         >
-            <MarkMessagesReadOnView unreadCount={unreadCount} />
-
             <SectionCard title="Messages" description="Recent communication">
                 <div className="space-y-4">
                     <MessageThreadList

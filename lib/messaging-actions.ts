@@ -100,7 +100,12 @@ export async function replyToMessage(
     return { success: true };
 }
 
-export async function markMessagesRead() {
+// Marks only the messages in one thread as read, instead of every unread
+// message the user has -- a thread should stay unread until it's actually
+// opened, not the moment the messages list happens to render.
+export async function markThreadRead(rootMessageId: string) {
+    if (!rootMessageId) return;
+
     const profile = await getUserProfile();
     const supabase = await createClient();
 
@@ -108,10 +113,11 @@ export async function markMessagesRead() {
         .from("messages")
         .update({ read_at: new Date().toISOString() })
         .eq("to_profile_id", profile.id)
-        .is("read_at", null);
+        .is("read_at", null)
+        .or(`id.eq.${rootMessageId},parent_message_id.eq.${rootMessageId}`);
 
     if (error) {
-        console.error("markMessagesRead error:", error.message);
+        console.error("markThreadRead error:", error.message);
     }
 }
 

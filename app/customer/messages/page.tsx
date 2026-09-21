@@ -4,7 +4,6 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
-import MarkMessagesReadOnView from "@/components/dashboard/MarkMessagesReadOnView";
 
 export default async function CustomerMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("customer");
@@ -28,8 +27,6 @@ export default async function CustomerMessagesPage() {
             subtitle="Contact the Jigzack team."
             unreadCount={unreadCount}
         >
-            <MarkMessagesReadOnView unreadCount={unreadCount} />
-
             <SectionCard title="Messages" description="Contact the Jigzack team">
                 <div className="space-y-4">
                     <MessageThreadList

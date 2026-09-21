@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { ChevronDown, Trash2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
-import { markMessagesRead, type MessageActionState } from "@/lib/messaging-actions";
+import { markThreadRead, type MessageActionState } from "@/lib/messaging-actions";
 
 export type MessageRow = {
     id: string;
@@ -200,13 +200,9 @@ export default function MessageThreadList({
             .on(
                 "postgres_changes",
                 { event: "INSERT", schema: "public", table: "messages", filter: `to_profile_id=eq.${currentProfileId}` },
-                (payload) => {
-                    fetchAndAdd((payload.new as { id: string }).id);
-                    // MarkMessagesReadOnView only covers the count at initial
-                    // load -- a message arriving live while this list is
-                    // already open would otherwise stay unread forever.
-                    markMessagesRead();
-                }
+                // Stays unread until the thread is actually opened -- arriving
+                // while the list happens to be on screen doesn't count.
+                (payload) => fetchAndAdd((payload.new as { id: string }).id)
             )
             .on(
                 "postgres_changes",
@@ -281,6 +277,25 @@ export default function MessageThreadList({
     const visibleRoots = roots.slice(0, visibleCount);
     const remaining = roots.length - visibleRoots.length;
 
+    const handleToggleThread = (rootId: string, isUnread: boolean) => {
+        const opening = openThreadId !== rootId;
+        setOpenThreadId(opening ? rootId : null);
+
+        if (opening && isUnread) {
+            const now = new Date().toISOString();
+            setMessages((prev) =>
+                prev.map((m) =>
+                    (m.id === rootId || m.parent_message_id === rootId) &&
+                    m.to_profile_id === currentProfileId &&
+                    !m.read_at
+                        ? { ...m, read_at: now }
+                        : m
+                )
+            );
+            markThreadRead(rootId);
+        }
+    };
+
     return (
         <div className="space-y-3">
             {visibleRoots.map(({ root, replies, latest, isUnread }) => {
@@ -301,7 +316,7 @@ export default function MessageThreadList({
                     >
                         <button
                             type="button"
-                            onClick={() => setOpenThreadId(isOpen ? null : root.id)}
+                            onClick={() => handleToggleThread(root.id, isUnread)}
                             className="flex w-full items-start justify-between gap-3 p-4 text-left"
                         >
                             <div className="min-w-0">
