@@ -1,11 +1,13 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
+import PhotoTypeBadge from "@/components/dashboard/PhotoTypeBadge";
 
 type UploadRow = {
     id: string;
     image_url: string | null;
     task_title?: string | null;
+    photo_type?: string | null;
     created_at?: string | null;
 };
 
@@ -47,18 +49,32 @@ export default async function EmployeeUploadsPage() {
                 ) : (
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         {uploads.map((upload) => (
-                            <div key={upload.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.03]">
-                                {upload.image_url ? (
-                                    <img
-                                        src={upload.image_url}
-                                        alt={upload.task_title ?? "Task upload"}
-                                        className="h-40 w-full object-cover"
-                                    />
-                                ) : (
-                                    <div className="flex h-40 items-center justify-center bg-black/20 text-sm text-white/40">
-                                        No image
+                            <div
+                                key={upload.id}
+                                className={`overflow-hidden rounded-xl border bg-white/[0.03] ${
+                                    upload.photo_type === "after"
+                                        ? "border-emerald-400/25"
+                                        : upload.photo_type === "before"
+                                            ? "border-sky-400/25"
+                                            : "border-white/10"
+                                }`}
+                            >
+                                <div className="relative">
+                                    {upload.image_url ? (
+                                        <img
+                                            src={upload.image_url}
+                                            alt={upload.task_title ?? "Task upload"}
+                                            className="h-40 w-full object-cover"
+                                        />
+                                    ) : (
+                                        <div className="flex h-40 items-center justify-center bg-black/20 text-sm text-white/40">
+                                            No image
+                                        </div>
+                                    )}
+                                    <div className="absolute left-3 top-3">
+                                        <PhotoTypeBadge type={upload.photo_type} />
                                     </div>
-                                )}
+                                </div>
 
                                 <div className="p-4">
                                     <p className="font-bold">{upload.task_title ?? "Task upload"}</p>

@@ -105,10 +105,11 @@ export default async function EmployeeTasksPage() {
                                         </div>
 
                                         <div className="grid gap-3 sm:grid-cols-2">
-                                            <form action={uploadTaskPhoto} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                            <form action={uploadTaskPhoto} className="rounded-xl border border-sky-400/20 bg-black/20 p-3">
                                                 <input type="hidden" name="taskId" value={task.id} />
                                                 <input type="hidden" name="photoType" value="before" />
-                                                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.15em] text-white/45">
+                                                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-sky-300">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
                                                     Before Photo
                                                 </label>
                                                 <input
@@ -125,10 +126,11 @@ export default async function EmployeeTasksPage() {
                                                 </button>
                                             </form>
 
-                                            <form action={uploadTaskPhoto} className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                            <form action={uploadTaskPhoto} className="rounded-xl border border-emerald-400/20 bg-black/20 p-3">
                                                 <input type="hidden" name="taskId" value={task.id} />
                                                 <input type="hidden" name="photoType" value="after" />
-                                                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.15em] text-white/45">
+                                                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300">
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                                                     After Photo
                                                 </label>
                                                 <input

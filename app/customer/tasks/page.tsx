@@ -2,6 +2,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import PhotoTypeBadge from "@/components/dashboard/PhotoTypeBadge";
 
 function formatDate(value: string | null | undefined) {
     if (!value) return "Not available";
@@ -86,24 +87,32 @@ export default async function CustomerTasksPage() {
                             {uploads.slice(0, 6).map((upload) => (
                                 <div
                                     key={upload.id}
-                                    className="overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] shadow"
+                                    className={`overflow-hidden rounded-3xl border bg-white/[0.03] shadow ${
+                                        upload.photo_type === "after"
+                                            ? "border-emerald-400/25"
+                                            : upload.photo_type === "before"
+                                                ? "border-sky-400/25"
+                                                : "border-white/10"
+                                    }`}
                                 >
-                                    {upload.image_url ? (
-                                        <img
-                                            src={upload.image_url}
-                                            alt={upload.photo_type ?? "Service photo"}
-                                            className="h-44 w-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-44 items-center justify-center bg-black/20 text-sm text-white/40">
-                                            No image
+                                    <div className="relative">
+                                        {upload.image_url ? (
+                                            <img
+                                                src={upload.image_url}
+                                                alt={upload.photo_type ?? "Service photo"}
+                                                className="h-44 w-full object-cover"
+                                            />
+                                        ) : (
+                                            <div className="flex h-44 items-center justify-center bg-black/20 text-sm text-white/40">
+                                                No image
+                                            </div>
+                                        )}
+                                        <div className="absolute left-3 top-3">
+                                            <PhotoTypeBadge type={upload.photo_type} />
                                         </div>
-                                    )}
+                                    </div>
 
                                     <div className="p-4">
-                                        <p className="font-bold capitalize">
-                                            {upload.photo_type ?? "Service photo"}
-                                        </p>
                                         <p className="text-sm text-white/60">
                                             {formatDate(upload.created_at)}
                                         </p>
