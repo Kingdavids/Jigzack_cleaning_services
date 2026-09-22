@@ -181,3 +181,83 @@ export async function sendBroadcast(
 
     return { success: true };
 }
+
+export type EstateActionState = { success: boolean; error?: string } | null;
+
+export async function promoteToEstate(
+    _prevState: EstateActionState,
+    formData: FormData
+): Promise<EstateActionState> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const profileId = String(formData.get("profileId") || "");
+
+    if (!profileId) {
+        return { success: false, error: "Choose a customer to promote." };
+    }
+
+    const { error } = await supabase
+        .from("customers")
+        .update({ is_estate: true })
+        .eq("profile_id", profileId);
+
+    if (error) {
+        console.error("promoteToEstate error:", error.message);
+        return { success: false, error: "Could not mark this customer as an estate." };
+    }
+
+    revalidatePath("/admin/estates");
+    revalidatePath("/admin/customers");
+
+    return { success: true };
+}
+
+export async function createUnit(
+    _prevState: EstateActionState,
+    formData: FormData
+): Promise<EstateActionState> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const estateProfileId = String(formData.get("estateProfileId") || "");
+    const label = String(formData.get("label") || "").trim();
+
+    if (!estateProfileId || !label) {
+        return { success: false, error: "A unit label is required." };
+    }
+
+    const { error } = await supabase.from("units").insert({
+        estate_profile_id: estateProfileId,
+        label,
+    });
+
+    if (error) {
+        console.error("createUnit insert error:", error.message);
+        return { success: false, error: "Could not add this unit." };
+    }
+
+    revalidatePath("/admin/estates");
+
+    return { success: true };
+}
+
+export async function linkTenantToUnit(tenantProfileId: string, unitId: string | null) {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!tenantProfileId) return;
+
+    const { error } = await supabase
+        .from("customers")
+        .update({ unit_id: unitId })
+        .eq("profile_id", tenantProfileId);
+
+    if (error) {
+        console.error("linkTenantToUnit error:", error.message);
+        return;
+    }
+
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin/estates");
+}

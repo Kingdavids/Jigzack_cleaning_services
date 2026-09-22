@@ -11,6 +11,7 @@ import {
     Camera,
     UserCheck,
     Sparkles,
+    Building2,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Dashboard", href: "/admin", icon: LayoutDashboard },
         { label: "Approvals", href: "/admin/approvals", icon: UserCheck },
         { label: "Customers", href: "/admin/customers", icon: Users },
+        { label: "Estates", href: "/admin/estates", icon: Building2 },
         { label: "Tasks", href: "/admin/tasks", icon: ClipboardList },
         { label: "Uploads", href: "/admin/uploads", icon: Camera },
         { label: "Messages", href: "/admin/messages", icon: MessageSquare },

@@ -17,6 +17,22 @@ function formatDate(value: string | null | undefined) {
 export default async function CustomerPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
 
+    let billingProfileId = profile.id;
+    let isTenant = false;
+
+    if (customer?.unit_id) {
+        const { data: unit } = await supabase
+            .from("units")
+            .select("estate_profile_id")
+            .eq("id", customer.unit_id)
+            .single();
+
+        if (unit) {
+            billingProfileId = unit.estate_profile_id;
+            isTenant = true;
+        }
+    }
+
     const [{ data: pickupsData }, { count: uploadsCount }, { data: invoicesData }] = await Promise.all([
         supabase
             .from("tasks")
@@ -27,7 +43,7 @@ export default async function CustomerPage() {
             .from("uploads")
             .select("id", { count: "exact", head: true })
             .eq("customer_id", profile.id),
-        supabase.from("payments").select("amount, status").eq("customer_id", profile.id),
+        supabase.from("payments").select("amount, status").eq("customer_id", billingProfileId),
     ]);
 
     const pickups = pickupsData ?? [];
@@ -53,6 +69,12 @@ export default async function CustomerPage() {
             subtitle={`Welcome back, ${profile.full_name ?? customer?.full_name ?? "there"} — track service history, upcoming pickups, photos, and invoices.`}
             unreadCount={unreadCount}
         >
+            {isTenant && (
+                <div className="mb-5 rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3 text-sm text-sky-200">
+                    You&apos;re set up as a tenant. Use Messages to raise a complaint, and Payments to view or download your estate&apos;s shared utility bill.
+                </div>
+            )}
+
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                 <StatCard
                     icon={CalendarCheck}

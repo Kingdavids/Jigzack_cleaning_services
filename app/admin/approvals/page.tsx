@@ -34,6 +34,22 @@ export default async function AdminApprovalsPage() {
         employees.filter((e) => e.profile_id).map((e) => [e.profile_id as string, e])
     );
 
+    const { data: unitsData } = await supabase
+        .from("units")
+        .select("id, label, estate_profile_id, estate:profiles!units_estate_profile_id_fkey(full_name)")
+        .order("label", { ascending: true });
+
+    const units = ((unitsData ?? []) as unknown as {
+        id: string;
+        label: string;
+        estate_profile_id: string;
+        estate: { full_name: string | null } | null;
+    }[]).map((u) => ({
+        id: u.id,
+        label: u.label,
+        estateName: u.estate?.full_name ?? "Estate",
+    }));
+
     return (
         <DashboardShell
             role="admin"
@@ -47,6 +63,7 @@ export default async function AdminApprovalsPage() {
                     users={pendingUsers ?? []}
                     customerDetailsByProfileId={customerDetailsByProfileId}
                     employeeDetailsByProfileId={employeeDetailsByProfileId}
+                    units={units}
                 />
             </SectionCard>
         </DashboardShell>

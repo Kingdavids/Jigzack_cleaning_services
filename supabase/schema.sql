@@ -134,6 +134,41 @@ create policy "customers_insert_own" on public.customers
 create policy "customers_all_admin" on public.customers
     for all using (public.is_admin()) with check (public.is_admin());
 
+-- ============================================================
+-- estates & units
+-- An estate is a customers row (is_estate = true) that receives one
+-- shared utility bill through the existing payments/tasks flow,
+-- unchanged. A tenant is a separate customer account linked to a
+-- unit under that estate via customers.unit_id, giving them read
+-- access to the estate's bill (see payments_select_tenant below)
+-- without a payments row of their own.
+-- ============================================================
+create table public.units (
+    id uuid primary key default gen_random_uuid(),
+    estate_profile_id uuid not null references public.profiles (id) on delete cascade,
+    label text not null,
+    created_at timestamptz not null default now()
+);
+
+alter table public.customers add column is_estate boolean not null default false;
+alter table public.customers add column unit_id uuid references public.units (id) on delete set null;
+
+alter table public.units enable row level security;
+
+create policy "units_select_estate_owner" on public.units
+    for select using (auth.uid() = estate_profile_id);
+
+create policy "units_select_tenant" on public.units
+    for select using (
+        exists (
+            select 1 from public.customers
+            where customers.profile_id = auth.uid() and customers.unit_id = units.id
+        )
+    );
+
+create policy "units_all_admin" on public.units
+    for all using (public.is_admin()) with check (public.is_admin());
+
 -- Bypasses RLS so a paying customer can mark their own registration
 -- fee paid after a verified Paystack transaction, without a broad
 -- update policy that would let them edit any other column (balance,
@@ -273,6 +308,18 @@ alter table public.payments enable row level security;
 
 create policy "payments_select_own" on public.payments
     for select using (auth.uid() = customer_id);
+
+-- Lets a tenant view (and print/download) their estate's shared
+-- invoice even though the payments row belongs to the estate's
+-- account, not their own.
+create policy "payments_select_tenant" on public.payments
+    for select using (
+        exists (
+            select 1 from public.customers c
+            join public.units u on u.id = c.unit_id
+            where c.profile_id = auth.uid() and u.estate_profile_id = payments.customer_id
+        )
+    );
 
 create policy "payments_all_admin" on public.payments
     for all using (public.is_admin()) with check (public.is_admin());

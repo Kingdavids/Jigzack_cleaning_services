@@ -38,11 +38,34 @@ export default async function CustomerInvoicePage({
         .eq("profile_id", profile.id)
         .single();
 
+    let billingProfileId = profile.id;
+    let billingCustomer = customer;
+
+    if (customer?.unit_id) {
+        const { data: unit } = await supabase
+            .from("units")
+            .select("estate_profile_id")
+            .eq("id", customer.unit_id)
+            .single();
+
+        if (unit) {
+            billingProfileId = unit.estate_profile_id;
+
+            const { data: estateCustomer } = await supabase
+                .from("customers")
+                .select("*")
+                .eq("profile_id", unit.estate_profile_id)
+                .single();
+
+            billingCustomer = estateCustomer ?? customer;
+        }
+    }
+
     const { data: invoice } = await supabase
         .from("payments")
         .select("*")
         .eq("id", id)
-        .eq("customer_id", profile.id)
+        .eq("customer_id", billingProfileId)
         .single();
 
     if (!invoice) {
@@ -77,17 +100,17 @@ export default async function CustomerInvoicePage({
 
                 <div className="grid gap-6 md:grid-cols-2">
                     <div className="space-y-2 rounded-xl border border-black/15 bg-white/40 p-4">
-                        <p><span className="font-semibold">Customer:</span> {customer?.full_name ?? profile.full_name ?? "Customer"}</p>
-                        <p><span className="font-semibold">Address:</span> {customer?.address ?? "Not available"}</p>
-                        <p><span className="font-semibold">Property Code:</span> {customer?.property_code ?? "Not available"}</p>
-                        <p><span className="font-semibold">Customer Account Code:</span> {customer?.account_code ?? "Not available"}</p>
-                        <p><span className="font-semibold">Property Class:</span> {customer?.property_class ?? "Residential"}</p>
+                        <p><span className="font-semibold">Customer:</span> {billingCustomer?.full_name ?? profile.full_name ?? "Customer"}</p>
+                        <p><span className="font-semibold">Address:</span> {billingCustomer?.address ?? "Not available"}</p>
+                        <p><span className="font-semibold">Property Code:</span> {billingCustomer?.property_code ?? "Not available"}</p>
+                        <p><span className="font-semibold">Customer Account Code:</span> {billingCustomer?.account_code ?? "Not available"}</p>
+                        <p><span className="font-semibold">Property Class:</span> {billingCustomer?.property_class ?? "Residential"}</p>
                     </div>
 
                     <div className="space-y-2 rounded-xl border border-black/15 bg-white/40 p-4">
                         <p><span className="font-semibold">Invoice ID:</span> {invoice.id}</p>
                         <p><span className="font-semibold">Status:</span> {invoice.status ?? "pending"}</p>
-                        <p><span className="font-semibold">Last Serviced:</span> {formatDate(customer?.last_serviced)}</p>
+                        <p><span className="font-semibold">Last Serviced:</span> {formatDate(billingCustomer?.last_serviced)}</p>
                         <p><span className="font-semibold">Amount Due:</span> {naira(amount)}</p>
                     </div>
                 </div>

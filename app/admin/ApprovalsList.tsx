@@ -3,6 +3,7 @@
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { linkTenantToUnit } from "./actions";
 
 interface PendingUser {
     id: string;
@@ -60,14 +61,17 @@ export default function ApprovalsList({
                                           users,
                                           customerDetailsByProfileId = {},
                                           employeeDetailsByProfileId = {},
+                                          units = [],
                                       }: {
     users: PendingUser[];
     customerDetailsByProfileId?: Record<string, CustomerDetails>;
     employeeDetailsByProfileId?: Record<string, EmployeeDetails>;
+    units?: { id: string; label: string; estateName: string }[];
 }) {
     const supabase = createClient();
     const router = useRouter();
     const [loadingId, setLoadingId] = useState<string | null>(null);
+    const [selectedUnitByUser, setSelectedUnitByUser] = useState<Record<string, string>>({});
 
     const updateStatus = async (
         id: string,
@@ -79,6 +83,10 @@ export default function ApprovalsList({
             .from("profiles")
             .update({ status })
             .eq("id", id);
+
+        if (!error && status === "approved" && selectedUnitByUser[id]) {
+            await linkTenantToUnit(id, selectedUnitByUser[id]);
+        }
 
         setLoadingId(null);
 
@@ -132,6 +140,28 @@ export default function ApprovalsList({
                                 </button>
                             </div>
                         </div>
+
+                        {user.role === "customer" && units.length > 0 && (
+                            <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.04] p-4">
+                                <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.15em] text-sky-300">
+                                    Link to unit (optional — makes this a tenant of an estate)
+                                </label>
+                                <select
+                                    value={selectedUnitByUser[user.id] ?? ""}
+                                    onChange={(e) =>
+                                        setSelectedUnitByUser((prev) => ({ ...prev, [user.id]: e.target.value }))
+                                    }
+                                    className="h-11 w-full rounded-xl border border-white/10 bg-[#141518] px-3 text-sm text-white outline-none"
+                                >
+                                    <option value="">Not a tenant — standalone customer</option>
+                                    {units.map((unit) => (
+                                        <option key={unit.id} value={unit.id}>
+                                            {unit.estateName} — {unit.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         {user.role === "customer" && (
                             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
