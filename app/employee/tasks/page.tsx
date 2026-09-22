@@ -3,7 +3,9 @@ import { Clock3, MapPinned } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
-import { endTask, startTask, uploadTaskPhoto } from "@/app/employee/actions";
+import TaskPhotoManager from "@/components/dashboard/TaskPhotoManager";
+import TaskTimer from "@/components/dashboard/TaskTimer";
+import { endTask, startTask } from "@/app/employee/actions";
 
 type TaskRow = {
     id: string;
@@ -13,6 +15,14 @@ type TaskRow = {
     scheduled_date: string | null;
     zone: string | null;
     customer_name?: string | null;
+    started_at: string | null;
+};
+
+type UploadRow = {
+    id: string;
+    task_id: string;
+    photo_type: "before" | "after";
+    image_url: string;
 };
 
 function formatDate(value: string | null) {
@@ -40,6 +50,21 @@ export default async function EmployeeTasksPage() {
     }
 
     const tasks: TaskRow[] = taskData ?? [];
+    const taskIds = tasks.map((t) => t.id);
+
+    const { data: uploadsData } = taskIds.length
+        ? await supabase
+              .from("uploads")
+              .select("id, task_id, photo_type, image_url")
+              .in("task_id", taskIds)
+        : { data: [] as UploadRow[] };
+
+    const uploadsByTask = new Map<string, { before: UploadRow[]; after: UploadRow[] }>();
+    for (const upload of (uploadsData ?? []) as UploadRow[]) {
+        const bucket = uploadsByTask.get(upload.task_id) ?? { before: [], after: [] };
+        bucket[upload.photo_type].push(upload);
+        uploadsByTask.set(upload.task_id, bucket);
+    }
 
     return (
         <DashboardShell
@@ -82,12 +107,13 @@ export default async function EmployeeTasksPage() {
                                     </div>
 
                                     <div className="flex flex-col gap-3 lg:min-w-[280px]">
-                                        <div className="flex gap-3">
+                                        <div className="flex items-center gap-3">
                                             <form action={startTask}>
                                                 <input type="hidden" name="taskId" value={task.id} />
                                                 <button
                                                     type="submit"
-                                                    className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                                                    disabled={(task.status ?? "").toLowerCase() === "in progress"}
+                                                    className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     Start Task
                                                 </button>
@@ -102,50 +128,27 @@ export default async function EmployeeTasksPage() {
                                                     End Task
                                                 </button>
                                             </form>
+
+                                            {(task.status ?? "").toLowerCase() === "in progress" && task.started_at && (
+                                                <TaskTimer startedAt={task.started_at} />
+                                            )}
                                         </div>
 
                                         <div className="grid gap-3 sm:grid-cols-2">
-                                            <form action={uploadTaskPhoto} className="rounded-xl border border-sky-400/20 bg-black/20 p-3">
-                                                <input type="hidden" name="taskId" value={task.id} />
-                                                <input type="hidden" name="photoType" value="before" />
-                                                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-sky-300">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-sky-400" />
-                                                    Before Photo
-                                                </label>
-                                                <input
-                                                    type="file"
-                                                    name="photo"
-                                                    accept="image/*"
-                                                    className="mb-3 block w-full text-sm text-white/60 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-white"
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
-                                                >
-                                                    Upload
-                                                </button>
-                                            </form>
-
-                                            <form action={uploadTaskPhoto} className="rounded-xl border border-emerald-400/20 bg-black/20 p-3">
-                                                <input type="hidden" name="taskId" value={task.id} />
-                                                <input type="hidden" name="photoType" value="after" />
-                                                <label className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.15em] text-emerald-300">
-                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                                                    After Photo
-                                                </label>
-                                                <input
-                                                    type="file"
-                                                    name="photo"
-                                                    accept="image/*"
-                                                    className="mb-3 block w-full text-sm text-white/60 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-sm file:text-white"
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
-                                                >
-                                                    Upload
-                                                </button>
-                                            </form>
+                                            <TaskPhotoManager
+                                                taskId={task.id}
+                                                photoType="before"
+                                                label="Before"
+                                                accent="sky"
+                                                initialPhotos={uploadsByTask.get(task.id)?.before ?? []}
+                                            />
+                                            <TaskPhotoManager
+                                                taskId={task.id}
+                                                photoType="after"
+                                                label="After"
+                                                accent="emerald"
+                                                initialPhotos={uploadsByTask.get(task.id)?.after ?? []}
+                                            />
                                         </div>
                                     </div>
                                 </div>

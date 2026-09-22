@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import { playNotificationSound } from "@/lib/notification-sound";
 import type { UserRole } from "@/lib/dashboard-types";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export default function Topbar({
                                    title,
@@ -33,22 +35,27 @@ export default function Topbar({
     }, [initialUnreadCount]);
 
     // Keeps the bell badge live across every dashboard page, not just the
-    // messages page itself, and surfaces a toast + a brief bell-ring --
-    // a quiet number changing in the corner is too easy to miss.
+    // messages page itself, and surfaces a toast + a brief bell-ring + a
+    // sound cue -- a quiet number changing in the corner is too easy to miss.
     useEffect(() => {
         const supabase = createClient();
+        const channels: RealtimeChannel[] = [];
 
-        const channel = supabase
+        const announce = () => {
+            setJustArrived(true);
+            if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
+            arrivedTimeout.current = setTimeout(() => setJustArrived(false), 1600);
+            playNotificationSound();
+        };
+
+        const messagesChannel = supabase
             .channel(`unread-badge-${profileId}`)
             .on(
                 "postgres_changes",
                 { event: "INSERT", schema: "public", table: "messages", filter: `to_profile_id=eq.${profileId}` },
                 async (payload) => {
                     setUnreadCount((c) => c + 1);
-
-                    setJustArrived(true);
-                    if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
-                    arrivedTimeout.current = setTimeout(() => setJustArrived(false), 1600);
+                    announce();
 
                     const newMessage = payload.new as { subject: string; from_profile_id: string };
                     const { data: sender } = await supabase
@@ -77,8 +84,92 @@ export default function Topbar({
             )
             .subscribe();
 
+        channels.push(messagesChannel);
+
+        if (role === "employee") {
+            const tasksChannel = supabase
+                .channel(`task-assign-${profileId}`)
+                .on(
+                    "postgres_changes",
+                    { event: "INSERT", schema: "public", table: "tasks", filter: `employee_id=eq.${profileId}` },
+                    (payload) => {
+                        announce();
+                        const task = payload.new as { title: string };
+                        toast.message("New task assigned", {
+                            description: task.title,
+                            action: { label: "View", onClick: () => router.push("/employee/tasks") },
+                        });
+                    }
+                )
+                .subscribe();
+            channels.push(tasksChannel);
+        }
+
+        if (role === "customer") {
+            const uploadsChannel = supabase
+                .channel(`uploads-${profileId}`)
+                .on(
+                    "postgres_changes",
+                    { event: "INSERT", schema: "public", table: "uploads", filter: `customer_id=eq.${profileId}` },
+                    (payload) => {
+                        announce();
+                        const upload = payload.new as { photo_type: string; task_title: string | null };
+                        toast.message(`New ${upload.photo_type} photo uploaded`, {
+                            description: upload.task_title ?? undefined,
+                            action: { label: "View", onClick: () => router.push("/customer/tasks") },
+                        });
+                    }
+                )
+                .on(
+                    "postgres_changes",
+                    { event: "UPDATE", schema: "public", table: "tasks", filter: `customer_id=eq.${profileId}` },
+                    (payload) => {
+                        const task = payload.new as { title: string; status: string };
+                        if (task.status !== "in progress" && task.status !== "completed") return;
+                        announce();
+                        toast.message(`Task ${task.status}`, {
+                            description: task.title,
+                            action: { label: "View", onClick: () => router.push("/customer/tasks") },
+                        });
+                    }
+                )
+                .subscribe();
+            channels.push(uploadsChannel);
+        }
+
+        if (role === "admin") {
+            const adminChannel = supabase
+                .channel(`admin-activity-${profileId}`)
+                .on(
+                    "postgres_changes",
+                    { event: "INSERT", schema: "public", table: "profiles", filter: `status=eq.pending` },
+                    (payload) => {
+                        announce();
+                        const signup = payload.new as { full_name: string | null; role: string };
+                        toast.message("New signup awaiting approval", {
+                            description: signup.full_name ? `${signup.full_name} (${signup.role})` : signup.role,
+                            action: { label: "Review", onClick: () => router.push("/admin/approvals") },
+                        });
+                    }
+                )
+                .on(
+                    "postgres_changes",
+                    { event: "INSERT", schema: "public", table: "uploads" },
+                    (payload) => {
+                        announce();
+                        const upload = payload.new as { photo_type: string; task_title: string | null };
+                        toast.message(`New ${upload.photo_type} photo uploaded`, {
+                            description: upload.task_title ?? undefined,
+                            action: { label: "View", onClick: () => router.push("/admin/uploads") },
+                        });
+                    }
+                )
+                .subscribe();
+            channels.push(adminChannel);
+        }
+
         return () => {
-            supabase.removeChannel(channel);
+            channels.forEach((c) => supabase.removeChannel(c));
             if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
         };
     }, [profileId, role, router]);

@@ -49,15 +49,38 @@ export async function endTask(formData: FormData) {
     revalidatePath("/customer/tasks");
 }
 
-export async function uploadTaskPhoto(formData: FormData) {
+export const MAX_PHOTOS_PER_SLOT = 5;
+
+export type UploadActionState = { success: boolean; error?: string; uploaded?: number } | null;
+
+export async function uploadTaskPhoto(
+    _prevState: UploadActionState,
+    formData: FormData
+): Promise<UploadActionState> {
     const profile = await getUserProfile();
     const supabase = await createClient();
 
     const taskId = String(formData.get("taskId") || "");
     const photoType = String(formData.get("photoType") || "");
-    const file = formData.get("photo") as File | null;
+    const files = formData.getAll("photo").filter((f): f is File => f instanceof File && f.size > 0);
 
-    if (!taskId || !photoType || !file || file.size === 0) return;
+    if (!taskId || !photoType || files.length === 0) {
+        return { success: false, error: "Choose at least one photo." };
+    }
+
+    const { count: existingCount } = await supabase
+        .from("uploads")
+        .select("id", { count: "exact", head: true })
+        .eq("task_id", taskId)
+        .eq("photo_type", photoType);
+
+    const remainingSlots = MAX_PHOTOS_PER_SLOT - (existingCount ?? 0);
+
+    if (remainingSlots <= 0) {
+        return { success: false, error: `You can only keep ${MAX_PHOTOS_PER_SLOT} ${photoType} photos per task.` };
+    }
+
+    const filesToUpload = files.slice(0, remainingSlots);
 
     const { data: task, error: taskError } = await supabase
         .from("tasks")
@@ -67,42 +90,90 @@ export async function uploadTaskPhoto(formData: FormData) {
 
     if (taskError) {
         console.error("Could not load task for upload:", taskError.message);
-        return;
+        return { success: false, error: "Could not load this task. Please try again." };
     }
 
-    const fileExt = file.name.split(".").pop();
-    const filePath = `${profile.id}/${taskId}-${photoType}-${Date.now()}.${fileExt}`;
+    let uploaded = 0;
 
-    const { error: uploadError } = await supabase.storage
-        .from("task-photos")
-        .upload(filePath, file, {
-            upsert: false,
+    for (const file of filesToUpload) {
+        const fileExt = file.name.split(".").pop();
+        const filePath = `${profile.id}/${taskId}-${photoType}-${Date.now()}-${uploaded}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+            .from("task-photos")
+            .upload(filePath, file, { upsert: false });
+
+        if (uploadError) {
+            console.error("Photo upload failed:", uploadError.message);
+            continue;
+        }
+
+        const { data: publicUrlData } = supabase.storage.from("task-photos").getPublicUrl(filePath);
+
+        const { error: insertError } = await supabase.from("uploads").insert({
+            task_id: taskId,
+            employee_id: profile.id,
+            customer_id: task?.customer_id ?? null,
+            task_title: task?.title ?? null,
+            image_url: publicUrlData.publicUrl,
+            photo_type: photoType, // "before" or "after"
+            created_at: new Date().toISOString(),
         });
 
-    if (uploadError) {
-        console.error("Photo upload failed:", uploadError.message);
-        return;
+        if (insertError) {
+            console.error("Uploads insert error:", insertError.message);
+            continue;
+        }
+
+        uploaded += 1;
     }
 
-    const { data: publicUrlData } = supabase.storage
-        .from("task-photos")
-        .getPublicUrl(filePath);
+    revalidatePath("/employee/tasks");
+    revalidatePath("/employee/uploads");
+    revalidatePath("/admin/uploads");
+    revalidatePath("/customer");
+    revalidatePath("/customer/tasks");
 
-    const { error: insertError } = await supabase.from("uploads").insert({
-        task_id: taskId,
-        employee_id: profile.id,
-        customer_id: task?.customer_id ?? null,
-        task_title: task?.title ?? null,
-        image_url: publicUrlData.publicUrl,
-        photo_type: photoType, // "before" or "after"
-        created_at: new Date().toISOString(),
-    });
-
-    if (insertError) {
-        console.error("Uploads insert error:", insertError.message);
-        return;
+    if (uploaded === 0) {
+        return { success: false, error: "Upload failed. Please try again." };
     }
 
+    if (uploaded < files.length) {
+        return {
+            success: true,
+            uploaded,
+            error: `Only ${uploaded} of ${files.length} photos were saved (5-photo limit per slot).`,
+        };
+    }
+
+    return { success: true, uploaded };
+}
+
+export async function deleteTaskPhoto(uploadId: string) {
+    const profile = await getUserProfile();
+    const supabase = await createClient();
+
+    if (!uploadId) return;
+
+    const { data: upload, error: fetchError } = await supabase
+        .from("uploads")
+        .select("id, employee_id, image_url")
+        .eq("id", uploadId)
+        .single();
+
+    if (fetchError || !upload) return;
+
+    if (upload.employee_id !== profile.id && profile.role !== "admin") return;
+
+    const storagePath = upload.image_url.split("/task-photos/")[1];
+
+    if (storagePath) {
+        await supabase.storage.from("task-photos").remove([decodeURIComponent(storagePath)]);
+    }
+
+    await supabase.from("uploads").delete().eq("id", uploadId);
+
+    revalidatePath("/employee/tasks");
     revalidatePath("/employee/uploads");
     revalidatePath("/admin/uploads");
     revalidatePath("/customer");

@@ -247,6 +247,9 @@ create policy "uploads_select_customer" on public.uploads
 create policy "uploads_insert_employee" on public.uploads
     for insert with check (auth.uid() = employee_id);
 
+create policy "uploads_delete_employee" on public.uploads
+    for delete using (auth.uid() = employee_id);
+
 create policy "uploads_all_admin" on public.uploads
     for all using (public.is_admin()) with check (public.is_admin());
 
@@ -317,6 +320,17 @@ create policy "messages_update_own_inbox" on public.messages
 -- fan-out shape as an admin's own broadcast to all customers/employees)
 -- rather than always landing on whichever admin account happens to be
 -- oldest, where a second admin would never see it at all.
+create or replace function public.approved_admin_emails()
+returns text[]
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select coalesce(array_agg(email), '{}') from public.profiles
+    where role = 'admin' and status = 'approved' and email is not null;
+$$;
+
 create or replace function public.approved_admin_ids()
 returns uuid[]
 language sql
@@ -370,6 +384,9 @@ create policy "messages_insert_to_admin" on public.messages
 -- on their own messages (scoped by the messages_select_own RLS policy
 -- above) instead of polling or waiting for a page reload.
 alter publication supabase_realtime add table public.messages;
+alter publication supabase_realtime add table public.tasks;
+alter publication supabase_realtime add table public.uploads;
+alter publication supabase_realtime add table public.profiles;
 
 -- ============================================================
 -- storage: task-photos bucket
@@ -386,6 +403,12 @@ create policy "task_photos_public_read" on storage.objects
 
 create policy "task_photos_employee_upload" on storage.objects
     for insert with check (
+        bucket_id = 'task-photos'
+        and (storage.foldername(name)) [1] = auth.uid()::text
+    );
+
+create policy "task_photos_employee_delete" on storage.objects
+    for delete using (
         bucket_id = 'task-photos'
         and (storage.foldername(name)) [1] = auth.uid()::text
     );

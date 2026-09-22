@@ -14,7 +14,12 @@ async function requireAdmin() {
     return profile;
 }
 
-export async function createTask(formData: FormData) {
+export type TaskActionState = { success: boolean; error?: string } | null;
+
+export async function createTask(
+    _prevState: TaskActionState,
+    formData: FormData
+): Promise<TaskActionState> {
     await requireAdmin();
     const supabase = await createClient();
 
@@ -25,7 +30,9 @@ export async function createTask(formData: FormData) {
     const zone = String(formData.get("zone") || "").trim() || null;
     const priority = String(formData.get("priority") || "low");
 
-    if (!title || !employeeId) return;
+    if (!title || !employeeId) {
+        return { success: false, error: "Title and employee are required." };
+    }
 
     const { error } = await supabase.from("tasks").insert({
         title,
@@ -38,7 +45,7 @@ export async function createTask(formData: FormData) {
 
     if (error) {
         console.error("createTask insert error:", error.message);
-        return;
+        return { success: false, error: "Could not create task. Please try again." };
     }
 
     revalidatePath("/admin/tasks");
@@ -46,6 +53,8 @@ export async function createTask(formData: FormData) {
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
+
+    return { success: true };
 }
 
 export async function createInvoice(formData: FormData) {

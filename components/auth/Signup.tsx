@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import { notifyAdminsOfSignup } from "@/lib/signup-notify";
 
 type SignupRole = "customer" | "employee";
 
@@ -61,6 +62,10 @@ export default function Signup() {
             }
 
             toast.success("Account created successfully. Please verify your email to continue.");
+
+            // Fire-and-forget: don't let a slow/failing email hold up the
+            // signup redirect, and don't surface provider errors to the user.
+            notifyAdminsOfSignup(fullName, email, role).catch(() => {});
 
             // Customer property setup requires an active session, which only
             // exists after the confirmation link is clicked — complete-signup

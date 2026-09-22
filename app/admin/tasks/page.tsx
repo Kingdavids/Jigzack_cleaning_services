@@ -3,6 +3,7 @@ import { createTask } from "../actions";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -88,14 +89,7 @@ export default async function AdminTasksPage() {
                         ))
                     )}
 
-                    <form
-                        action={createTask}
-                        className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-5"
-                    >
-                        <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-                            Assign new task
-                        </p>
-
+                    <AssignTaskForm action={createTask}>
                         <input
                             name="title"
                             placeholder="Task title"
@@ -155,14 +149,7 @@ export default async function AdminTasksPage() {
                                 <option value="high">High</option>
                             </select>
                         </div>
-
-                        <button
-                            type="submit"
-                            className="w-full rounded-2xl bg-amber-400 px-4 py-2.5 font-bold text-black transition hover:bg-amber-300"
-                        >
-                            Assign Task
-                        </button>
-                    </form>
+                    </AssignTaskForm>
                 </div>
             </SectionCard>
         </DashboardShell>
