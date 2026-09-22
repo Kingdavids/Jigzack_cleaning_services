@@ -8,26 +8,20 @@ export default async function AdminPage() {
     const { profile, unreadCount } = await requireDashboardAccess("admin");
     const supabase = await createClient();
 
-    const { data: pendingUsers } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("status", "pending");
+    const [
+        { data: pendingUsers },
+        { data: customersData },
+        { data: employeesData },
+        { data: unpaidPaymentsData },
+    ] = await Promise.all([
+        supabase.from("profiles").select("id").eq("status", "pending"),
+        supabase.from("customers").select("id"),
+        supabase.from("profiles").select("id").eq("role", "employee").eq("status", "approved"),
+        supabase.from("payments").select("amount, status").neq("status", "paid"),
+    ]);
 
-    const { data: customersData } = await supabase.from("customers").select("id");
     const customers = customersData ?? [];
-
-    const { data: employeesData } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "employee")
-        .eq("status", "approved");
-
     const employees = employeesData ?? [];
-
-    const { data: unpaidPaymentsData } = await supabase
-        .from("payments")
-        .select("amount, status")
-        .neq("status", "paid");
 
     const totalBalance = (unpaidPaymentsData ?? []).reduce(
         (sum, p) => sum + Number(p.amount ?? 0),

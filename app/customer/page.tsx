@@ -17,24 +17,20 @@ function formatDate(value: string | null | undefined) {
 export default async function CustomerPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
 
-    const { data: pickupsData } = await supabase
-        .from("tasks")
-        .select("scheduled_date")
-        .eq("customer_id", profile.id)
-        .order("scheduled_date", { ascending: true });
+    const [{ data: pickupsData }, { count: uploadsCount }, { data: invoicesData }] = await Promise.all([
+        supabase
+            .from("tasks")
+            .select("scheduled_date")
+            .eq("customer_id", profile.id)
+            .order("scheduled_date", { ascending: true }),
+        supabase
+            .from("uploads")
+            .select("id", { count: "exact", head: true })
+            .eq("customer_id", profile.id),
+        supabase.from("payments").select("amount, status").eq("customer_id", profile.id),
+    ]);
 
     const pickups = pickupsData ?? [];
-
-    const { count: uploadsCount } = await supabase
-        .from("uploads")
-        .select("id", { count: "exact", head: true })
-        .eq("customer_id", profile.id);
-
-    const { data: invoicesData } = await supabase
-        .from("payments")
-        .select("amount, status")
-        .eq("customer_id", profile.id);
-
     const invoices = invoicesData ?? [];
 
     const now = new Date();
