@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
+import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 
 export async function startTask(formData: FormData) {
     const profile = await getUserProfile();
@@ -48,8 +49,6 @@ export async function endTask(formData: FormData) {
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
 }
-
-export const MAX_PHOTOS_PER_SLOT = 5;
 
 export type UploadActionState = { success: boolean; error?: string; uploaded?: number } | null;
 

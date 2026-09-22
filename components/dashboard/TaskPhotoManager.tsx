@@ -5,7 +5,8 @@ import Image from "next/image";
 import { X, Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
-import { uploadTaskPhoto, deleteTaskPhoto, MAX_PHOTOS_PER_SLOT } from "@/app/employee/actions";
+import { uploadTaskPhoto, deleteTaskPhoto } from "@/app/employee/actions";
+import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 
 type Photo = { id: string; image_url: string };
 
