@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import PrintButton from "@/components/dashboard/PrintButton";
 
 function naira(value: number) {
@@ -80,14 +81,23 @@ export default async function CustomerInvoicePage({
         <div className="min-h-screen bg-neutral-100 px-4 py-8 text-black print:bg-white">
             <div className="mx-auto max-w-4xl rounded-2xl bg-[#f3eadf] p-8 shadow-2xl print:shadow-none">
                 <div className="mb-8 flex items-start justify-between gap-6 border-b border-black/15 pb-6">
-                    <div>
-                        <h1 className="text-4xl font-black tracking-tight">
-                            LAGOS WASTE MANAGEMENT AUTHORITY
-                        </h1>
-                        <p className="mt-3 text-lg font-semibold">JIGZACK CLEANING SERVICES</p>
-                        <p className="mt-2 text-sm text-black/70">
-                            Placing our customer and the environment first
-                        </p>
+                    <div className="flex items-start gap-4">
+                        <Image
+                            src="/images/lawma-logo.png"
+                            alt="Lagos Waste Management Authority logo"
+                            width={72}
+                            height={72}
+                            className="shrink-0"
+                        />
+                        <div>
+                            <h1 className="text-4xl font-black tracking-tight">
+                                LAGOS WASTE MANAGEMENT AUTHORITY
+                            </h1>
+                            <p className="mt-3 text-lg font-semibold">JIGZACK CLEANING SERVICES</p>
+                            <p className="mt-2 text-sm text-black/70">
+                                Placing our customer and the environment first
+                            </p>
+                        </div>
                     </div>
 
                     <div className="text-right text-sm">
