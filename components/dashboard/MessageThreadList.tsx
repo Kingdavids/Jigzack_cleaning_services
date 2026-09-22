@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Trash2 } from "lucide-react";
+import { ChevronDown, Megaphone, Trash2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { markThreadRead, type MessageActionState } from "@/lib/messaging-actions";
 
@@ -16,6 +16,7 @@ export type MessageRow = {
     from_profile_id: string;
     to_profile_id: string;
     read_at?: string | null;
+    is_broadcast?: boolean;
     from_profile: { full_name: string | null } | null;
     to_profile: { full_name: string | null } | null;
 };
@@ -23,6 +24,8 @@ export type MessageRow = {
 type ReplyAction = (prevState: MessageActionState, formData: FormData) => Promise<MessageActionState>;
 
 const PAGE_SIZE = 8;
+const MESSAGE_SELECT =
+    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)";
 
 function formatWhen(value: string) {
     const date = new Date(value);
@@ -36,6 +39,30 @@ function formatWhen(value: string) {
     }
 
     return date.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
+function initialsFor(name: string | null | undefined) {
+    const trimmed = (name ?? "").trim();
+    if (!trimmed) return "?";
+    const parts = trimmed.split(/\s+/);
+    return parts.length === 1
+        ? parts[0].slice(0, 2).toUpperCase()
+        : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function Avatar({ name, tone = "neutral" }: { name: string | null | undefined; tone?: "mine" | "neutral" | "broadcast" }) {
+    const styles =
+        tone === "mine"
+            ? "bg-amber-400 text-black"
+            : tone === "broadcast"
+                ? "bg-sky-400/15 text-sky-300"
+                : "bg-white/10 text-white/70";
+
+    return (
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${styles}`}>
+            {initialsFor(name)}
+        </div>
+    );
 }
 
 function ReplySubmit() {
@@ -126,8 +153,10 @@ function MessageBubble({
     const isMine = message.from_profile_id === currentProfileId;
 
     return (
-        <div className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-            <div className={`flex max-w-[85%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+        <div className={`flex items-end gap-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
+            {!isMine && <Avatar name={message.from_profile?.full_name} />}
+
+            <div className={`flex max-w-[78%] flex-col ${isMine ? "items-end" : "items-start"}`}>
                 {!isMine && (
                     <p className="mb-1 px-1 text-xs font-semibold text-white/50">
                         {message.from_profile?.full_name ?? "Unknown"}
@@ -135,7 +164,7 @@ function MessageBubble({
                 )}
 
                 <div
-                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words ${
+                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words shadow-sm ${
                         isMine
                             ? "rounded-br-sm bg-amber-400 text-black"
                             : "rounded-bl-sm border border-white/10 bg-white/[0.06] text-white/85"
@@ -181,13 +210,7 @@ export default function MessageThreadList({
         // no from_profile/to_profile names -- so re-fetch it with the same
         // embedded select the initial page load used before adding it in.
         const fetchAndAdd = async (id: string) => {
-            const { data } = await supabase
-                .from("messages")
-                .select(
-                    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
-                )
-                .eq("id", id)
-                .single();
+            const { data } = await supabase.from("messages").select(MESSAGE_SELECT).eq("id", id).single();
 
             if (!data) return;
 
@@ -268,7 +291,7 @@ export default function MessageThreadList({
 
     if (roots.length === 0) {
         return (
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/50">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-sm text-white/50">
                 No messages yet.
             </div>
         );
@@ -300,15 +323,17 @@ export default function MessageThreadList({
         <div className="space-y-3">
             {visibleRoots.map(({ root, replies, latest, isUnread }) => {
                 const isOpen = openThreadId === root.id;
-                const counterpart =
-                    root.from_profile_id === currentProfileId
-                        ? root.to_profile?.full_name
-                        : root.from_profile?.full_name;
+                const isBroadcast = Boolean(root.is_broadcast);
+                const isMineRoot = root.from_profile_id === currentProfileId;
+                const counterpart = isMineRoot ? root.to_profile?.full_name : root.from_profile?.full_name;
+                const avatarName = isBroadcast ? "Broadcast" : isMineRoot ? root.to_profile?.full_name : root.from_profile?.full_name;
 
                 return (
                     <div
                         key={root.id}
-                        className={`overflow-hidden rounded-xl border transition ${
+                        className={`overflow-hidden rounded-2xl border transition ${
+                            isOpen ? "shadow-lg shadow-black/20" : ""
+                        } ${
                             isUnread
                                 ? "border-amber-400/30 bg-amber-400/[0.06] hover:border-amber-400/50"
                                 : "border-white/10 bg-white/[0.03] hover:border-white/20"
@@ -317,9 +342,17 @@ export default function MessageThreadList({
                         <button
                             type="button"
                             onClick={() => handleToggleThread(root.id, isUnread)}
-                            className="flex w-full items-start justify-between gap-3 p-4 text-left"
+                            className="flex w-full items-start gap-3 p-4 text-left"
                         >
-                            <div className="min-w-0">
+                            {isBroadcast ? (
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sky-300">
+                                    <Megaphone className="h-4 w-4" />
+                                </div>
+                            ) : (
+                                <Avatar name={avatarName} />
+                            )}
+
+                            <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                     {isUnread && (
                                         <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.2)]" />
@@ -331,6 +364,11 @@ export default function MessageThreadList({
                                     >
                                         {root.subject}
                                     </p>
+                                    {isBroadcast && (
+                                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300">
+                                            Broadcast
+                                        </span>
+                                    )}
                                     {replies.length > 0 && (
                                         <span className="shrink-0 text-xs text-white/40">
                                             ({replies.length + 1})
@@ -387,7 +425,14 @@ export default function MessageThreadList({
                                         ))}
                                     </div>
 
-                                    <ReplyForm parentId={root.id} replyAction={replyAction} />
+                                    {isBroadcast ? (
+                                        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-white/45">
+                                            <Megaphone className="h-3.5 w-3.5 shrink-0" />
+                                            Broadcast message — replies aren&apos;t available.
+                                        </div>
+                                    ) : (
+                                        <ReplyForm parentId={root.id} replyAction={replyAction} />
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -287,6 +287,7 @@ create table public.messages (
     body text not null,
     parent_message_id uuid references public.messages (id) on delete set null,
     read_at timestamptz,
+    is_broadcast boolean not null default false,
     created_at timestamptz not null default now()
 );
 
@@ -346,10 +347,23 @@ $$;
 
 -- Customers/employees can message an approved admin (support-style
 -- contact), but not each other -- the recipient must be an admin.
+-- Broadcasts are one-way: replying is a normal insert with
+-- parent_message_id set to the thread root, so this also rejects a
+-- reply whose root is a broadcast, at the database level rather than
+-- only hiding the reply box in the UI (defense in depth -- the row is
+-- already readable by the replier as its recipient, via
+-- messages_select_own, so no security-definer bypass is needed here).
 create policy "messages_insert_to_admin" on public.messages
     for insert with check (
         auth.uid() = from_profile_id
         and public.is_approved_admin(to_profile_id)
+        and (
+            parent_message_id is null
+            or not exists (
+                select 1 from public.messages root
+                where root.id = parent_message_id and root.is_broadcast
+            )
+        )
     );
 
 -- Lets dashboard clients subscribe to live INSERT/UPDATE/DELETE events

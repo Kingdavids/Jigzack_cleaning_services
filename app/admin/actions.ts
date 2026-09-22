@@ -78,12 +78,6 @@ export async function createInvoice(formData: FormData) {
 
 export type MessageActionState = { success: boolean; error?: string } | null;
 
-const BROADCAST_ROLES: Record<string, ("customer" | "employee")[]> = {
-    __all_customers__: ["customer"],
-    __all_employees__: ["employee"],
-    __all_users__: ["customer", "employee"],
-};
-
 export async function sendMessage(
     _prevState: MessageActionState,
     formData: FormData
@@ -99,45 +93,6 @@ export async function sendMessage(
         return { success: false, error: "Recipient, subject, and message are required." };
     }
 
-    const broadcastRoles = BROADCAST_ROLES[toProfileId];
-
-    if (broadcastRoles) {
-        const { data: recipients, error: recipientsError } = await supabase
-            .from("profiles")
-            .select("id")
-            .in("role", broadcastRoles)
-            .eq("status", "approved");
-
-        if (recipientsError) {
-            console.error("broadcast recipients error:", recipientsError.message);
-            return { success: false, error: "Could not load recipients. Please try again." };
-        }
-
-        if (!recipients || recipients.length === 0) {
-            return { success: false, error: "No approved recipients found for this broadcast." };
-        }
-
-        const rows = recipients.map((r) => ({
-            from_profile_id: profile.id,
-            to_profile_id: r.id,
-            subject,
-            body,
-        }));
-
-        const { error } = await supabase.from("messages").insert(rows);
-
-        if (error) {
-            console.error("broadcast insert error:", error.message);
-            return { success: false, error: "Could not send broadcast. Please try again." };
-        }
-
-        revalidatePath("/admin/messages");
-        revalidatePath("/employee/messages");
-        revalidatePath("/customer/messages");
-
-        return { success: true };
-    }
-
     const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: toProfileId,
@@ -151,6 +106,69 @@ export async function sendMessage(
     }
 
     revalidatePath("/admin/messages");
+
+    return { success: true };
+}
+
+const BROADCAST_ROLES: Record<string, ("customer" | "employee")[]> = {
+    all_customers: ["customer"],
+    all_employees: ["employee"],
+    everyone: ["customer", "employee"],
+};
+
+// Broadcasts are one-way (see the messages_insert_to_admin RLS policy,
+// which rejects any reply whose thread root has is_broadcast = true) --
+// a fan-out announcement isn't meant to become a support conversation.
+export async function sendBroadcast(
+    _prevState: MessageActionState,
+    formData: FormData
+): Promise<MessageActionState> {
+    const profile = await requireAdmin();
+    const supabase = await createClient();
+
+    const audience = String(formData.get("audience") || "");
+    const subject = String(formData.get("subject") || "").trim();
+    const body = String(formData.get("body") || "").trim();
+
+    const roles = BROADCAST_ROLES[audience];
+
+    if (!roles || !subject || !body) {
+        return { success: false, error: "Audience, subject, and message are required." };
+    }
+
+    const { data: recipients, error: recipientsError } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("role", roles)
+        .eq("status", "approved");
+
+    if (recipientsError) {
+        console.error("broadcast recipients error:", recipientsError.message);
+        return { success: false, error: "Could not load recipients. Please try again." };
+    }
+
+    if (!recipients || recipients.length === 0) {
+        return { success: false, error: "No approved recipients found for this broadcast." };
+    }
+
+    const rows = recipients.map((r) => ({
+        from_profile_id: profile.id,
+        to_profile_id: r.id,
+        subject,
+        body,
+        is_broadcast: true,
+    }));
+
+    const { error } = await supabase.from("messages").insert(rows);
+
+    if (error) {
+        console.error("broadcast insert error:", error.message);
+        return { success: false, error: "Could not send broadcast. Please try again." };
+    }
+
+    revalidatePath("/admin/messages");
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
 
     return { success: true };
 }

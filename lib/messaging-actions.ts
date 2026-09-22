@@ -67,7 +67,7 @@ export async function replyToMessage(
 
     const { data: parent, error: parentError } = await supabase
         .from("messages")
-        .select("id, subject, from_profile_id, to_profile_id, parent_message_id")
+        .select("id, subject, from_profile_id, to_profile_id, parent_message_id, is_broadcast")
         .eq("id", parentMessageId)
         .single();
 
@@ -76,6 +76,14 @@ export async function replyToMessage(
     }
 
     const threadRootId = parent.parent_message_id ?? parent.id;
+
+    // Reply always targets the thread root (see below), so this row's own
+    // is_broadcast flag tells us whether the whole thread is one-way. Also
+    // enforced at the database level (messages_insert_to_admin RLS policy)
+    // so this isn't just a UI-layer restriction.
+    if (parent.is_broadcast) {
+        return { success: false, error: "Broadcast messages can't be replied to." };
+    }
     const otherPartyId =
         parent.from_profile_id === profile.id ? parent.to_profile_id : parent.from_profile_id;
 

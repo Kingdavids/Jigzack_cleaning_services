@@ -11,7 +11,7 @@ export default async function EmployeeMessagesPage() {
     const { data: messagesData } = await supabase
         .from("messages")
         .select(
-            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
         )
         .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
         .order("created_at", { ascending: false })
