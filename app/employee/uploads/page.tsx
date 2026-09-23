@@ -1,7 +1,7 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
-import PhotoTypeBadge from "@/components/dashboard/PhotoTypeBadge";
+import UploadsGrid from "@/components/dashboard/UploadsGrid";
 
 type UploadRow = {
     id: string;
@@ -29,7 +29,7 @@ export default async function EmployeeUploadsPage() {
         .from("uploads")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(4);
+        .limit(24);
 
     const uploads: UploadRow[] = uploadData ?? [];
 
@@ -38,51 +38,25 @@ export default async function EmployeeUploadsPage() {
             role="employee"
             profileId={profile.id}
             title="Task Uploads"
-            subtitle="Recent before/after photos across the team."
+            subtitle="Your recent before and after photos."
             unreadCount={unreadCount}
         >
-            <SectionCard title="Task Uploads" description="Recent before/after photos across the team.">
+            <SectionCard title="Task Uploads" description="Your recent before and after photos.">
                 {uploads.length === 0 ? (
                     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/50">
                         No uploads available.
                     </div>
                 ) : (
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        {uploads.map((upload) => (
-                            <div
-                                key={upload.id}
-                                className={`overflow-hidden rounded-xl border bg-white/[0.03] ${
-                                    upload.photo_type === "after"
-                                        ? "border-emerald-400/25"
-                                        : upload.photo_type === "before"
-                                            ? "border-sky-400/25"
-                                            : "border-white/10"
-                                }`}
-                            >
-                                <div className="relative">
-                                    {upload.image_url ? (
-                                        <img
-                                            src={upload.image_url}
-                                            alt={upload.task_title ?? "Task upload"}
-                                            className="h-40 w-full object-cover"
-                                        />
-                                    ) : (
-                                        <div className="flex h-40 items-center justify-center bg-black/20 text-sm text-white/40">
-                                            No image
-                                        </div>
-                                    )}
-                                    <div className="absolute left-3 top-3">
-                                        <PhotoTypeBadge type={upload.photo_type} />
-                                    </div>
-                                </div>
-
-                                <div className="p-4">
-                                    <p className="font-bold">{upload.task_title ?? "Task upload"}</p>
-                                    <p className="text-sm text-white/50">{formatDate(upload.created_at ?? null)}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                    <UploadsGrid
+                        className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+                        uploads={uploads.map((upload) => ({
+                            id: upload.id,
+                            image_url: upload.image_url,
+                            photo_type: upload.photo_type ?? null,
+                            title: upload.task_title ?? "Task upload",
+                            subtitle: formatDate(upload.created_at ?? null),
+                        }))}
+                    />
                 )}
             </SectionCard>
         </DashboardShell>

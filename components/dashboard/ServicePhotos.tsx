@@ -1,27 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
+import { useState } from "react";
+import PhotoLightbox from "@/components/dashboard/PhotoLightbox";
 
 export type ServicePhoto = { id: string; image_url: string; photo_type: string | null };
 
 type Category = "before" | "after";
 
-const CATEGORY_STYLE: Record<Category, { label: string; border: string; text: string; dot: string; chip: string }> = {
-    before: {
-        label: "Before",
-        border: "border-sky-400/25",
-        text: "text-sky-300",
-        dot: "bg-sky-400",
-        chip: "bg-sky-500 text-white",
-    },
-    after: {
-        label: "After",
-        border: "border-emerald-400/25",
-        text: "text-emerald-300",
-        dot: "bg-emerald-400",
-        chip: "bg-emerald-500 text-white",
-    },
+const CATEGORY_STYLE: Record<Category, { label: string; border: string; text: string; dot: string }> = {
+    before: { label: "Before", border: "border-sky-400/25", text: "text-sky-300", dot: "bg-sky-400" },
+    after: { label: "After", border: "border-emerald-400/25", text: "text-emerald-300", dot: "bg-emerald-400" },
 };
 
 // Before and after photos for one service day, clearly separated, with a
@@ -32,34 +20,6 @@ export default function ServicePhotos({ photos, heading }: { photos: ServicePhot
     const ordered = [...before, ...after];
 
     const [openIndex, setOpenIndex] = useState<number | null>(null);
-
-    const close = useCallback(() => setOpenIndex(null), []);
-    const step = useCallback(
-        (direction: 1 | -1) =>
-            setOpenIndex((current) =>
-                current === null ? null : (current + direction + ordered.length) % ordered.length
-            ),
-        [ordered.length]
-    );
-
-    useEffect(() => {
-        if (openIndex === null) return;
-
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") close();
-            if (e.key === "ArrowRight") step(1);
-            if (e.key === "ArrowLeft") step(-1);
-        };
-
-        document.addEventListener("keydown", onKey);
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-
-        return () => {
-            document.removeEventListener("keydown", onKey);
-            document.body.style.overflow = previousOverflow;
-        };
-    }, [openIndex, close, step]);
 
     const renderColumn = (category: Category, list: ServicePhoto[]) => {
         const style = CATEGORY_STYLE[category];
@@ -100,9 +60,6 @@ export default function ServicePhotos({ photos, heading }: { photos: ServicePhot
         );
     };
 
-    const current = openIndex === null ? null : ordered[openIndex];
-    const currentCategory: Category = current?.photo_type === "after" ? "after" : "before";
-
     return (
         <>
             <div className="grid gap-3 md:grid-cols-2">
@@ -110,77 +67,7 @@ export default function ServicePhotos({ photos, heading }: { photos: ServicePhot
                 {renderColumn("after", after)}
             </div>
 
-            {current && (
-                <div
-                    role="dialog"
-                    aria-modal="true"
-                    aria-label={heading ? `${heading} photo preview` : "Photo preview"}
-                    className="fixed inset-0 z-[100] flex flex-col bg-black/95"
-                    onClick={close}
-                >
-                    <div className="flex items-center justify-between gap-3 px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-3">
-                            <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${CATEGORY_STYLE[currentCategory].chip}`}>
-                                {CATEGORY_STYLE[currentCategory].label}
-                            </span>
-                            <span className="text-sm text-white/70">
-                                {heading ? `${heading} · ` : ""}
-                                {(openIndex ?? 0) + 1} of {ordered.length}
-                            </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <a
-                                href={current.image_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-xs font-semibold text-white/80 transition hover:bg-white/10"
-                            >
-                                <ExternalLink className="h-3.5 w-3.5" />
-                                Open original
-                            </a>
-                            <button
-                                type="button"
-                                onClick={close}
-                                aria-label="Close preview"
-                                className="flex h-10 w-10 items-center justify-center rounded-lg border border-white/15 text-white transition hover:bg-white/10"
-                            >
-                                <X className="h-5 w-5" />
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="relative flex min-h-0 flex-1 items-center justify-center px-2 pb-4 sm:px-14" onClick={(e) => e.stopPropagation()}>
-                        {ordered.length > 1 && (
-                            <button
-                                type="button"
-                                onClick={() => step(-1)}
-                                aria-label="Previous photo"
-                                className="absolute left-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 sm:left-3"
-                            >
-                                <ChevronLeft className="h-6 w-6" />
-                            </button>
-                        )}
-
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={current.image_url}
-                            alt={`${CATEGORY_STYLE[currentCategory].label} service photo`}
-                            className="max-h-full max-w-full rounded-lg object-contain"
-                        />
-
-                        {ordered.length > 1 && (
-                            <button
-                                type="button"
-                                onClick={() => step(1)}
-                                aria-label="Next photo"
-                                className="absolute right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/60 text-white transition hover:bg-black/80 sm:right-3"
-                            >
-                                <ChevronRight className="h-6 w-6" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
+            <PhotoLightbox photos={ordered} index={openIndex} onChange={setOpenIndex} heading={heading} />
         </>
     );
 }

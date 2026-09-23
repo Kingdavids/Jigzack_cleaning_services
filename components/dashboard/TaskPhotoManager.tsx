@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { uploadTaskPhoto, deleteTaskPhoto } from "@/app/employee/actions";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
+import PhotoLightbox from "@/components/dashboard/PhotoLightbox";
 
 type Photo = { id: string; image_url: string };
 
@@ -27,6 +28,7 @@ export default function TaskPhotoManager({
     const [isCompressing, startCompressing] = useTransition();
     const [isUploading, startUploading] = useTransition();
     const inputRef = useRef<HTMLInputElement>(null);
+    const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
     useEffect(() => {
         const supabase = createClient();
@@ -145,14 +147,21 @@ export default function TaskPhotoManager({
             </label>
 
             <div className="mb-2 grid grid-cols-3 gap-2">
-                {photos.map((photo) => (
+                {photos.map((photo, i) => (
                     <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg border border-white/10">
-                        <Image src={photo.image_url} alt={`${label} photo`} fill className="object-cover" unoptimized />
+                        <button
+                            type="button"
+                            onClick={() => setPreviewIndex(i)}
+                            aria-label={`View ${label.toLowerCase()} photo ${i + 1} full size`}
+                            className="absolute inset-0 block h-full w-full cursor-zoom-in"
+                        >
+                            <Image src={photo.image_url} alt={`${label} photo`} fill className="object-cover" unoptimized />
+                        </button>
                         <button
                             type="button"
                             onClick={() => handleDelete(photo.id)}
                             aria-label="Remove photo"
-                            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition group-hover:opacity-100"
+                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                         >
                             <X size={12} />
                         </button>
@@ -183,6 +192,12 @@ export default function TaskPhotoManager({
             {photos.length === 0 && (
                 <p className="text-xs text-white/40">No {photoType} photos yet. Tap + to add up to {MAX_PHOTOS_PER_SLOT}.</p>
             )}
+
+            <PhotoLightbox
+                photos={photos.map((p) => ({ ...p, photo_type: photoType }))}
+                index={previewIndex !== null && previewIndex < photos.length ? previewIndex : null}
+                onChange={setPreviewIndex}
+            />
         </div>
     );
 }
