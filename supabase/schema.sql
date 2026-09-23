@@ -22,21 +22,50 @@ create table public.profiles (
     created_at timestamptz not null default now()
 );
 
+-- The role is NEVER read from client-supplied signup metadata (anyone
+-- could send role = 'admin'). Everyone starts as a customer; the only way
+-- to become an employee is a valid, unused, unexpired admin-issued invite
+-- token (public.employee_invites), consumed here atomically.
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    v_invite_id uuid;
+    v_invite_email text;
+    v_role text := 'customer';
 begin
+    select id, email into v_invite_id, v_invite_email
+    from public.employee_invites
+    where token = new.raw_user_meta_data ->> 'invite_token'
+      and used_at is null
+      and expires_at > now()
+    for update;
+
+    if v_invite_id is not null then
+        if v_invite_email is not null and lower(v_invite_email) <> lower(new.email) then
+            raise exception 'This invite was issued for a different email address.';
+        end if;
+        v_role := 'employee';
+    end if;
+
     insert into public.profiles (id, full_name, email, role, status)
     values (
         new.id,
         new.raw_user_meta_data ->> 'full_name',
         new.email,
-        coalesce(new.raw_user_meta_data ->> 'role', 'customer'),
+        v_role,
         'pending'
     );
+
+    if v_role = 'employee' then
+        update public.employee_invites
+        set used_at = now(), used_by = new.id
+        where id = v_invite_id;
+    end if;
+
     return new;
 end;
 $$;
@@ -133,6 +162,44 @@ create policy "customers_insert_own" on public.customers
 
 create policy "customers_all_admin" on public.customers
     for all using (public.is_admin()) with check (public.is_admin());
+
+-- ============================================================
+-- employee_invites
+-- Employee accounts can't be self-registered. An admin generates an
+-- invite link (token minted server-side); the invited person signs up
+-- through it and handle_new_user() upgrades them to an employee.
+-- ============================================================
+create table public.employee_invites (
+    id uuid primary key default gen_random_uuid(),
+    token text not null unique,
+    email text,
+    invited_by uuid references public.profiles (id) on delete set null,
+    used_at timestamptz,
+    used_by uuid references public.profiles (id) on delete set null,
+    expires_at timestamptz not null default (now() + interval '7 days'),
+    created_at timestamptz not null default now()
+);
+
+alter table public.employee_invites enable row level security;
+
+create policy "employee_invites_all_admin" on public.employee_invites
+    for all using (public.is_admin()) with check (public.is_admin());
+
+-- Lets the (logged-out) invite page check a token without any table access.
+create or replace function public.check_employee_invite(p_token text)
+returns jsonb
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select coalesce(
+        (select jsonb_build_object('valid', true, 'email', email)
+         from public.employee_invites
+         where token = p_token and used_at is null and expires_at > now()),
+        jsonb_build_object('valid', false)
+    );
+$$;
 
 -- ============================================================
 -- estates & units
@@ -301,6 +368,9 @@ create table public.payments (
     invoice_month text,
     status text not null default 'pending'
         check (status in ('paid', 'pending', 'failed')),
+    paid_at timestamptz,
+    payment_method text,
+    payment_reference text,
     created_at timestamptz not null default now()
 );
 
@@ -338,6 +408,10 @@ create table public.messages (
     parent_message_id uuid references public.messages (id) on delete set null,
     read_at timestamptz,
     is_broadcast boolean not null default false,
+    -- Rows created by one send to several recipients (broadcast, or a
+    -- message to every admin) share a group_id so the sender's list can
+    -- show it once instead of once per recipient.
+    group_id uuid,
     created_at timestamptz not null default now()
 );
 

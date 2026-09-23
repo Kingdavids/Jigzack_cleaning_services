@@ -41,6 +41,18 @@ export default function Topbar({
         const supabase = createClient();
         const channels: RealtimeChannel[] = [];
 
+        // A multi-photo upload inserts one row per photo. Announce the first and
+        // stay quiet for the rest of that burst instead of toasting + chiming
+        // once per image.
+        const recentUploadAlerts = new Map<string, number>();
+        const shouldAnnounceUpload = (upload: { photo_type: string; task_title: string | null }) => {
+            const key = `${upload.task_title ?? ""}:${upload.photo_type}`;
+            const now = Date.now();
+            const last = recentUploadAlerts.get(key) ?? 0;
+            recentUploadAlerts.set(key, now);
+            return now - last > 8000;
+        };
+
         const announce = () => {
             setJustArrived(true);
             if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
@@ -112,11 +124,12 @@ export default function Topbar({
                     "postgres_changes",
                     { event: "INSERT", schema: "public", table: "uploads", filter: `customer_id=eq.${profileId}` },
                     (payload) => {
-                        announce();
                         const upload = payload.new as { photo_type: string; task_title: string | null };
-                        toast.message(`New ${upload.photo_type} photo uploaded`, {
+                        if (!shouldAnnounceUpload(upload)) return;
+                        announce();
+                        toast.message(`New ${upload.photo_type} photos uploaded`, {
                             description: upload.task_title ?? undefined,
-                            action: { label: "View", onClick: () => router.push("/customer/tasks") },
+                            action: { label: "View", onClick: () => router.push("/customer") },
                         });
                     }
                 )
@@ -129,7 +142,7 @@ export default function Topbar({
                         announce();
                         toast.message(`Task ${task.status}`, {
                             description: task.title,
-                            action: { label: "View", onClick: () => router.push("/customer/tasks") },
+                            action: { label: "View", onClick: () => router.push("/customer") },
                         });
                     }
                 )
@@ -156,9 +169,10 @@ export default function Topbar({
                     "postgres_changes",
                     { event: "INSERT", schema: "public", table: "uploads" },
                     (payload) => {
-                        announce();
                         const upload = payload.new as { photo_type: string; task_title: string | null };
-                        toast.message(`New ${upload.photo_type} photo uploaded`, {
+                        if (!shouldAnnounceUpload(upload)) return;
+                        announce();
+                        toast.message(`New ${upload.photo_type} photos uploaded`, {
                             description: upload.task_title ?? undefined,
                             action: { label: "View", onClick: () => router.push("/admin/uploads") },
                         });

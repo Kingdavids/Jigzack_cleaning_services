@@ -17,6 +17,7 @@ export type MessageRow = {
     to_profile_id: string;
     read_at?: string | null;
     is_broadcast?: boolean;
+    group_id?: string | null;
     from_profile: { full_name: string | null } | null;
     to_profile: { full_name: string | null } | null;
 };
@@ -25,7 +26,7 @@ type ReplyAction = (prevState: MessageActionState, formData: FormData) => Promis
 
 const PAGE_SIZE = 8;
 const MESSAGE_SELECT =
-    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)";
+    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, group_id, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)";
 
 function formatWhen(value: string) {
     const date = new Date(value);
@@ -114,9 +115,11 @@ function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: R
 
 function DeleteForm({
                          messageId,
+                         groupId,
                          deleteAction,
                      }: {
     messageId: string;
+    groupId?: string | null;
     deleteAction: (formData: FormData) => void;
 }) {
     return (
@@ -130,6 +133,7 @@ function DeleteForm({
             }}
         >
             <input type="hidden" name="messageId" value={messageId} />
+            {groupId && <input type="hidden" name="groupId" value={groupId} />}
             <button
                 type="submit"
                 aria-label="Delete message"
@@ -145,10 +149,12 @@ function MessageBubble({
                             message,
                             currentProfileId,
                             deleteAction,
+                            deleteGroupId,
                         }: {
     message: MessageRow;
     currentProfileId: string;
     deleteAction: (formData: FormData) => void;
+    deleteGroupId?: string | null;
 }) {
     const isMine = message.from_profile_id === currentProfileId;
 
@@ -175,7 +181,7 @@ function MessageBubble({
 
                 <div className="mt-1 flex items-center gap-2 px-1">
                     <span className="text-[11px] text-white/40">{formatWhen(message.created_at)}</span>
-                    {isMine && <DeleteForm messageId={message.id} deleteAction={deleteAction} />}
+                    {isMine && <DeleteForm messageId={message.id} groupId={deleteGroupId} deleteAction={deleteAction} />}
                 </div>
             </div>
         </div>
@@ -271,20 +277,54 @@ export default function MessageThreadList({
     }, [messages]);
 
     const roots = useMemo(() => {
-        return messages
+        // One send to several recipients (broadcast, or a message to every
+        // admin) creates one row per recipient. The sender sees them as ONE
+        // card; each recipient only ever has their own row, so they're
+        // unaffected.
+        const groups = new Map<string, MessageRow[]>();
+
+        messages
             .filter((m) => !m.parent_message_id)
-            .map((root) => {
-                const replies = (repliesByRoot.get(root.id) ?? []).sort(
+            .forEach((m) => {
+                const key = m.group_id && m.from_profile_id === currentProfileId ? `g:${m.group_id}` : `r:${m.id}`;
+                const list = groups.get(key) ?? [];
+                list.push(m);
+                groups.set(key, list);
+            });
+
+        return Array.from(groups.values())
+            .map((groupRoots) => {
+                const sortedRoots = [...groupRoots].sort(
                     (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                 );
+                const root = sortedRoots[0];
+                const rootIds = sortedRoots.map((r) => r.id);
+
+                const replies = sortedRoots
+                    .flatMap((r) => repliesByRoot.get(r.id) ?? [])
+                    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
                 const latest = replies.length > 0 ? replies[replies.length - 1] : root;
                 // Any message in the thread addressed to me can be the unread
                 // one -- not just the root -- otherwise a fresh reply on an
                 // already-read thread would never show as unread.
-                const isUnread = [root, ...replies].some(
+                const isUnread = [...sortedRoots, ...replies].some(
                     (m) => m.to_profile_id === currentProfileId && !m.read_at
                 );
-                return { root, replies, latest, isUnread };
+                // Replying continues with whoever answered last; before any
+                // answer it goes to the first recipient.
+                const replyParentId = latest.parent_message_id ?? root.id;
+
+                return {
+                    root,
+                    rootIds,
+                    replies,
+                    latest,
+                    isUnread,
+                    groupSize: sortedRoots.length,
+                    replyParentId,
+                    groupId: sortedRoots.length > 1 ? root.group_id ?? null : null,
+                };
             })
             .sort((a, b) => new Date(b.latest.created_at).getTime() - new Date(a.latest.created_at).getTime());
     }, [repliesByRoot, messages, currentProfileId]);
@@ -300,7 +340,7 @@ export default function MessageThreadList({
     const visibleRoots = roots.slice(0, visibleCount);
     const remaining = roots.length - visibleRoots.length;
 
-    const handleToggleThread = (rootId: string, isUnread: boolean) => {
+    const handleToggleThread = (rootId: string, rootIds: string[], isUnread: boolean) => {
         const opening = openThreadId !== rootId;
         setOpenThreadId(opening ? rootId : null);
 
@@ -308,25 +348,38 @@ export default function MessageThreadList({
             const now = new Date().toISOString();
             setMessages((prev) =>
                 prev.map((m) =>
-                    (m.id === rootId || m.parent_message_id === rootId) &&
+                    (rootIds.includes(m.id) || (m.parent_message_id !== null && rootIds.includes(m.parent_message_id))) &&
                     m.to_profile_id === currentProfileId &&
                     !m.read_at
                         ? { ...m, read_at: now }
                         : m
                 )
             );
-            markThreadRead(rootId);
+            rootIds.forEach((id) => markThreadRead(id));
         }
     };
 
     return (
         <div className="space-y-3">
-            {visibleRoots.map(({ root, replies, latest, isUnread }) => {
+            {visibleRoots.map(({ root, rootIds, replies, latest, isUnread, groupSize, replyParentId, groupId }) => {
                 const isOpen = openThreadId === root.id;
                 const isBroadcast = Boolean(root.is_broadcast);
                 const isMineRoot = root.from_profile_id === currentProfileId;
-                const counterpart = isMineRoot ? root.to_profile?.full_name : root.from_profile?.full_name;
-                const avatarName = isBroadcast ? "Broadcast" : isMineRoot ? root.to_profile?.full_name : root.from_profile?.full_name;
+                const counterpart =
+                    groupSize > 1
+                        ? isBroadcast
+                            ? `${groupSize} recipients`
+                            : `All admins (${groupSize})`
+                        : isMineRoot
+                            ? root.to_profile?.full_name
+                            : root.from_profile?.full_name;
+                const avatarName = isBroadcast
+                    ? "Broadcast"
+                    : groupSize > 1
+                        ? "Admins"
+                        : isMineRoot
+                            ? root.to_profile?.full_name
+                            : root.from_profile?.full_name;
 
                 return (
                     <div
@@ -341,7 +394,7 @@ export default function MessageThreadList({
                     >
                         <button
                             type="button"
-                            onClick={() => handleToggleThread(root.id, isUnread)}
+                            onClick={() => handleToggleThread(root.id, rootIds, isUnread)}
                             className="flex w-full items-start gap-3 p-4 text-left"
                         >
                             {isBroadcast ? (
@@ -413,6 +466,7 @@ export default function MessageThreadList({
                                             message={root}
                                             currentProfileId={currentProfileId}
                                             deleteAction={deleteAction}
+                                            deleteGroupId={groupId}
                                         />
 
                                         {replies.map((reply) => (
@@ -431,7 +485,7 @@ export default function MessageThreadList({
                                             Broadcast message — replies aren&apos;t available.
                                         </div>
                                     ) : (
-                                        <ReplyForm parentId={root.id} replyAction={replyAction} />
+                                        <ReplyForm parentId={replyParentId} replyAction={replyAction} />
                                     )}
                                 </div>
                             </div>

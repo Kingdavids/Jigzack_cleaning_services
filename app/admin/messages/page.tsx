@@ -22,10 +22,16 @@ export default async function AdminMessagesPage() {
     const { data: messagesData } = await supabase
         .from("messages")
         .select(
-            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
+            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, group_id, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
         )
+        // Admins can technically read every message (messages_all_admin), but
+        // each send fans out to one row per recipient -- loading them all
+        // showed the same message once per admin and once per broadcast
+        // recipient. Only this admin's own side of each conversation belongs
+        // in their inbox.
+        .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
         .order("created_at", { ascending: false })
-        .limit(50);
+        .limit(200);
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
 

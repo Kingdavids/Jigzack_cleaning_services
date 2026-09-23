@@ -12,6 +12,7 @@ import {
     UserCheck,
     Sparkles,
     Building2,
+    UserPlus,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -23,6 +24,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Approvals", href: "/admin/approvals", icon: UserCheck },
         { label: "Customers", href: "/admin/customers", icon: Users },
         { label: "Estates", href: "/admin/estates", icon: Building2 },
+        { label: "Employees", href: "/admin/employees", icon: UserPlus },
         { label: "Tasks", href: "/admin/tasks", icon: ClipboardList },
         { label: "Uploads", href: "/admin/uploads", icon: Camera },
         { label: "Messages", href: "/admin/messages", icon: MessageSquare },
@@ -30,7 +32,6 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
     ],
     customer: [
         { label: "Dashboard", href: "/customer", icon: LayoutDashboard },
-        { label: "My Tasks", href: "/customer/tasks", icon: ClipboardList },
         { label: "Messages", href: "/customer/messages", icon: MessageSquare },
         { label: "Payments", href: "/customer/payments", icon: CreditCard },
     ],

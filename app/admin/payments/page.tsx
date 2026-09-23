@@ -3,6 +3,8 @@ import { createInvoice } from "../actions";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
+import MarkPaidControl from "@/components/dashboard/MarkPaidControl";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -12,6 +14,8 @@ type PaymentRow = {
     status: string;
     invoice_month: string | null;
     created_at: string;
+    paid_at: string | null;
+    payment_method: string | null;
     customer: ProfileRef;
 };
 
@@ -41,10 +45,10 @@ export default async function AdminPaymentsPage() {
     const { data: paymentsData } = await supabase
         .from("payments")
         .select(
-            "id, amount, status, invoice_month, created_at, customer:profiles!payments_customer_id_fkey(full_name)"
+            "id, amount, status, invoice_month, created_at, paid_at, payment_method, customer:profiles!payments_customer_id_fkey(full_name)"
         )
         .order("created_at", { ascending: false })
-        .limit(10);
+        .limit(20);
 
     const payments = (paymentsData ?? []) as unknown as PaymentRow[];
 
@@ -85,18 +89,20 @@ export default async function AdminPaymentsPage() {
                                         <StatusBadge status={payment.status} />
                                     </div>
                                 </div>
+
+                                {payment.status === "paid" ? (
+                                    <p className="mt-3 border-t border-white/10 pt-3 text-xs text-white/45">
+                                        Paid {formatDate(payment.paid_at ?? payment.created_at)}
+                                        {payment.payment_method ? ` via ${payment.payment_method}` : ""}
+                                    </p>
+                                ) : (
+                                    <MarkPaidControl paymentId={payment.id} />
+                                )}
                             </div>
                         ))
                     )}
 
-                    <form
-                        action={createInvoice}
-                        className="space-y-3 rounded-3xl border border-white/10 bg-black/20 p-5"
-                    >
-                        <p className="text-xs uppercase tracking-[0.2em] text-white/45">
-                            Create invoice
-                        </p>
-
+                    <CreateInvoiceForm action={createInvoice}>
                         <select
                             name="customerId"
                             required
@@ -135,14 +141,7 @@ export default async function AdminPaymentsPage() {
                             placeholder="Description"
                             className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
                         />
-
-                        <button
-                            type="submit"
-                            className="w-full rounded-2xl bg-amber-400 px-4 py-2.5 font-bold text-black transition hover:bg-amber-300"
-                        >
-                            Create Invoice
-                        </button>
-                    </form>
+                    </CreateInvoiceForm>
                 </div>
             </SectionCard>
         </DashboardShell>

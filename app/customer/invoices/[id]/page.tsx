@@ -2,7 +2,9 @@ import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { redirect } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import PrintButton from "@/components/dashboard/PrintButton";
+import { receiptNumber, resolveBilling } from "@/lib/customer/billing";
 
 function naira(value: number) {
     return `₦${value.toLocaleString()}`;
@@ -39,28 +41,7 @@ export default async function CustomerInvoicePage({
         .eq("profile_id", profile.id)
         .single();
 
-    let billingProfileId = profile.id;
-    let billingCustomer = customer;
-
-    if (customer?.unit_id) {
-        const { data: unit } = await supabase
-            .from("units")
-            .select("estate_profile_id")
-            .eq("id", customer.unit_id)
-            .single();
-
-        if (unit) {
-            billingProfileId = unit.estate_profile_id;
-
-            const { data: estateCustomer } = await supabase
-                .from("customers")
-                .select("*")
-                .eq("profile_id", unit.estate_profile_id)
-                .single();
-
-            billingCustomer = estateCustomer ?? customer;
-        }
-    }
+    const { billingProfileId, billingCustomer } = await resolveBilling(supabase, profile.id, customer);
 
     const { data: invoice } = await supabase
         .from("payments")
@@ -177,7 +158,15 @@ export default async function CustomerInvoicePage({
                     </div>
                 </div>
 
-                <div className="mt-10 flex justify-end">
+                <div className="mt-10 flex flex-wrap items-center justify-end gap-3">
+                    {invoice.status === "paid" && (
+                        <Link
+                            href={`/customer/receipts/${invoice.id}`}
+                            className="rounded-xl border border-black/20 bg-white/60 px-5 py-3 text-sm font-semibold text-black print:hidden"
+                        >
+                            View receipt {receiptNumber(invoice.id)}
+                        </Link>
+                    )}
                     <PrintButton />
                 </div>
             </div>

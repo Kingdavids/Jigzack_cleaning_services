@@ -1,8 +1,11 @@
 "use server";
 
+import { randomBytes, randomUUID } from "node:crypto";
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
+import { escapeHtml, sendEmail } from "@/lib/send-email";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -13,6 +16,12 @@ async function requireAdmin() {
 
     return profile;
 }
+
+// Identical rows created seconds apart are a double-submit (double click,
+// retried request), not a second intent -- the client-side pending guard
+// alone can't fully rule that out.
+const DUPLICATE_WINDOW_MS = 15_000;
+const duplicateSince = () => new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString();
 
 export type TaskActionState = { success: boolean; error?: string } | null;
 
@@ -32,6 +41,18 @@ export async function createTask(
 
     if (!title || !employeeId) {
         return { success: false, error: "Title and employee are required." };
+    }
+
+    const { data: duplicateTask } = await supabase
+        .from("tasks")
+        .select("id")
+        .eq("title", title)
+        .eq("employee_id", employeeId)
+        .gte("created_at", duplicateSince())
+        .limit(1);
+
+    if (duplicateTask && duplicateTask.length > 0) {
+        return { success: true };
     }
 
     const { error } = await supabase.from("tasks").insert({
@@ -57,7 +78,12 @@ export async function createTask(
     return { success: true };
 }
 
-export async function createInvoice(formData: FormData) {
+export type InvoiceActionState = { success: boolean; error?: string } | null;
+
+export async function createInvoice(
+    _prevState: InvoiceActionState,
+    formData: FormData
+): Promise<InvoiceActionState> {
     await requireAdmin();
     const supabase = await createClient();
 
@@ -66,7 +92,21 @@ export async function createInvoice(formData: FormData) {
     const description = String(formData.get("description") || "").trim() || null;
     const invoiceMonth = String(formData.get("invoiceMonth") || "").trim() || null;
 
-    if (!customerId || !amount) return;
+    if (!customerId || !amount || amount <= 0) {
+        return { success: false, error: "Choose a customer and enter an amount greater than zero." };
+    }
+
+    const { data: duplicateInvoice } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("customer_id", customerId)
+        .eq("amount", amount)
+        .gte("created_at", duplicateSince())
+        .limit(1);
+
+    if (duplicateInvoice && duplicateInvoice.length > 0) {
+        return { success: true };
+    }
 
     const { error } = await supabase.from("payments").insert({
         customer_id: customerId,
@@ -77,6 +117,37 @@ export async function createInvoice(formData: FormData) {
 
     if (error) {
         console.error("createInvoice insert error:", error.message);
+        return { success: false, error: "Could not create invoice. Please try again." };
+    }
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return { success: true };
+}
+
+const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Paystack", "Other"];
+
+export async function markInvoicePaid(paymentId: string, method: string, reference: string) {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!paymentId) return;
+
+    const { error } = await supabase
+        .from("payments")
+        .update({
+            status: "paid",
+            paid_at: new Date().toISOString(),
+            payment_method: PAYMENT_METHODS.includes(method) ? method : "Other",
+            payment_reference: reference.trim().slice(0, 120) || null,
+        })
+        .eq("id", paymentId)
+        .neq("status", "paid");
+
+    if (error) {
+        console.error("markInvoicePaid error:", error.message);
         return;
     }
 
@@ -100,6 +171,20 @@ export async function sendMessage(
 
     if (!toProfileId || !subject || !body) {
         return { success: false, error: "Recipient, subject, and message are required." };
+    }
+
+    const { data: duplicateMessage } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("from_profile_id", profile.id)
+        .eq("to_profile_id", toProfileId)
+        .eq("subject", subject)
+        .eq("body", body)
+        .gte("created_at", duplicateSince())
+        .limit(1);
+
+    if (duplicateMessage && duplicateMessage.length > 0) {
+        return { success: true };
     }
 
     const { error } = await supabase.from("messages").insert({
@@ -160,12 +245,28 @@ export async function sendBroadcast(
         return { success: false, error: "No approved recipients found for this broadcast." };
     }
 
+    const { data: duplicateBroadcast } = await supabase
+        .from("messages")
+        .select("id")
+        .eq("from_profile_id", profile.id)
+        .eq("subject", subject)
+        .eq("body", body)
+        .eq("is_broadcast", true)
+        .gte("created_at", duplicateSince())
+        .limit(1);
+
+    if (duplicateBroadcast && duplicateBroadcast.length > 0) {
+        return { success: true };
+    }
+
+    const groupId = randomUUID();
     const rows = recipients.map((r) => ({
         from_profile_id: profile.id,
         to_profile_id: r.id,
         subject,
         body,
         is_broadcast: true,
+        group_id: groupId,
     }));
 
     const { error } = await supabase.from("messages").insert(rows);
@@ -260,4 +361,90 @@ export async function linkTenantToUnit(tenantProfileId: string, unitId: string |
 
     revalidatePath("/admin/approvals");
     revalidatePath("/admin/estates");
+}
+
+export type InviteActionState = {
+    success: boolean;
+    error?: string;
+    link?: string;
+    emailed?: boolean;
+} | null;
+
+async function siteOrigin() {
+    if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
+
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+
+    return host ? `${proto}://${host}` : "";
+}
+
+// Employees can't self-register: an admin mints a single-use link (7 days)
+// and the invited person signs up through it. The token is generated here,
+// server-side, and only ever validated by the database.
+export async function createEmployeeInvite(
+    _prevState: InviteActionState,
+    formData: FormData
+): Promise<InviteActionState> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    const email = String(formData.get("email") || "").trim().toLowerCase() || null;
+
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return { success: false, error: "That email address doesn't look valid." };
+    }
+
+    const token = randomBytes(24).toString("hex");
+
+    const { error } = await supabase.from("employee_invites").insert({
+        token,
+        email,
+        invited_by: admin.id,
+    });
+
+    if (error) {
+        console.error("createEmployeeInvite insert error:", error.message);
+        return { success: false, error: "Could not create the invite. Please try again." };
+    }
+
+    const link = `${await siteOrigin()}/auth/employee-invite?token=${token}`;
+
+    let emailed = false;
+    if (email) {
+        emailed = await sendEmail({
+            to: [email],
+            subject: "You're invited to join Jigzack Cleaning Services",
+            html: `
+                <p>You've been invited to create an employee account with Jigzack Cleaning Services.</p>
+                <p><a href="${escapeHtml(link)}">Set up your account</a></p>
+                <p>This link works once and expires in 7 days.</p>
+            `,
+        });
+    }
+
+    revalidatePath("/admin/employees");
+
+    return { success: true, link, emailed };
+}
+
+export async function revokeEmployeeInvite(inviteId: string) {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!inviteId) return;
+
+    const { error } = await supabase
+        .from("employee_invites")
+        .delete()
+        .eq("id", inviteId)
+        .is("used_at", null);
+
+    if (error) {
+        console.error("revokeEmployeeInvite error:", error.message);
+        return;
+    }
+
+    revalidatePath("/admin/employees");
 }

@@ -11,11 +11,19 @@ import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { notifyAdminsOfSignup } from "@/lib/signup-notify";
 
-type SignupRole = "customer" | "employee";
-
-export default function Signup() {
+// Public signup creates customers only. An employee account can only be
+// created through an admin-issued invite link (inviteToken) -- the database
+// ignores any role sent from the browser, so there's no role field here.
+export default function Signup({
+                                   inviteToken,
+                                   presetEmail,
+                               }: {
+    inviteToken?: string;
+    presetEmail?: string | null;
+}) {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
+    const isEmployeeInvite = Boolean(inviteToken);
 
     const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -24,11 +32,10 @@ export default function Signup() {
         const fullName = String(form.get("fullName") || "").trim();
         const email = String(form.get("email") || "").trim();
         const password = String(form.get("password") || "");
-        const role = String(form.get("role") || "customer") as SignupRole;
 
         const supabase = createClient();
 
-        if (!fullName || !email || !password || !role) {
+        if (!fullName || !email || !password) {
             toast.error("Please fill in all fields");
             return;
         }
@@ -51,7 +58,7 @@ export default function Signup() {
                     emailRedirectTo: `${origin}/auth/callback?next=/auth/complete-signup`,
                     data: {
                         full_name: fullName,
-                        role,
+                        ...(inviteToken ? { invite_token: inviteToken } : {}),
                     },
                 },
             });
@@ -61,16 +68,14 @@ export default function Signup() {
                 return;
             }
 
-            toast.success("Account created successfully. Please verify your email to continue.");
-
             // Fire-and-forget: don't let a slow/failing email hold up the
-            // signup redirect, and don't surface provider errors to the user.
-            notifyAdminsOfSignup(fullName, email, role).catch(() => {});
+            // redirect, and don't surface provider errors to the user.
+            notifyAdminsOfSignup(fullName, email, isEmployeeInvite ? "employee" : "customer").catch(() => {});
 
-            // Customer property setup requires an active session, which only
-            // exists after the confirmation link is clicked — complete-signup
-            // routes customers to /auth/customer-setup once that's true.
-            router.push(`/auth/pending?role=${role}`);
+            // There's no session until the confirmation link is clicked, so
+            // /auth/pending (which needs one) would just bounce back to the
+            // login screen. This page is public and says what to do next.
+            router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`);
         } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {
@@ -82,10 +87,12 @@ export default function Signup() {
         <>
             <CardHeader className="px-0 pt-0 pb-4">
                 <CardTitle className="text-2xl md:text-3xl font-black tracking-tight text-white">
-                    Create account
+                    {isEmployeeInvite ? "Create your employee account" : "Create account"}
                 </CardTitle>
                 <CardDescription className="text-white/65">
-                    Register as a customer or employee.
+                    {isEmployeeInvite
+                        ? "You've been invited to join the Jigzack team."
+                        : "Register as a customer to book and track waste collection."}
                 </CardDescription>
             </CardHeader>
 
@@ -114,6 +121,8 @@ export default function Signup() {
                             type="email"
                             placeholder="example@gmail.com"
                             autoComplete="email"
+                            defaultValue={presetEmail ?? ""}
+                            readOnly={Boolean(presetEmail)}
                             className="h-12 rounded-xl border-white/10 bg-white/10 text-white placeholder:text-white/35 focus-visible:ring-amber-300/70 focus-visible:ring-offset-0"
                         />
                     </div>
@@ -130,25 +139,6 @@ export default function Signup() {
                         />
                     </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="role" className="text-white/80">
-                            Account type
-                        </Label>
-                        <select
-                            id="role"
-                            name="role"
-                            defaultValue="customer"
-                            className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-3 text-white outline-none"
-                        >
-                            <option value="customer" className="bg-slate-900">
-                                Customer
-                            </option>
-                            <option value="employee" className="bg-slate-900">
-                                Employee
-                            </option>
-                        </select>
-                    </div>
-
                     <Button
                         type="submit"
                         disabled={isLoading}
@@ -158,7 +148,7 @@ export default function Signup() {
                     </Button>
 
                     <p className="text-center text-xs text-white/55 leading-5">
-                        New accounts require email verification and admin approval before dashboard access.
+                        We&apos;ll email you a link to confirm your address. New accounts also need admin approval before dashboard access.
                     </p>
                 </form>
             </CardContent>

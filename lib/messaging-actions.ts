@@ -1,10 +1,37 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 
 export type MessageActionState = { success: boolean; error?: string } | null;
+
+// A double-click, a retried request or a slow network can submit the same
+// form twice before the button's pending state lands. An identical message
+// from the same sender within a few seconds is that, not a second intent.
+async function isRecentDuplicate(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    match: { from_profile_id: string; subject: string; body: string; parent_message_id: string | null }
+) {
+    const since = new Date(Date.now() - 15_000).toISOString();
+
+    let query = supabase
+        .from("messages")
+        .select("id")
+        .eq("from_profile_id", match.from_profile_id)
+        .eq("subject", match.subject)
+        .eq("body", match.body)
+        .gte("created_at", since)
+        .limit(1);
+
+    query = match.parent_message_id
+        ? query.eq("parent_message_id", match.parent_message_id)
+        : query.is("parent_message_id", null);
+
+    const { data } = await query;
+    return Boolean(data && data.length > 0);
+}
 
 export async function sendMessageToAdmin(
     _prevState: MessageActionState,
@@ -27,14 +54,21 @@ export async function sendMessageToAdmin(
         return { success: false, error: "Could not reach admin. Please try again." };
     }
 
+    if (await isRecentDuplicate(supabase, { from_profile_id: profile.id, subject, body, parent_message_id: null })) {
+        return { success: true };
+    }
+
     // Every admin gets their own copy so whichever one is actually working
     // sees it and gets the live alert -- not just whichever admin account
-    // happens to be oldest.
+    // happens to be oldest. The shared group_id lets the sender's list show
+    // it once instead of once per admin.
+    const groupId = randomUUID();
     const rows = (adminIds as string[]).map((adminId) => ({
         from_profile_id: profile.id,
         to_profile_id: adminId,
         subject,
         body,
+        group_id: groupId,
     }));
 
     const { error: insertError } = await supabase.from("messages").insert(rows);
@@ -93,6 +127,10 @@ export async function replyToMessage(
 
     const subject = parent.subject.startsWith("Re: ") ? parent.subject : `Re: ${parent.subject}`;
 
+    if (await isRecentDuplicate(supabase, { from_profile_id: profile.id, subject, body, parent_message_id: threadRootId })) {
+        return { success: true };
+    }
+
     const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: otherPartyId,
@@ -135,12 +173,19 @@ export async function markThreadRead(rootMessageId: string) {
 }
 
 export async function deleteMessage(formData: FormData) {
+    const profile = await getUserProfile();
     const supabase = await createClient();
     const messageId = String(formData.get("messageId") || "");
+    const groupId = String(formData.get("groupId") || "");
 
     if (!messageId) return;
 
-    const { error } = await supabase.from("messages").delete().eq("id", messageId);
+    // A sender's list shows a fan-out (broadcast / message to all admins) as
+    // one card, so deleting it has to remove every copy the sender owns --
+    // otherwise the next copy would just pop up in its place.
+    const { error } = groupId
+        ? await supabase.from("messages").delete().eq("group_id", groupId).eq("from_profile_id", profile.id)
+        : await supabase.from("messages").delete().eq("id", messageId);
 
     if (error) {
         console.error("deleteMessage error:", error.message);
