@@ -6,6 +6,7 @@ import {
     Building2,
     CheckCircle2,
     ChevronRight,
+    Circle,
     ClipboardList,
     Home,
     MapPin,
@@ -200,6 +201,49 @@ export default function CustomerSetupPage() {
         return Math.round((completed / requiredFields.length) * 100);
     }, [form]);
 
+    const checklist = useMemo(() => {
+        const anyFacility = [
+            form.duplexCount,
+            form.flatsCount,
+            form.miniFlatsCount,
+            form.bungalowCount,
+            form.terraceCount,
+            form.shopsCount,
+            form.domesticOthers,
+            form.supermarketsCount,
+            form.complexesCount,
+            form.beachesCount,
+            form.marketsCount,
+            form.hotelsCount,
+            form.schoolsCount,
+            form.carWashBarsCount,
+            form.blockIndustryCount,
+            form.eateryCount,
+            form.workshopCount,
+            form.commercialOthers,
+        ].some((value) => value.trim() !== "");
+
+        return [
+            {
+                label: "Account holder details",
+                done: Boolean(form.landlordName.trim() && form.contactPhone.trim() && form.whatsappNumber.trim()),
+            },
+            {
+                label: "Property address and area",
+                done: Boolean(form.propertyAddress.trim() && form.lga.trim() && form.state.trim()),
+            },
+            { label: "Facility information", done: anyFacility },
+            {
+                label: "Pickup preferences",
+                done: Boolean(
+                    form.wasteType &&
+                    form.preferredPickupFrequency &&
+                    (form.preferredPickupFrequency !== "Custom" || form.customFrequency.trim())
+                ),
+            },
+        ];
+    }, [form]);
+
     function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
         setForm((prev) => ({ ...prev, [key]: value }));
     }
@@ -320,58 +364,71 @@ export default function CustomerSetupPage() {
                             scheduled properly, and prepared for pickup service.
                         </p>
 
-                        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                            {[
-                                "Property details",
-                                "Service planning",
-                                "Admin review next",
-                            ].map((item, index) => (
-                                <div
-                                    key={item}
-                                    className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3"
+                        <ol className="mt-7 flex items-start" aria-label="Setup steps">
+                            {["Property details", "Service planning", "Admin review"].map((label, index) => (
+                                <li
+                                    key={label}
+                                    aria-current={index === 0 ? "step" : undefined}
+                                    className="relative flex flex-1 flex-col items-center text-center"
                                 >
-                                    <p className="text-xs uppercase tracking-[0.18em] text-white/40">
-                                        {`0${index + 1}`}
-                                    </p>
-                                    <p className="mt-2 text-sm font-semibold text-white/85">{item}</p>
-                                </div>
+                                    {index > 0 && (
+                                        <span
+                                            aria-hidden="true"
+                                            className="absolute left-[-50%] top-3.5 h-px w-full bg-white/15"
+                                        />
+                                    )}
+                                    <span
+                                        className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${
+                                            index === 0
+                                                ? "bg-amber-400 text-black"
+                                                : "border border-white/20 bg-[#0a0a0b] text-white/50"
+                                        }`}
+                                    >
+                                        {index + 1}
+                                    </span>
+                                    <span
+                                        className={`mt-2 px-1 text-[11px] leading-4 sm:text-xs ${
+                                            index === 0 ? "font-semibold text-white" : "text-white/50"
+                                        }`}
+                                    >
+                                        {label}
+                                    </span>
+                                </li>
                             ))}
-                        </div>
+                        </ol>
                     </div>
 
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-                        <p className="text-xs uppercase tracking-[0.2em] text-white/45">Completion</p>
-                        <div className="mt-4 flex items-end justify-between gap-4">
-                            <div>
-                                <p className="text-4xl font-black text-amber-300">{progress}%</p>
-                                <p className="mt-1 text-sm text-white/55">Required profile fields completed</p>
-                            </div>
-                            <CheckCircle2 className="h-10 w-10 text-amber-300" />
+                        <div className="flex items-baseline justify-between gap-4">
+                            <p className="text-xs uppercase tracking-[0.2em] text-white/45">Your progress</p>
+                            <p className="text-2xl font-black text-amber-300">{progress}%</p>
                         </div>
 
-                        <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/8">
+                        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/8">
                             <div
                                 className="h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400 transition-all duration-500"
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
 
-                        <div className="mt-6 space-y-3">
-                            {[
-                                "Landlord / account holder details",
-                                "Property address and area",
-                                "Facility information",
-                                "Pickup preferences",
-                            ].map((item) => (
-                                <div
-                                    key={item}
-                                    className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3"
-                                >
-                                    <span className="text-sm text-white/75">{item}</span>
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-300" />
-                                </div>
+                        <p className="mt-2 text-xs leading-5 text-white/45">
+                            {progress === 100
+                                ? "Everything required is filled in. Submit at the bottom of the form."
+                                : "Fill in the form below. Each item ticks off as you complete it."}
+                        </p>
+
+                        <ul className="mt-4 space-y-2.5">
+                            {checklist.map((item) => (
+                                <li key={item.label} className="flex items-center gap-2.5 text-sm">
+                                    {item.done ? (
+                                        <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                                    ) : (
+                                        <Circle className="h-4 w-4 shrink-0 text-white/25" />
+                                    )}
+                                    <span className={item.done ? "text-white/85" : "text-white/50"}>{item.label}</span>
+                                </li>
                             ))}
-                        </div>
+                        </ul>
                     </div>
                 </div>
 
