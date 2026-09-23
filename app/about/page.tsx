@@ -1,8 +1,8 @@
 import Image from "next/image";
 
 const LEADERS = [
-    { name: "Samuel John", role: "Operations Lead", img: "/images/team/samuel-john-operations-lead.jpg" },
     { name: "Bikun Ishaku Bello", role: "Field Coordinator", img: "/images/team/bikun-ishaku-bello-field-coordinator.jpg" },
+    { name: "Samuel John", role: "Operations Lead", img: "/images/team/samuel-john-operations-lead.jpg" },
 ];
 
 const CREW = [
