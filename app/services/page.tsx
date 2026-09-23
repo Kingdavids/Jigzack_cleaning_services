@@ -7,7 +7,7 @@ export default function ServicesPage() {
                 <div
                     className="absolute inset-0 opacity-25 animate-serviceBg"
                     style={{
-                        backgroundImage: "url('/images/sevice-bg.jpg')",
+                        backgroundImage: "url('/images/field/roadside-2.jpg')",
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                     }}
@@ -26,7 +26,7 @@ export default function ServicesPage() {
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
-                                    src="/images/domestic-waste.jpg"
+                                    src="/images/field/bins-domestic.jpg"
                                     alt="Domestic waste collection"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"
@@ -54,7 +54,7 @@ export default function ServicesPage() {
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:120ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
-                                    src="/images/fleet-truck-front.jpg"
+                                    src="/images/field/commercial-bins-2.jpg"
                                     alt="Commercial waste disposal"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"
@@ -82,7 +82,7 @@ export default function ServicesPage() {
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:240ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
-                                    src="/images/plastic-waste.jpg"
+                                    src="/images/field/plastics-truck-2.jpg"
                                     alt="Eco-friendly waste handling and plastics"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"

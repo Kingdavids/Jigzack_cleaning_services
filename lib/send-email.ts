@@ -9,7 +9,17 @@ export function escapeHtml(value: string) {
 
 // Server-only helper (imported by server actions). Skips quietly when
 // Resend isn't configured so a missing key never breaks the calling flow.
-export async function sendEmail({ to, subject, html }: { to: string[]; subject: string; html: string }) {
+export async function sendEmail({
+                                         to,
+                                         subject,
+                                         html,
+                                         replyTo,
+                                     }: {
+    to: string[];
+    subject: string;
+    html: string;
+    replyTo?: string;
+}) {
     const apiKey = process.env.RESEND_API_KEY;
 
     if (!apiKey) {
@@ -28,7 +38,7 @@ export async function sendEmail({ to, subject, html }: { to: string[]; subject: 
                 Authorization: `Bearer ${apiKey}`,
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify({ from, to, subject, html }),
+            body: JSON.stringify({ from, to, subject, html, ...(replyTo ? { reply_to: replyTo } : {}) }),
         });
 
         if (!response.ok) {

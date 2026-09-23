@@ -1,13 +1,11 @@
-'use client'
 import "./globals.css";
 
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { usePathname } from "next/navigation";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/components/context/AuthProvider";
 import { Toaster } from "sonner";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import SiteChrome from "@/components/SiteChrome";
 
 const jakarta = Plus_Jakarta_Sans({
     subsets: ["latin"],
@@ -15,27 +13,30 @@ const jakarta = Plus_Jakarta_Sans({
     display: "swap",
 });
 
-// Dashboards render their own DashboardShell/Topbar navigation, so the
-// public marketing navbar and footer are skipped on those routes.
-const DASHBOARD_PREFIXES = ["/admin", "/employee", "/customer"];
+const description =
+    "LAWMA-approved waste collection for homes and businesses in Lagos and Port Harcourt. Scheduled pickups, monthly invoices and receipts online.";
+
+export const metadata: Metadata = {
+    metadataBase: process.env.NEXT_PUBLIC_SITE_URL ? new URL(process.env.NEXT_PUBLIC_SITE_URL) : undefined,
+    title: {
+        default: "Jigzack Cleaning Services | Waste collection in Lagos and Port Harcourt",
+        template: "%s | Jigzack Cleaning Services",
+    },
+    description,
+    openGraph: {
+        title: "Jigzack Cleaning Services",
+        description,
+        images: ["/images/field/truck-side.jpg"],
+        type: "website",
+    },
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-    const pathname = usePathname();
-    const isDashboard = DASHBOARD_PREFIXES.some((prefix) => pathname?.startsWith(prefix));
-
     return (
         <html lang="en" className={jakarta.variable}>
         <body className="bg-slate-950 text-white">
         <AuthProvider>
-            {isDashboard ? (
-                children
-            ) : (
-                <>
-                    <Navbar />
-                    <div className="pt-24 md:pt-28">{children}</div>
-                    <Footer />
-                </>
-            )}
+            <SiteChrome>{children}</SiteChrome>
             <Toaster />
         </AuthProvider>
         </body>

@@ -1,17 +1,11 @@
-import React, {useState} from 'react'
-
 const About = () => {
-
     return (
-        <div>
-            <div>
-                <p className="text-center">
-                    A government-approved solid waste disposal company dedicated to providing efficient, reliable, and environmentally friendly services.
-                    Our competitive monthly rates.
-                </p>
-            </div>
-        </div>
-    )
-}
+        <p>
+            We&apos;re an approved operator under the Lagos Waste Management Authority (LAWMA). Pickups run on a fixed
+            schedule, and the monthly rate depends on the type of property. Once you sign up, your pickup dates,
+            invoices and receipts are all in your dashboard.
+        </p>
+    );
+};
 
 export default About;

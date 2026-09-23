@@ -1,3 +1,5 @@
+import ContactForm from "@/components/ContactForm";
+
 export default function ContactPage() {
     return (
         <main>
@@ -5,7 +7,7 @@ export default function ContactPage() {
                 <div
                     className="absolute inset-0 opacity-35 animate-contactBg"
                     style={{
-                        backgroundImage: "url('/images/contact.jpeg')",
+                        backgroundImage: "url('/images/field/truck-side.jpg')",
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                     }}
@@ -27,11 +29,11 @@ export default function ContactPage() {
                             <div className="mt-8 grid gap-4">
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Email</p>
-                                    <p className="mt-1 text-lg font-bold text-amber-300">info@jigzack.com</p>
+                                    <a href="mailto:info@jigzack.com" className="mt-1 block text-lg font-bold text-amber-300">info@jigzack.com</a>
                                 </div>
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Phone</p>
-                                    <p className="mt-1 text-lg font-bold text-amber-300">+234 (000) 000 0000</p>
+                                    <a href="tel:+2347034339721" className="mt-1 block text-lg font-bold text-amber-300">0703 433 9721</a>
                                 </div>
 
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -48,28 +50,17 @@ export default function ContactPage() {
                                 Let’s schedule your service<span className="text-amber-300">.</span>
                             </h3>
                             <p className="mt-2 text-white/70">
-                                Tell us what you need — domestic pickup, commercial service, or eco-handling support.
+                                Tell us what you need: a household pickup, a commercial service, or help with plastics and other recyclables.
                             </p>
 
-                            <div className="mt-6 grid gap-4">
-                                <a
-                                    href="mailto:info@jigzack.com"
-                                    className="rounded-2xl bg-amber-400 text-black font-bold px-5 py-3 text-center hover:bg-amber-300 transition shadow-lg"
-                                >
-                                    Email Us
-                                </a>
+                            <ContactForm />
 
-                                <a
-                                    href="tel:+2340000000000"
-                                    className="rounded-2xl border border-white/15 bg-white/10 text-white font-bold px-5 py-3 text-center hover:bg-white/15 transition"
-                                >
-                                    Call Now
-                                </a>
-
-                                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/70">
-                                    Fast response • Flexible plans • Competitive monthly rates
-                                </div>
-                            </div>
+                            <a
+                                href="tel:+2347034339721"
+                                className="mt-4 block rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-center font-bold text-white transition hover:bg-white/15"
+                            >
+                                Or call 0703 433 9721
+                            </a>
                         </div>
                     </div>
                 </div>

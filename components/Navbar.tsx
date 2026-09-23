@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 
 const NAV_LINKS = [
@@ -21,9 +22,12 @@ export default function Navbar() {
                     <Link
                         href="/"
                         onClick={() => setOpen(false)}
-                        className="shrink-0 text-xl font-extrabold tracking-tight text-amber-500"
+                        className="flex shrink-0 items-center gap-2 text-xl font-extrabold tracking-tight text-amber-500"
                     >
-                        Jigzack<span className="text-amber-300">.</span>
+                        <Image src="/images/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" priority />
+                        <span>
+                            Jigzack<span className="text-amber-300">.</span>
+                        </span>
                     </Link>
 
                     <nav className="hidden flex-1 items-center justify-center gap-8 md:flex lg:gap-10">
@@ -38,19 +42,12 @@ export default function Navbar() {
                         ))}
                     </nav>
 
-                    <div className="hidden shrink-0 items-center gap-3 md:flex">
+                    <div className="hidden shrink-0 items-center md:flex">
                         <Link
                             href="/auth"
-                            className="rounded-xl border border-amber-300/20 bg-white/5 px-4 py-2 font-semibold text-white transition hover:bg-white/10"
-                        >
-                            Log in
-                        </Link>
-
-                        <Link
-                            href="/services"
                             className="rounded-xl bg-amber-500 px-5 py-2 font-semibold text-black shadow-lg transition hover:bg-amber-300"
                         >
-                            Learn more
+                            Get started
                         </Link>
                     </div>
 
@@ -84,21 +81,13 @@ export default function Navbar() {
                         </Link>
                     ))}
 
-                    <div className="mt-3 flex flex-col gap-3 border-t border-white/10 pt-4">
+                    <div className="mt-3 border-t border-white/10 pt-4">
                         <Link
                             href="/auth"
                             onClick={() => setOpen(false)}
-                            className="rounded-xl border border-amber-300/20 bg-white/5 px-4 py-2.5 text-center font-semibold text-white transition hover:bg-white/10"
+                            className="block rounded-xl bg-amber-500 px-5 py-2.5 text-center font-semibold text-black shadow-lg transition hover:bg-amber-300"
                         >
-                            Log in
-                        </Link>
-
-                        <Link
-                            href="/services"
-                            onClick={() => setOpen(false)}
-                            className="rounded-xl bg-amber-500 px-5 py-2.5 text-center font-semibold text-black shadow-lg transition hover:bg-amber-300"
-                        >
-                            Learn more
+                            Get started
                         </Link>
                     </div>
                 </nav>

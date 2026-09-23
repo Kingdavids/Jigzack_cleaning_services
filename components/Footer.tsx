@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { ShieldCheck } from "lucide-react";
 
 export default function Footer() {
@@ -7,8 +8,11 @@ export default function Footer() {
             <div className="mx-auto max-w-7xl px-6 py-14 md:px-10">
                 <div className="grid gap-10 md:grid-cols-[1.3fr_0.7fr_0.7fr_1fr]">
                     <div>
-                        <Link href="/" className="text-xl font-extrabold tracking-tight text-amber-500">
-                            Jigzack<span className="text-amber-300">.</span>
+                        <Link href="/" className="inline-flex items-center gap-2 text-xl font-extrabold tracking-tight text-amber-500">
+                            <Image src="/images/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" />
+                            <span>
+                                Jigzack<span className="text-amber-300">.</span>
+                            </span>
                         </Link>
                         <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
                             Government-approved solid waste disposal for homes and businesses across Lagos and Port Harcourt.
@@ -41,7 +45,7 @@ export default function Footer() {
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Contact</p>
                         <div className="mt-4 flex flex-col gap-2 text-sm text-white/65">
                             <a href="mailto:info@jigzack.com" className="transition hover:text-amber-300">info@jigzack.com</a>
-                            <a href="tel:+2340000000000" className="transition hover:text-amber-300">+234 (000) 000 0000</a>
+                            <a href="tel:+2347034339721" className="transition hover:text-amber-300">0703 433 9721</a>
                             <p className="text-white/45">Lagos • Port Harcourt</p>
                         </div>
                     </div>

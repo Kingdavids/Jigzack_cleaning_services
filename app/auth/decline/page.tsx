@@ -238,7 +238,7 @@ function DeclineContent() {
 
                             <div className="mt-4 flex flex-wrap gap-3">
                                 <a
-                                    href="mailto:support@jigzack.com"
+                                    href="mailto:info@jigzack.com"
                                     className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
                                 >
                                     <span className="inline-flex items-center gap-2">

@@ -1,3 +1,16 @@
+import Image from "next/image";
+
+const LEADERS = [
+    { name: "Samuel John", role: "Operations Lead", img: "/images/team/samuel-john.jpg" },
+    { name: "Bikun", role: "Field Coordinator", img: "/images/team/bikun.jpg" },
+];
+
+const CREW = [
+    { caption: "Collection crew", img: "/images/field/crew-rain-bin.jpg" },
+    { caption: "Field team", img: "/images/field/notice-crew.jpg" },
+    { caption: "Our trucks", img: "/images/field/truck-rain.jpg" },
+];
+
 export default function AboutPage() {
     return (
         <main>
@@ -5,7 +18,7 @@ export default function AboutPage() {
                 <div
                     className="absolute inset-0 opacity-30 animate-teamBg"
                     style={{
-                        backgroundImage: "url('/images/team-6.jpg')",
+                        backgroundImage: "url('/images/field/truck-side.jpg')",
                         backgroundSize: "cover",
                         backgroundPosition: "center",
                     }}
@@ -55,47 +68,49 @@ export default function AboutPage() {
 
                         <div className="min-w-0 space-y-6">
                             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 md:p-6 animate-riseIn [animation-delay:120ms]">
-                                <div className="flex items-end justify-between gap-4">
-                                    <div>
-                                        <h3 className="text-xl md:text-2xl font-black">
-                                            The Team<span className="text-amber-300">.</span>
-                                        </h3>
-                                        <p className="mt-1 text-white/70 text-sm">
-                                            A dedicated crew trained for safety, speed, and clean handling.
-                                        </p>
-                                    </div>
-                                    <div className="text-xs text-white/60 hidden sm:block">
-                                        Swipe / scroll →
-                                    </div>
-                                </div>
+                                <h3 className="text-xl md:text-2xl font-black">
+                                    The Team<span className="text-amber-300">.</span>
+                                </h3>
+                                <p className="mt-1 text-white/70 text-sm">
+                                    The people who run operations, and the crews on the ground.
+                                </p>
 
-                                <div className="mt-5 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory">
-                                    {[
-                                        { name: "Operations Lead", img: "/images/team-1.jpg" },
-                                        { name: "Field Supervisor", img: "/images/team-2.jpg" },
-                                        { name: "Collection Team", img: "/images/team-3.jpg" },
-                                        { name: "Community Outreach", img: "/images/team-4.jpg" },
-                                        { name: "Commercial Support", img: "/images/team-5.jpg" },
-                                    ].map((m, i) => (
+                                <div className="mt-5 grid grid-cols-2 gap-4">
+                                    {LEADERS.map((person) => (
                                         <div
-                                            key={i}
-                                            className="min-w-[240px] snap-start group rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden hover:bg-white/10 transition"
+                                            key={person.name}
+                                            className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03]"
                                         >
-                                            <div className="relative h-40 overflow-hidden">
-                                                <img
-                                                    src={m.img}
-                                                    alt={m.name}
-                                                    className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                                    loading="lazy"
+                                            <div className="relative aspect-[4/5] overflow-hidden">
+                                                <Image
+                                                    src={person.img}
+                                                    alt={`${person.name}, ${person.role}`}
+                                                    fill
+                                                    sizes="(min-width: 1024px) 22vw, 45vw"
+                                                    className="object-cover object-top"
                                                 />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
                                             </div>
                                             <div className="p-4">
-                                                <p className="font-bold text-white">{m.name}</p>
-                                                <p className="text-sm text-white/70 mt-1">
-                                                    Trained. Reliable. Service-first.
-                                                </p>
+                                                <p className="font-bold text-white">{person.name}</p>
+                                                <p className="mt-0.5 text-sm text-amber-300">{person.role}</p>
                                             </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-3 gap-3">
+                                    {CREW.map((crew) => (
+                                        <div key={crew.caption} className="overflow-hidden rounded-xl border border-white/10">
+                                            <div className="relative aspect-square">
+                                                <Image
+                                                    src={crew.img}
+                                                    alt={crew.caption}
+                                                    fill
+                                                    sizes="(min-width: 1024px) 12vw, 30vw"
+                                                    className="object-cover"
+                                                />
+                                            </div>
+                                            <p className="px-2 py-1.5 text-center text-xs text-white/70">{crew.caption}</p>
                                         </div>
                                     ))}
                                 </div>
