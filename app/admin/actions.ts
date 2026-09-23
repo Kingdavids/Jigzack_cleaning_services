@@ -1,11 +1,21 @@
 "use server";
 
 import { randomBytes, randomUUID } from "node:crypto";
-import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
+import { siteOrigin } from "@/lib/site-origin";
+import { approvalEmail } from "@/lib/approval-email";
+import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
+import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
+import {
+    BILLABLE_SELECT,
+    generateInvoiceFor,
+    generateScheduleFor,
+    recalculateOpenInvoice,
+    type BillableCustomer,
+} from "@/lib/billing/generate";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -370,16 +380,6 @@ export type InviteActionState = {
     emailed?: boolean;
 } | null;
 
-async function siteOrigin() {
-    if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "");
-
-    const h = await headers();
-    const host = h.get("x-forwarded-host") ?? h.get("host");
-    const proto = h.get("x-forwarded-proto") ?? "https";
-
-    return host ? `${proto}://${host}` : "";
-}
-
 // Employees can't self-register: an admin mints a single-use link (7 days)
 // and the invited person signs up through it. The token is generated here,
 // server-side, and only ever validated by the database.
@@ -447,4 +447,428 @@ export async function revokeEmployeeInvite(inviteId: string) {
     }
 
     revalidatePath("/admin/employees");
+}
+
+// ---------------------------------------------------------------------------
+// Approvals (with the applicant's email) and auto-generated schedule/invoice
+// ---------------------------------------------------------------------------
+
+export type ApprovalResult = { success: boolean; error?: string; notes?: string[] };
+
+export async function setUserApproval(
+    userId: string,
+    status: "approved" | "declined",
+    unitId: string | null
+): Promise<ApprovalResult> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!userId || (status !== "approved" && status !== "declined")) {
+        return { success: false, error: "Invalid request." };
+    }
+
+    const { data: target } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, status")
+        .eq("id", userId)
+        .single();
+
+    if (!target) return { success: false, error: "Could not find that user." };
+
+    // A double click must not approve twice or email the person twice.
+    if (target.status === status) return { success: true, notes: [`Already ${status}.`] };
+
+    const { error } = await supabase.from("profiles").update({ status }).eq("id", userId);
+
+    if (error) {
+        console.error("setUserApproval update error:", error.message);
+        return { success: false, error: "Could not update this account. Please try again." };
+    }
+
+    const notes: string[] = [];
+    let isTenant = false;
+
+    if (status === "approved" && target.role === "customer") {
+        if (unitId) {
+            await supabase.from("customers").update({ unit_id: unitId }).eq("profile_id", userId);
+            isTenant = true;
+            notes.push("Linked to their estate unit.");
+        } else {
+            const { data: customer } = await supabase
+                .from("customers")
+                .select(BILLABLE_SELECT)
+                .eq("profile_id", userId)
+                .maybeSingle();
+
+            if (customer) {
+                const billable = customer as unknown as BillableCustomer;
+                const schedule = await generateScheduleFor(supabase, billable);
+                const invoice = await generateInvoiceFor(supabase, billable);
+
+                notes.push(
+                    schedule.created > 0
+                        ? `Created ${schedule.created} scheduled pickups (${schedule.frequency}).`
+                        : "No new pickups were scheduled."
+                );
+                if (!schedule.recognised) {
+                    notes.push("Their pickup frequency wasn't recognised, so it defaulted to weekly. Check the schedule.");
+                }
+                notes.push(
+                    invoice === "created"
+                        ? "Generated this month's invoice."
+                        : invoice === "no-pricing"
+                            ? "No invoice generated: no priced property types were entered. Add one manually."
+                            : invoice === "exists"
+                                ? "This month's invoice already exists."
+                                : "Could not generate the invoice."
+                );
+            }
+        }
+    }
+
+    if (target.email) {
+        const { subject, html } = approvalEmail({
+            name: target.full_name,
+            role: target.role,
+            status,
+            origin: await siteOrigin(),
+            isTenant,
+        });
+        const emailed = await sendEmail({ to: [target.email], subject, html });
+        notes.push(emailed ? `Emailed ${target.email}.` : "Approval email not sent (email isn't configured).");
+    }
+
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/tasks");
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+
+    return { success: true, notes };
+}
+
+async function approvedBillableCustomers(supabase: Awaited<ReturnType<typeof createClient>>) {
+    const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("role", "customer")
+        .eq("status", "approved");
+
+    const ids = (profiles ?? []).map((p) => p.id as string);
+    if (ids.length === 0) return [];
+
+    const { data } = await supabase
+        .from("customers")
+        .select(BILLABLE_SELECT)
+        .in("profile_id", ids)
+        .is("unit_id", null)
+        .eq("status", "active");
+
+    return (data ?? []) as unknown as BillableCustomer[];
+}
+
+export type GenerateResult = { success: boolean; message: string };
+
+export async function generateAllSchedules(): Promise<GenerateResult> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const customers = await approvedBillableCustomers(supabase);
+    let created = 0;
+    let unrecognised = 0;
+
+    for (const customer of customers) {
+        const result = await generateScheduleFor(supabase, customer);
+        created += result.created;
+        if (!result.recognised) unrecognised += 1;
+    }
+
+    revalidatePath("/admin/tasks");
+
+    return {
+        success: true,
+        message:
+            `Added ${created} pickups across ${customers.length} customers.` +
+            (unrecognised > 0 ? ` ${unrecognised} had a frequency we couldn't read and defaulted to weekly.` : ""),
+    };
+}
+
+export async function generateAllInvoices(): Promise<GenerateResult> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const customers = await approvedBillableCustomers(supabase);
+    const tally = { created: 0, exists: 0, "no-pricing": 0, error: 0 };
+
+    for (const customer of customers) {
+        tally[await generateInvoiceFor(supabase, customer)] += 1;
+    }
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message:
+            `${tally.created} invoices created for ${monthLabel()}, ${tally.exists} already existed` +
+            (tally["no-pricing"] > 0 ? `, ${tally["no-pricing"]} skipped (no priced property types, add manually)` : "") +
+            (tally.error > 0 ? `, ${tally.error} failed` : "") +
+            ".",
+    };
+}
+
+export async function generateCustomerBilling(profileId: string, what: "schedule" | "invoice"): Promise<GenerateResult> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const { data: customer } = await supabase.from("customers").select(BILLABLE_SELECT).eq("profile_id", profileId).single();
+    if (!customer) return { success: false, message: "Customer not found." };
+
+    const billable = customer as unknown as BillableCustomer;
+
+    revalidatePath("/admin/tasks");
+    revalidatePath("/admin/payments");
+    revalidatePath(`/admin/customers/${profileId}`);
+
+    if (what === "schedule") {
+        const result = await generateScheduleFor(supabase, billable);
+        return {
+            success: true,
+            message: result.created > 0 ? `Added ${result.created} pickups (${result.frequency}).` : "Their schedule is already up to date.",
+        };
+    }
+
+    const outcome = await generateInvoiceFor(supabase, billable);
+    const messages: Record<string, string> = {
+        created: `Invoice created for ${monthLabel()}.`,
+        exists: `An invoice for ${monthLabel()} already exists.`,
+        "no-pricing": "No priced property types are recorded for this customer. Add an invoice manually.",
+        error: "Could not create the invoice.",
+    };
+
+    return { success: outcome === "created" || outcome === "exists", message: messages[outcome] };
+}
+
+// ---------------------------------------------------------------------------
+// Customer records
+// ---------------------------------------------------------------------------
+
+export type CustomerActionState = { success: boolean; error?: string; message?: string } | null;
+
+const countString = (value: FormDataEntryValue | null) => {
+    const n = parseInt(String(value ?? "").trim(), 10);
+    return Number.isFinite(n) && n > 0 ? String(n) : "";
+};
+
+export async function updateCustomerDetails(
+    _prevState: CustomerActionState,
+    formData: FormData
+): Promise<CustomerActionState> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const profileId = String(formData.get("profileId") || "");
+    if (!profileId) return { success: false, error: "Missing customer." };
+
+    const { data: existing } = await supabase
+        .from("customers")
+        .select("facility_details")
+        .eq("profile_id", profileId)
+        .single();
+
+    if (!existing) return { success: false, error: "Customer not found." };
+
+    const facility_details: Record<string, string> = { ...((existing.facility_details as Record<string, string>) ?? {}) };
+    for (const facility of ALL_FACILITIES) {
+        facility_details[facility.key] = countString(formData.get(facility.key));
+    }
+
+    const status = String(formData.get("status") || "active");
+
+    const { error } = await supabase
+        .from("customers")
+        .update({
+            account_code: String(formData.get("accountCode") || "").trim() || null,
+            property_code: String(formData.get("propertyCode") || "").trim() || null,
+            property_class: String(formData.get("propertyClass") || "").trim() || null,
+            preferred_pickup_frequency: String(formData.get("pickupFrequency") || "").trim() || null,
+            status: status === "inactive" ? "inactive" : "active",
+            facility_details,
+        })
+        .eq("profile_id", profileId);
+
+    if (error) {
+        console.error("updateCustomerDetails error:", error.message);
+        return { success: false, error: "Could not save these details." };
+    }
+
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/customers");
+    revalidatePath("/customer");
+
+    return { success: true, message: "Customer details saved." };
+}
+
+// The landlord tells the company a unit is vacant; the admin records it here
+// and the (still automatic, unpaid) invoice for this month is re-priced.
+export async function saveVacancies(
+    _prevState: CustomerActionState,
+    formData: FormData
+): Promise<CustomerActionState> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const profileId = String(formData.get("profileId") || "");
+    if (!profileId) return { success: false, error: "Missing customer." };
+
+    const { data: customer } = await supabase.from("customers").select(BILLABLE_SELECT).eq("profile_id", profileId).single();
+    if (!customer) return { success: false, error: "Customer not found." };
+
+    const billable = customer as unknown as BillableCustomer;
+    const vacancies: Record<string, string> = {};
+
+    for (const facility of DOMESTIC_FACILITIES) {
+        const vacant = parseInt(countString(formData.get(facility.key)) || "0", 10);
+        const registered = facilityCount(billable.facility_details, facility.key);
+
+        if (vacant > registered) {
+            return {
+                success: false,
+                error: `${facility.label}: ${vacant} vacant is more than the ${registered} registered.`,
+            };
+        }
+
+        if (vacant > 0) vacancies[facility.key] = String(vacant);
+    }
+
+    const { error } = await supabase
+        .from("customers")
+        .update({ vacancies, vacancy_note: String(formData.get("vacancyNote") || "").trim() || null })
+        .eq("profile_id", profileId);
+
+    if (error) {
+        console.error("saveVacancies error:", error.message);
+        return { success: false, error: "Could not save the vacancies." };
+    }
+
+    const recalculated = await recalculateOpenInvoice(supabase, { ...billable, vacancies });
+
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+    revalidatePath("/customer");
+
+    return {
+        success: true,
+        message: recalculated
+            ? "Vacancies saved and this month's unpaid invoice was re-priced."
+            : "Vacancies saved. They'll apply to the next invoice (an edited or paid invoice isn't changed).",
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Invoices
+// ---------------------------------------------------------------------------
+
+export async function updateInvoice(
+    _prevState: InvoiceActionState,
+    formData: FormData
+): Promise<InvoiceActionState> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    const paymentId = String(formData.get("paymentId") || "");
+    if (!paymentId) return { success: false, error: "Missing invoice." };
+
+    let items: LineItem[] = [];
+    try {
+        items = normalizeLineItems(JSON.parse(String(formData.get("lineItems") || "[]")));
+    } catch {
+        return { success: false, error: "The line items couldn't be read." };
+    }
+
+    if (items.length === 0) return { success: false, error: "Add at least one line item." };
+    if (items.some((item) => item.quantity < 0 || item.unit_price < 0)) {
+        return { success: false, error: "Quantities and prices can't be negative." };
+    }
+
+    const arrears = Number(formData.get("arrears") || 0);
+
+    const { data, error } = await supabase
+        .from("payments")
+        .update({
+            amount: itemsTotal(items),
+            arrears: Number.isFinite(arrears) && arrears > 0 ? arrears : 0,
+            units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
+            description: String(formData.get("description") || "").trim() || null,
+            invoice_month: String(formData.get("invoiceMonth") || "").trim() || null,
+            line_items: items,
+            // Hand-edited from here on, so automatic re-pricing must not overwrite it.
+            auto_generated: false,
+        })
+        .eq("id", paymentId)
+        .neq("status", "paid")
+        .select("id");
+
+    if (error) {
+        console.error("updateInvoice error:", error.message);
+        return { success: false, error: "Could not save the invoice." };
+    }
+
+    if (!data || data.length === 0) {
+        return { success: false, error: "This invoice is already paid and can't be edited." };
+    }
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+    revalidatePath("/customer");
+
+    return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Schedule management
+// ---------------------------------------------------------------------------
+
+export async function updateTask(taskId: string, employeeId: string | null, scheduledDate: string | null, zone: string) {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!taskId) return;
+
+    const { error } = await supabase
+        .from("tasks")
+        .update({
+            employee_id: employeeId || null,
+            scheduled_date: scheduledDate || null,
+            zone: zone.trim() || null,
+        })
+        .eq("id", taskId);
+
+    if (error) {
+        console.error("updateTask error:", error.message);
+        return;
+    }
+
+    revalidatePath("/admin/tasks");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/customer/schedule");
+}
+
+export async function deleteTask(taskId: string) {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!taskId) return;
+
+    const { error } = await supabase.from("tasks").delete().eq("id", taskId).eq("status", "pending");
+
+    if (error) {
+        console.error("deleteTask error:", error.message);
+        return;
+    }
+
+    revalidatePath("/admin/tasks");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/customer/schedule");
 }

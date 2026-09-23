@@ -129,7 +129,7 @@ export default function Topbar({
                         announce();
                         toast.message(`New ${upload.photo_type} photos uploaded`, {
                             description: upload.task_title ?? undefined,
-                            action: { label: "View", onClick: () => router.push("/customer") },
+                            action: { label: "View", onClick: () => router.push("/customer/schedule") },
                         });
                     }
                 )
@@ -142,7 +142,7 @@ export default function Topbar({
                         announce();
                         toast.message(`Task ${task.status}`, {
                             description: task.title,
-                            action: { label: "View", onClick: () => router.push("/customer") },
+                            action: { label: "View", onClick: () => router.push("/customer/schedule") },
                         });
                     }
                 )

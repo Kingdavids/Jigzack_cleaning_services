@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import { notifyAdminsOfNewApplication } from "@/lib/signup-notify";
 
 type PropertyType = "residential" | "commercial";
 
@@ -32,6 +33,8 @@ type FormState = {
     duplexCount: string;
     flatsCount: string;
     miniFlatsCount: string;
+    bungalowCount: string;
+    terraceCount: string;
     shopsCount: string;
     domesticOthers: string;
     supermarketsCount: string;
@@ -46,6 +49,7 @@ type FormState = {
     workshopCount: string;
     commercialOthers: string;
     preferredPickupFrequency: string;
+    customFrequency: string;
     wasteType: string;
     specialNotes: string;
     agreed: boolean;
@@ -59,12 +63,14 @@ const initialState: FormState = {
     whatsappNumber: "",
     email: "",
     lga: "",
-    state: "Lagos",
+    state: "",
     landmark: "",
     propertyType: "residential",
     duplexCount: "",
     flatsCount: "",
     miniFlatsCount: "",
+    bungalowCount: "",
+    terraceCount: "",
     shopsCount: "",
     domesticOthers: "",
     supermarketsCount: "",
@@ -79,6 +85,7 @@ const initialState: FormState = {
     workshopCount: "",
     commercialOthers: "",
     preferredPickupFrequency: "Weekly",
+    customFrequency: "",
     wasteType: "General Waste",
     specialNotes: "",
     agreed: false,
@@ -213,6 +220,11 @@ export default function CustomerSetupPage() {
             return;
         }
 
+        if (form.preferredPickupFrequency === "Custom" && !form.customFrequency.trim()) {
+            alert("Please describe how often you want pickups, for example: daily, or 3 times a week.");
+            return;
+        }
+
         try {
             setSubmitting(true);
 
@@ -239,13 +251,18 @@ export default function CustomerSetupPage() {
                 state: form.state,
                 landmark: form.landmark,
                 property_type: form.propertyType,
-                preferred_pickup_frequency: form.preferredPickupFrequency,
+                preferred_pickup_frequency:
+                    form.preferredPickupFrequency === "Custom"
+                        ? form.customFrequency.trim()
+                        : form.preferredPickupFrequency,
                 waste_type: form.wasteType,
                 special_notes: form.specialNotes,
                 facility_details: {
                     duplexCount: form.duplexCount,
                     flatsCount: form.flatsCount,
                     miniFlatsCount: form.miniFlatsCount,
+                    bungalowCount: form.bungalowCount,
+                    terraceCount: form.terraceCount,
                     shopsCount: form.shopsCount,
                     domesticOthers: form.domesticOthers,
                     supermarketsCount: form.supermarketsCount,
@@ -267,6 +284,11 @@ export default function CustomerSetupPage() {
             if (error && error.code !== "23505") {
                 toast.error(error.message || "Unable to save your details. Please try again.");
                 return;
+            }
+
+            // Only for a newly created row, so a resubmit can't email twice.
+            if (!error) {
+                await notifyAdminsOfNewApplication().catch(() => {});
             }
 
             window.location.href = "/auth/pending?role=customer";
@@ -365,7 +387,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.landlordName}
                                     onChange={(value) => updateField("landlordName", value)}
-                                    placeholder="Mrs. Adenike Lapite"
+                                    placeholder="Full name"
                                 />
                             </div>
 
@@ -384,7 +406,7 @@ export default function CustomerSetupPage() {
                                     type="email"
                                     value={form.email}
                                     onChange={(value) => updateField("email", value)}
-                                    placeholder="customer@example.com"
+                                    placeholder="name@example.com"
                                 />
                             </div>
 
@@ -393,7 +415,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.contactPhone}
                                     onChange={(value) => updateField("contactPhone", value)}
-                                    placeholder="0803 511 2627"
+                                    placeholder="Phone number"
                                 />
                             </div>
 
@@ -402,7 +424,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.whatsappNumber}
                                     onChange={(value) => updateField("whatsappNumber", value)}
-                                    placeholder="0803 511 2627"
+                                    placeholder="WhatsApp number"
                                 />
                             </div>
 
@@ -411,7 +433,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.landmark}
                                     onChange={(value) => updateField("landmark", value)}
-                                    placeholder="Near estate gate or notable landmark"
+                                    placeholder="Nearby landmark"
                                 />
                             </div>
                         </div>
@@ -428,7 +450,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.propertyAddress}
                                     onChange={(value) => updateField("propertyAddress", value)}
-                                    placeholder="6 Dele Okanuyi Street, Adde..."
+                                    placeholder="Street address and area"
                                 />
                             </div>
 
@@ -437,7 +459,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.lga}
                                     onChange={(value) => updateField("lga", value)}
-                                    placeholder="Eti Osa"
+                                    placeholder="Local government area"
                                 />
                             </div>
 
@@ -446,7 +468,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.state}
                                     onChange={(value) => updateField("state", value)}
-                                    placeholder="Lagos"
+                                    placeholder="State"
                                 />
                             </div>
 
@@ -467,6 +489,20 @@ export default function CustomerSetupPage() {
                                     options={["Weekly", "Bi-weekly", "Monthly", "Custom"]}
                                 />
                             </div>
+
+                            {form.preferredPickupFrequency === "Custom" && (
+                                <div className="md:col-span-2 xl:col-span-2">
+                                    <FieldLabel required>Describe your pickup frequency</FieldLabel>
+                                    <TextInput
+                                        value={form.customFrequency}
+                                        onChange={(value) => updateField("customFrequency", value)}
+                                        placeholder="e.g. Daily, or 3 times a week"
+                                    />
+                                    <p className="mt-2 text-xs text-white/40">
+                                        Type it in your own words. Your schedule is built from this.
+                                    </p>
+                                </div>
+                            )}
 
                             <div>
                                 <FieldLabel>Waste Type</FieldLabel>
@@ -490,13 +526,13 @@ export default function CustomerSetupPage() {
                         title="Domestic Facilities / Property Details"
                         subtitle="Fill this for residential properties, based on the paper form you shared."
                     >
-                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+                        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
                             <div>
                                 <FieldLabel>Duplex</FieldLabel>
                                 <TextInput
                                     value={form.duplexCount}
                                     onChange={(value) => updateField("duplexCount", value)}
-                                    placeholder="1"
+                                    placeholder="0"
                                 />
                             </div>
 
@@ -505,7 +541,7 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.flatsCount}
                                     onChange={(value) => updateField("flatsCount", value)}
-                                    placeholder="2"
+                                    placeholder="0"
                                 />
                             </div>
 
@@ -519,6 +555,24 @@ export default function CustomerSetupPage() {
                             </div>
 
                             <div>
+                                <FieldLabel>Bungalows</FieldLabel>
+                                <TextInput
+                                    value={form.bungalowCount}
+                                    onChange={(value) => updateField("bungalowCount", value)}
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div>
+                                <FieldLabel>Terraces</FieldLabel>
+                                <TextInput
+                                    value={form.terraceCount}
+                                    onChange={(value) => updateField("terraceCount", value)}
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div>
                                 <FieldLabel>Shops</FieldLabel>
                                 <TextInput
                                     value={form.shopsCount}
@@ -527,12 +581,12 @@ export default function CustomerSetupPage() {
                                 />
                             </div>
 
-                            <div className="xl:col-span-5">
+                            <div className="xl:col-span-6">
                                 <FieldLabel>Others</FieldLabel>
                                 <TextInput
                                     value={form.domesticOthers}
                                     onChange={(value) => updateField("domesticOthers", value)}
-                                    placeholder="Apartment, bungalow, detached house, etc."
+                                    placeholder="Any other property type"
                                 />
                             </div>
                         </div>

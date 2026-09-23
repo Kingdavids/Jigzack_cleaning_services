@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
-import { notifyAdminsOfSignup } from "@/lib/signup-notify";
 
 // Public signup creates customers only. An employee account can only be
 // created through an admin-issued invite link (inviteToken) -- the database
@@ -67,10 +66,6 @@ export default function Signup({
                 toast.error(signUpError.message || "Unable to create account");
                 return;
             }
-
-            // Fire-and-forget: don't let a slow/failing email hold up the
-            // redirect, and don't surface provider errors to the user.
-            notifyAdminsOfSignup(fullName, email, isEmployeeInvite ? "employee" : "customer").catch(() => {});
 
             // There's no session until the confirmation link is clicked, so
             // /auth/pending (which needs one) would just bounce back to the

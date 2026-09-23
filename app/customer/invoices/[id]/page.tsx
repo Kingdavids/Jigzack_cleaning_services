@@ -1,25 +1,11 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { redirect } from "next/navigation";
-import Image from "next/image";
-import Link from "next/link";
-import PrintButton from "@/components/dashboard/PrintButton";
-import { receiptNumber, resolveBilling } from "@/lib/customer/billing";
-
-function naira(value: number) {
-    return `₦${value.toLocaleString()}`;
-}
-
-function formatDate(value: string | null | undefined) {
-    if (!value) return "";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString("en-CA", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-}
+import { formatDate, invoiceNumber, naira, receiptNumber, resolveBilling } from "@/lib/customer/billing";
+import { normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
+import DocumentActions from "@/components/dashboard/DocumentActions";
+import { DocumentHeader, PaymentDetailsBlock, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
 
 export default async function CustomerInvoicePage({
                                                       params,
@@ -51,123 +37,125 @@ export default async function CustomerInvoicePage({
         .single();
 
     if (!invoice) {
-        redirect("/customer");
+        redirect("/customer/payments");
     }
 
     const amount = Number(invoice.amount ?? 0);
-    const units = Number(invoice.units ?? 1);
-    const unitPrice = units > 0 ? amount / units : amount;
+    const arrears = Number(invoice.arrears ?? 0);
+    const total = amount + arrears;
+    const status = invoice.status ?? "pending";
+    const number = invoiceNumber(invoice.id);
+    const month = invoice.invoice_month ?? formatDate(invoice.created_at);
+
+    // Older invoices have no line items: show them as a single charge.
+    const savedItems = normalizeLineItems(invoice.line_items);
+    const items: LineItem[] =
+        savedItems.length > 0
+            ? savedItems
+            : [
+                {
+                    label: invoice.description ?? "Waste management service charge",
+                    quantity: Number(invoice.units ?? 1) || 1,
+                    unit_price: (Number(invoice.units ?? 1) || 1) > 0 ? amount / (Number(invoice.units ?? 1) || 1) : amount,
+                },
+            ];
 
     return (
-        <div className="min-h-screen bg-neutral-100 px-4 py-8 text-black print:bg-white">
-            <div className="mx-auto max-w-4xl rounded-2xl bg-[#f3eadf] p-8 shadow-2xl print:shadow-none">
-                <div className="mb-8 flex items-start justify-between gap-6 border-b border-black/15 pb-6">
-                    <div className="flex items-start gap-4">
-                        <Image
-                            src="/images/lawma-logo.png"
-                            alt="Lagos Waste Management Authority logo"
-                            width={72}
-                            height={72}
-                            className="shrink-0"
-                        />
-                        <div>
-                            <h1 className="text-4xl font-black tracking-tight">
-                                LAGOS WASTE MANAGEMENT AUTHORITY
-                            </h1>
-                            <p className="mt-3 text-lg font-semibold">JIGZACK CLEANING SERVICES</p>
-                            <p className="mt-2 text-sm text-black/70">
-                                Placing our customer and the environment first
-                            </p>
+        <div className="doc-page min-h-screen bg-neutral-100 px-4 py-6 text-black print:bg-white">
+            <div className="mx-auto max-w-3xl">
+                <div
+                    id="invoice-sheet"
+                    className="doc-sheet space-y-4 rounded-2xl bg-[#f3eadf] p-6 text-[13px] shadow-2xl print:shadow-none"
+                >
+                    <DocumentHeader
+                        title="INVOICE"
+                        subtitle="Lagos Waste Management Authority"
+                        right={
+                            <>
+                                <p><span className="font-semibold">Invoice No:</span> {number}</p>
+                                <p><span className="font-semibold">Month:</span> {month}</p>
+                                <p><span className="font-semibold">Issued:</span> {formatDate(invoice.created_at)}</p>
+                                <p>
+                                    <span className="font-semibold">Status:</span>{" "}
+                                    <span className={`font-bold uppercase ${status === "paid" ? "text-emerald-700" : "text-red-700"}`}>
+                                        {status}
+                                    </span>
+                                </p>
+                            </>
+                        }
+                    />
+
+                    <PropertyDetailsBlock customer={billingCustomer} fallbackName={profile.full_name} />
+
+                    <div className="overflow-hidden rounded-lg border border-black/15">
+                        <table className="min-w-full text-left text-xs">
+                            <thead className="bg-white/60">
+                            <tr>
+                                <th className="px-3 py-2">Description</th>
+                                <th className="px-3 py-2 text-right">Qty</th>
+                                <th className="px-3 py-2 text-right">Unit price</th>
+                                <th className="px-3 py-2 text-right">Amount</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            {items.map((item, index) => (
+                                <tr key={`${item.label}-${index}`} className="border-t border-black/10">
+                                    <td className="px-3 py-2">
+                                        <span className="font-medium">{item.label}</span>
+                                        {item.note && <span className="ml-2 text-[11px] text-black/55">({item.note})</span>}
+                                    </td>
+                                    <td className="px-3 py-2 text-right">{item.quantity}</td>
+                                    <td className="px-3 py-2 text-right">{naira(item.unit_price)}</td>
+                                    <td className="px-3 py-2 text-right">{naira(item.quantity * item.unit_price)}</td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-[1fr_15rem]">
+                        <PaymentDetailsBlock reference={number} />
+
+                        <div className="space-y-1.5 self-start text-xs">
+                            <div className="flex justify-between border-b border-black/15 pb-1.5">
+                                <span>Current charges</span>
+                                <span>{naira(amount)}</span>
+                            </div>
+                            <div className="flex justify-between border-b border-black/15 pb-1.5">
+                                <span>Arrears</span>
+                                <span>{naira(arrears)}</span>
+                            </div>
+                            <div className="flex justify-between text-base font-bold">
+                                <span>Total due</span>
+                                <span>{naira(total)}</span>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="text-right text-sm">
-                        <p className="font-semibold">Invoice Month</p>
-                        <p>{invoice.invoice_month ?? formatDate(invoice.created_at)}</p>
-                        <p className="mt-3 font-semibold">Account Name</p>
-                        <p>JIGZACK CLEANING SERVICES</p>
-                    </div>
+                    <SupportBlock />
                 </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2 rounded-xl border border-black/15 bg-white/40 p-4">
-                        <p><span className="font-semibold">Customer:</span> {billingCustomer?.full_name ?? profile.full_name ?? "Customer"}</p>
-                        <p><span className="font-semibold">Address:</span> {billingCustomer?.address ?? "Not available"}</p>
-                        <p><span className="font-semibold">Property Code:</span> {billingCustomer?.property_code ?? "Not available"}</p>
-                        <p><span className="font-semibold">Customer Account Code:</span> {billingCustomer?.account_code ?? "Not available"}</p>
-                        <p><span className="font-semibold">Property Class:</span> {billingCustomer?.property_class ?? "Residential"}</p>
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+                    <Link href="/customer/payments" className="text-sm font-semibold text-black/60 hover:text-black">
+                        Back to payments
+                    </Link>
+                    <div className="flex flex-wrap items-center justify-end gap-3">
+                        {status === "paid" && (
+                            <Link
+                                href={`/customer/receipts/${invoice.id}`}
+                                className="rounded-xl border border-black/20 bg-white/70 px-4 py-2.5 text-sm font-semibold text-black hover:bg-white"
+                            >
+                                View receipt {receiptNumber(invoice.id)}
+                            </Link>
+                        )}
+                        <DocumentActions
+                            targetId="invoice-sheet"
+                            fileName={`Jigzack-invoice-${number}`}
+                            title={`Jigzack invoice ${number}`}
+                            shareText={`Jigzack Cleaning Services invoice ${number} for ${month}: ${naira(total)} (${status}).`}
+                            printLabel="Print invoice"
+                        />
                     </div>
-
-                    <div className="space-y-2 rounded-xl border border-black/15 bg-white/40 p-4">
-                        <p><span className="font-semibold">Invoice ID:</span> {invoice.id}</p>
-                        <p><span className="font-semibold">Status:</span> {invoice.status ?? "pending"}</p>
-                        <p><span className="font-semibold">Last Serviced:</span> {formatDate(billingCustomer?.last_serviced)}</p>
-                        <p><span className="font-semibold">Amount Due:</span> {naira(amount)}</p>
-                    </div>
-                </div>
-
-                <div className="mt-8 overflow-hidden rounded-xl border border-black/15">
-                    <table className="min-w-full text-left text-sm">
-                        <thead className="bg-white/60">
-                        <tr>
-                            <th className="px-4 py-3">Description</th>
-                            <th className="px-4 py-3">Unit</th>
-                            <th className="px-4 py-3">Unit Price</th>
-                            <th className="px-4 py-3">Total</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr className="border-t border-black/10">
-                            <td className="px-4 py-4">
-                                {invoice.description ?? "Waste management service charge"}
-                            </td>
-                            <td className="px-4 py-4">{units}</td>
-                            <td className="px-4 py-4">{naira(unitPrice)}</td>
-                            <td className="px-4 py-4">{naira(amount)}</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="mt-8 ml-auto max-w-md space-y-3 text-sm">
-                    <div className="flex justify-between border-b border-black/15 pb-2">
-                        <span>Current Charges</span>
-                        <span>{naira(amount)}</span>
-                    </div>
-                    <div className="flex justify-between border-b border-black/15 pb-2">
-                        <span>Net Arrears</span>
-                        <span>{naira(Number(invoice.arrears ?? 0))}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold">
-                        <span>Total</span>
-                        <span>{naira(amount + Number(invoice.arrears ?? 0))}</span>
-                    </div>
-                </div>
-
-                <div className="mt-10 grid gap-6 md:grid-cols-2 text-sm">
-                    <div className="rounded-xl border border-black/15 bg-white/40 p-4">
-                        <p className="font-semibold">Payment Details</p>
-                        <p className="mt-2">Sterling: 0079266810</p>
-                        <p>GTBank: 0562133368</p>
-                    </div>
-
-                    <div className="rounded-xl border border-black/15 bg-white/40 p-4">
-                        <p className="font-semibold">Support</p>
-                        <p className="mt-2">LAWMA Response: 5577 / 07080601020 / 07055893400</p>
-                        <p>Jigzack Cleaning Services: 0703 433 9721 / 0708 680 8079</p>
-                    </div>
-                </div>
-
-                <div className="mt-10 flex flex-wrap items-center justify-end gap-3">
-                    {invoice.status === "paid" && (
-                        <Link
-                            href={`/customer/receipts/${invoice.id}`}
-                            className="rounded-xl border border-black/20 bg-white/60 px-5 py-3 text-sm font-semibold text-black print:hidden"
-                        >
-                            View receipt {receiptNumber(invoice.id)}
-                        </Link>
-                    )}
-                    <PrintButton />
                 </div>
             </div>
         </div>

@@ -34,7 +34,21 @@ export async function proxy(request: NextRequest) {
         },
     });
 
-    await supabase.auth.getUser();
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    // A logged-out visitor opening a dashboard link (e.g. the "review this
+    // signup" link in an admin email) is sent to login and brought back here
+    // afterwards. The Location is relative so it stays on the public domain
+    // behind Railway's proxy.
+    const { pathname, search } = request.nextUrl;
+    if (!user && /^\/(admin|customer|employee)(\/|$)/.test(pathname)) {
+        return new NextResponse(null, {
+            status: 307,
+            headers: { Location: `/auth?next=${encodeURIComponent(pathname + search)}` },
+        });
+    }
 
     return response;
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ type ProfileStatus = "pending" | "approved" | "declined";
 export default function Login() {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -85,20 +86,14 @@ export default function Login() {
 
             toast.success(`Welcome back${profile.full_name ? `, ${profile.full_name}` : ""}!`);
 
-            if (role === "admin") {
-                router.refresh();
-                router.push("/admin");
-                return;
-            }
-
-            if (role === "employee") {
-                router.refresh();
-                router.push("/employee");
-                return;
-            }
+            // Only follow a `next` that stays on this user's own dashboard.
+            const next = searchParams.get("next");
+            const home = `/${role === "admin" || role === "employee" ? role : "customer"}`;
+            const target =
+                next && !next.startsWith("//") && (next === home || next.startsWith(`${home}/`)) ? next : home;
 
             router.refresh();
-            router.push("/customer");
+            router.push(target);
         } catch {
             toast.error("Something went wrong. Please try again.");
         } finally {

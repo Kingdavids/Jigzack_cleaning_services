@@ -1,9 +1,11 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createTask } from "../actions";
+import { createTask, generateAllSchedules } from "../actions";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
+import BillingActionButton from "@/components/dashboard/BillingActionButton";
+import TaskAdminControls from "@/components/dashboard/TaskAdminControls";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -12,6 +14,9 @@ type TaskRow = {
     title: string;
     status: string | null;
     scheduled_date: string | null;
+    zone: string | null;
+    employee_id: string | null;
+    auto_generated: boolean;
     customer: ProfileRef;
     employee: ProfileRef;
 };
@@ -44,12 +49,17 @@ export default async function AdminTasksPage() {
     const { data: tasksData } = await supabase
         .from("tasks")
         .select(
-            "id, title, status, scheduled_date, customer:profiles!tasks_customer_id_fkey(full_name), employee:profiles!tasks_employee_id_fkey(full_name)"
+            "id, title, status, scheduled_date, zone, employee_id, auto_generated, customer:profiles!tasks_customer_id_fkey(full_name), employee:profiles!tasks_employee_id_fkey(full_name)"
         )
-        .order("created_at", { ascending: false })
-        .limit(10);
+        // Soonest first, so what needs assigning next is at the top. Finished
+        // work drops to the bottom instead of pushing it out of view.
+        .order("scheduled_date", { ascending: true, nullsFirst: false })
+        .limit(120);
 
-    const tasks = (tasksData ?? []) as unknown as TaskRow[];
+    const allTasks = (tasksData ?? []) as unknown as TaskRow[];
+    const isOpen = (task: TaskRow) => !["completed", "declined"].includes((task.status ?? "pending").toLowerCase());
+    const tasks = [...allTasks.filter(isOpen), ...allTasks.filter((t) => !isOpen(t)).reverse().slice(0, 15)];
+    const unassigned = allTasks.filter((t) => isOpen(t) && !t.employee_id).length;
 
     return (
         <DashboardShell
@@ -59,7 +69,20 @@ export default async function AdminTasksPage() {
             subtitle="Live overview of assigned service tasks."
             unreadCount={unreadCount}
         >
-            <SectionCard title="Task progress" description="Live overview of assigned service tasks.">
+            <div className="space-y-6">
+            <SectionCard
+                title="Schedule"
+                description="Pickups are generated from each customer's stated frequency. Assign staff, change dates, or remove any of them below."
+            >
+                <div className="flex flex-wrap items-center gap-3">
+                    <BillingActionButton run={generateAllSchedules}>Generate schedules for all customers</BillingActionButton>
+                    <span className="text-sm text-white/50">
+                        {unassigned > 0 ? `${unassigned} upcoming pickups still need a driver.` : "Every upcoming pickup has someone assigned."}
+                    </span>
+                </div>
+            </SectionCard>
+
+            <SectionCard title="Task progress" description="Upcoming and in-progress work first, then the latest finished.">
                 <div className="space-y-4">
                     {tasks.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -83,8 +106,18 @@ export default async function AdminTasksPage() {
                                         </p>
                                     </div>
 
-                                    <StatusBadge status={task.status ?? "pending"} />
+                                    <StatusBadge status={(task.status ?? "pending").replace(" ", "_")} />
                                 </div>
+
+                                {(task.status ?? "pending") === "pending" && (
+                                    <TaskAdminControls
+                                        taskId={task.id}
+                                        employeeId={task.employee_id}
+                                        scheduledDate={task.scheduled_date}
+                                        zone={task.zone}
+                                        employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
+                                    />
+                                )}
                             </div>
                         ))
                     )}
@@ -152,6 +185,7 @@ export default async function AdminTasksPage() {
                     </AssignTaskForm>
                 </div>
             </SectionCard>
+            </div>
         </DashboardShell>
     );
 }

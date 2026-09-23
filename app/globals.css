@@ -409,3 +409,44 @@ html {
   animation: bellRing 0.7s ease-in-out;
   transform-origin: top center;
 }
+
+/* Invoices and receipts must print on exactly one A4 page. */
+@page {
+    size: A4;
+    margin: 8mm;
+}
+
+@media print {
+    html,
+    body {
+        background: #fff !important;
+        height: auto !important;
+    }
+
+    * {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .doc-page {
+        min-height: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+    }
+
+    .doc-sheet {
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 4mm !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        font-size: 11px !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+        page-break-after: avoid;
+    }
+
+    .doc-sheet h1 {
+        font-size: 18px !important;
+    }
+}

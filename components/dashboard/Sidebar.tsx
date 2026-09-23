@@ -13,6 +13,7 @@ import {
     Sparkles,
     Building2,
     UserPlus,
+    CalendarDays,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
     ],
     customer: [
         { label: "Dashboard", href: "/customer", icon: LayoutDashboard },
+        { label: "Schedule", href: "/customer/schedule", icon: CalendarDays },
         { label: "Messages", href: "/customer/messages", icon: MessageSquare },
         { label: "Payments", href: "/customer/payments", icon: CreditCard },
     ],

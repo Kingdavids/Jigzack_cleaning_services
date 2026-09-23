@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 
-// Pickups, the last service's before/after photos and service history now
-// live on the dashboard itself.
+// "My Tasks" became the Schedule page.
 export default function CustomerTasksPage() {
-    redirect("/customer");
+    redirect("/customer/schedule");
 }

@@ -1,9 +1,10 @@
 'use client';
 
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { linkTenantToUnit } from "./actions";
+import { toast } from "sonner";
+import { setUserApproval } from "./actions";
+import { ALL_FACILITIES, FACILITY_TEXT_LABELS } from "@/lib/customer/facilities";
 
 interface PendingUser {
     id: string;
@@ -31,22 +32,8 @@ interface CustomerDetails {
 }
 
 const FACILITY_LABELS: Record<string, string> = {
-    duplexCount: "Duplex",
-    flatsCount: "Flats",
-    miniFlatsCount: "Mini flats",
-    shopsCount: "Shops",
-    domesticOthers: "Other domestic",
-    supermarketsCount: "Supermarkets",
-    complexesCount: "Complexes",
-    beachesCount: "Beaches",
-    marketsCount: "Markets",
-    hotelsCount: "Hotels",
-    schoolsCount: "Schools",
-    carWashBarsCount: "Car wash / bars",
-    blockIndustryCount: "Block industry",
-    eateryCount: "Eatery",
-    workshopCount: "Workshop",
-    commercialOthers: "Other commercial",
+    ...Object.fromEntries(ALL_FACILITIES.map((f) => [f.key, f.label])),
+    ...FACILITY_TEXT_LABELS,
 };
 
 interface EmployeeDetails {
@@ -68,31 +55,27 @@ export default function ApprovalsList({
     employeeDetailsByProfileId?: Record<string, EmployeeDetails>;
     units?: { id: string; label: string; estateName: string }[];
 }) {
-    const supabase = createClient();
     const router = useRouter();
     const [loadingId, setLoadingId] = useState<string | null>(null);
     const [selectedUnitByUser, setSelectedUnitByUser] = useState<Record<string, string>>({});
 
-    const updateStatus = async (
-        id: string,
-        status: "approved" | "declined"
-    ) => {
+    const updateStatus = async (id: string, status: "approved" | "declined") => {
         setLoadingId(id);
 
-        const { error } = await supabase
-            .from("profiles")
-            .update({ status })
-            .eq("id", id);
-
-        if (!error && status === "approved" && selectedUnitByUser[id]) {
-            await linkTenantToUnit(id, selectedUnitByUser[id]);
-        }
+        const result = await setUserApproval(id, status, selectedUnitByUser[id] || null);
 
         setLoadingId(null);
 
-        if (!error) {
-            router.refresh();
+        if (!result.success) {
+            toast.error(result.error ?? "Something went wrong. Please try again.");
+            return;
         }
+
+        toast.success(status === "approved" ? "Account approved" : "Account declined", {
+            description: result.notes?.join(" "),
+            duration: 8000,
+        });
+        router.refresh();
     };
 
     return (
@@ -111,7 +94,8 @@ export default function ApprovalsList({
                 return (
                     <div
                         key={user.id}
-                        className="rounded-3xl border border-white/10 bg-white/[0.03] p-5"
+                        id={`user-${user.id}`}
+                        className="scroll-mt-24 rounded-3xl border border-white/10 bg-white/[0.03] p-5 target:border-amber-300/40"
                     >
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                             <div>

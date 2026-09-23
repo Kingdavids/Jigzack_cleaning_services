@@ -146,6 +146,10 @@ create table public.customers (
     registration_fee_paid boolean not null default false,
     registration_fee_reference text,
     registration_fee_paid_at timestamptz,
+    -- Units the landlord has told us are vacant, e.g. {"flatsCount": 2}.
+    -- Vacant units aren't billed (see lib/billing/pricing.ts).
+    vacancies jsonb not null default '{}'::jsonb,
+    vacancy_note text,
     created_at timestamptz not null default now()
 );
 
@@ -236,6 +240,26 @@ create policy "units_select_tenant" on public.units
 create policy "units_all_admin" on public.units
     for all using (public.is_admin()) with check (public.is_admin());
 
+-- A tenant's invoice shows their estate's property details, so they need
+-- to read that one row. Done through a SECURITY DEFINER function because a
+-- policy that queried customers directly would recurse into itself.
+create or replace function public.tenant_estate_profile_id()
+returns uuid
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select u.estate_profile_id
+    from public.customers c
+    join public.units u on u.id = c.unit_id
+    where c.profile_id = auth.uid()
+    limit 1;
+$$;
+
+create policy "customers_select_tenant_estate" on public.customers
+    for select using (profile_id = public.tenant_estate_profile_id());
+
 -- Bypasses RLS so a paying customer can mark their own registration
 -- fee paid after a verified Paystack transaction, without a broad
 -- update policy that would let them edit any other column (balance,
@@ -303,8 +327,12 @@ create table public.tasks (
     zone text,
     started_at timestamptz,
     completed_at timestamptz,
+    -- Generated from the customer's pickup frequency (editable by admin).
+    auto_generated boolean not null default false,
     created_at timestamptz not null default now()
 );
+
+create unique index tasks_auto_date_key on public.tasks (customer_id, scheduled_date) where auto_generated;
 
 alter table public.tasks enable row level security;
 
@@ -371,8 +399,13 @@ create table public.payments (
     paid_at timestamptz,
     payment_method text,
     payment_reference text,
+    -- [{ "label": "Flat", "quantity": 8, "unit_price": 5000, "note": "2 vacant" }]
+    line_items jsonb,
+    auto_generated boolean not null default false,
     created_at timestamptz not null default now()
 );
+
+create unique index payments_auto_month_key on public.payments (customer_id, invoice_month) where auto_generated;
 
 alter table public.payments enable row level security;
 

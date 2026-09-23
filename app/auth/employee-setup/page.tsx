@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ChevronRight, MapPin, User } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import { notifyAdminsOfNewApplication } from "@/lib/signup-notify";
 
 type FormState = {
     fullName: string;
@@ -136,6 +137,10 @@ export default function EmployeeSetupPage() {
                 return;
             }
 
+            if (!error) {
+                await notifyAdminsOfNewApplication().catch(() => {});
+            }
+
             window.location.href = "/auth/pending?role=employee";
         } finally {
             setSubmitting(false);
@@ -180,7 +185,7 @@ export default function EmployeeSetupPage() {
                                 <TextInput
                                     value={form.phone}
                                     onChange={(value) => updateField("phone", value)}
-                                    placeholder="0803 511 2627"
+                                    placeholder="Phone number"
                                 />
                             </div>
                         </div>
@@ -197,7 +202,7 @@ export default function EmployeeSetupPage() {
                                 <TextInput
                                     value={form.address}
                                     onChange={(value) => updateField("address", value)}
-                                    placeholder="6 Dele Okanuyi Street, Lekki"
+                                    placeholder="Street address and area"
                                 />
                             </div>
 
@@ -206,7 +211,7 @@ export default function EmployeeSetupPage() {
                                 <TextInput
                                     value={form.lga}
                                     onChange={(value) => updateField("lga", value)}
-                                    placeholder="Eti Osa"
+                                    placeholder="Local government area"
                                 />
                             </div>
 
@@ -215,7 +220,7 @@ export default function EmployeeSetupPage() {
                                 <TextInput
                                     value={form.state}
                                     onChange={(value) => updateField("state", value)}
-                                    placeholder="Lagos"
+                                    placeholder="State"
                                 />
                             </div>
                         </div>
