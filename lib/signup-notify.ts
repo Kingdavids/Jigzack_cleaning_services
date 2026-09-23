@@ -5,6 +5,9 @@ import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
 
+const lastNotified = new Map<string, number>();
+const NOTIFY_COOLDOWN_MS = 30 * 60 * 1000;
+
 // Sent when an applicant finishes the setup form -- the point they're really
 // awaiting review with their details on file -- not at raw signup, which
 // happens before their email is confirmed and before there's anything to
@@ -14,6 +17,12 @@ export async function notifyAdminsOfNewApplication() {
     const profile = await getUserProfile();
 
     if (profile.status !== "pending") return;
+
+    // One email per applicant per half hour (per server instance), so a
+    // pending account can't keep re-triggering this to flood the admins.
+    const last = lastNotified.get(profile.id) ?? 0;
+    if (Date.now() - last < NOTIFY_COOLDOWN_MS) return;
+    lastNotified.set(profile.id, Date.now());
 
     const supabase = await createClient();
     const { data: recipients, error } = await supabase.rpc("approved_admin_emails");

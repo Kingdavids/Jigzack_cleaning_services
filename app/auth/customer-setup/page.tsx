@@ -3,14 +3,12 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-    Building2,
     CheckCircle2,
     ChevronRight,
     Circle,
     ClipboardList,
     Home,
     MapPin,
-    Phone,
     User,
     Warehouse,
 } from "lucide-react";

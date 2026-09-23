@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { Home as HomeIcon, Building2, Recycle } from "lucide-react";
 
 export default function ServicesPage() {
@@ -25,11 +26,13 @@ export default function ServicesPage() {
                     <div className="mt-10 grid gap-6 md:grid-cols-3">
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
-                                <img
+                                <Image
+                                    width={800}
+                                    height={320}
+                                    sizes="(min-width: 768px) 33vw, 100vw"
                                     src="/images/field/bins-domestic.jpg"
                                     alt="Domestic waste collection"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
                                 <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">
@@ -52,11 +55,13 @@ export default function ServicesPage() {
 
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:120ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
-                                <img
+                                <Image
+                                    width={800}
+                                    height={320}
+                                    sizes="(min-width: 768px) 33vw, 100vw"
                                     src="/images/field/commercial-bins-2.jpg"
                                     alt="Commercial waste disposal"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
                                 <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">
@@ -79,11 +84,13 @@ export default function ServicesPage() {
 
                         <div className="group rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6 transition-all duration-300 hover:bg-white/10 hover:border-amber-300/30 animate-riseIn [animation-delay:240ms]">
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
-                                <img
+                                <Image
+                                    width={800}
+                                    height={320}
+                                    sizes="(min-width: 768px) 33vw, 100vw"
                                     src="/images/field/plastics-truck-2.jpg"
                                     alt="Truck loaded with bagged plastics"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    loading="lazy"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 via-transparent to-transparent" />
                                 <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-amber-400 text-black">

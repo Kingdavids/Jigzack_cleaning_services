@@ -548,17 +548,30 @@ alter publication supabase_realtime add table public.profiles;
 -- employees can only upload into their own "{uid}/..." folder,
 -- matching the filePath built in app/employee/actions.ts.
 -- ============================================================
-insert into storage.buckets (id, name, public)
-values ('task-photos', 'task-photos', true)
-on conflict (id) do nothing;
+-- Only images, and nothing over 15MB, can be stored here.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+    'task-photos', 'task-photos', true, 15728640,
+    array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+)
+on conflict (id) do update
+    set file_size_limit = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
 
+-- Photos are shown through their public URLs, which need no policy. This
+-- one only lets signed-in users list files, so strangers can't browse them.
 create policy "task_photos_public_read" on storage.objects
-    for select using (bucket_id = 'task-photos');
+    for select to authenticated using (bucket_id = 'task-photos');
 
+-- Only staff can add photos, and only into their own folder.
 create policy "task_photos_employee_upload" on storage.objects
-    for insert with check (
+    for insert to authenticated with check (
         bucket_id = 'task-photos'
         and (storage.foldername(name)) [1] = auth.uid()::text
+        and exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role in ('employee', 'admin') and p.status = 'approved'
+        )
     );
 
 create policy "task_photos_employee_delete" on storage.objects
@@ -566,3 +579,19 @@ create policy "task_photos_employee_delete" on storage.objects
         bucket_id = 'task-photos'
         and (storage.foldername(name)) [1] = auth.uid()::text
     );
+
+-- ============================================================
+-- Function access
+-- Postgres lets everyone (including logged-out visitors holding the public
+-- anon key) call a function unless told otherwise. These return admin
+-- contact details or change payment state, so only signed-in users may run
+-- them. check_employee_invite stays open on purpose: the invite page calls
+-- it before the person has an account.
+-- ============================================================
+revoke execute on function public.approved_admin_emails() from public, anon;
+revoke execute on function public.approved_admin_ids() from public, anon;
+revoke execute on function public.mark_registration_fee_paid(text) from public, anon;
+revoke execute on function public.handle_new_user() from public, anon, authenticated;
+grant execute on function public.approved_admin_emails() to authenticated;
+grant execute on function public.approved_admin_ids() to authenticated;
+grant execute on function public.mark_registration_fee_paid(text) to authenticated;

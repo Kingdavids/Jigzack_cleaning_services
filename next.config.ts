@@ -1,14 +1,29 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
+// Sensible browser protections for every response. There is no Content
+// Security Policy here on purpose: Paystack's checkout and Next's own inline
+// scripts need a carefully tuned one, and a wrong policy would break payments.
+const securityHeaders = [
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+];
+
 const nextConfig: NextConfig = {
+  poweredByHeader: false,
   turbopack: {
     root: path.join(__dirname),
+  },
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
   experimental: {
     serverActions: {
       // Default is 1MB, which rejects the upload outright before the photo
-      // form action even runs — a single iPhone photo routinely exceeds it.
+      // form action even runs: a single iPhone photo routinely exceeds it.
       bodySizeLimit: "25mb",
     },
   },

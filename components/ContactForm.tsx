@@ -24,13 +24,13 @@ const fieldClass =
 
 export default function ContactForm() {
     const [state, formAction] = useActionState<ContactState, FormData>(sendContactMessage, null);
-    const [sent, setSent] = useState(false);
+    // The success panel is derived from the latest result; "send another"
+    // just remembers which result was already dismissed.
+    const [dismissed, setDismissed] = useState<ContactState>(null);
+    const sent = Boolean(state?.success) && state !== dismissed;
 
     useEffect(() => {
-        if (!state) return;
-
-        if (state.success) setSent(true);
-        else if (state.error) toast.error(state.error);
+        if (state && !state.success && state.error) toast.error(state.error);
     }, [state]);
 
     if (sent) {
@@ -66,7 +66,7 @@ export default function ContactForm() {
 
                 <button
                     type="button"
-                    onClick={() => setSent(false)}
+                    onClick={() => setDismissed(state)}
                     className="animate-successIn mt-6 rounded-xl border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 [animation-delay:900ms]"
                 >
                     Send another message

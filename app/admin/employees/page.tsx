@@ -30,7 +30,7 @@ export default async function AdminEmployeesPage() {
         .limit(30);
 
     const invites = (invitesData ?? []) as InviteRow[];
-    const now = Date.now();
+    const now = new Date().getTime();
 
     const { data: employeesData } = await supabase
         .from("profiles")

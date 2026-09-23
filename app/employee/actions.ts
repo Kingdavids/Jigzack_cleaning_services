@@ -50,6 +50,16 @@ export async function endTask(formData: FormData) {
     revalidatePath("/customer/tasks");
 }
 
+const IMAGE_EXTENSIONS: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
+};
+
+const MAX_PHOTO_BYTES = 15 * 1024 * 1024;
+
 export type UploadActionState = { success: boolean; error?: string; uploaded?: number } | null;
 
 export async function uploadTaskPhoto(
@@ -65,6 +75,14 @@ export async function uploadTaskPhoto(
 
     if (!taskId || !photoType || files.length === 0) {
         return { success: false, error: "Choose at least one photo." };
+    }
+
+    if (photoType !== "before" && photoType !== "after") {
+        return { success: false, error: "Photos must be marked before or after." };
+    }
+
+    if (profile.role !== "employee" && profile.role !== "admin") {
+        return { success: false, error: "Only staff can upload task photos." };
     }
 
     const { count: existingCount } = await supabase
@@ -83,7 +101,7 @@ export async function uploadTaskPhoto(
 
     const { data: task, error: taskError } = await supabase
         .from("tasks")
-        .select("title, customer_id")
+        .select("title, customer_id, employee_id")
         .eq("id", taskId)
         .single();
 
@@ -92,10 +110,24 @@ export async function uploadTaskPhoto(
         return { success: false, error: "Could not load this task. Please try again." };
     }
 
+    // Staff can only add photos to the jobs assigned to them.
+    if (profile.role !== "admin" && task.employee_id !== profile.id) {
+        return { success: false, error: "This task isn't assigned to you." };
+    }
+
     let uploaded = 0;
 
     for (const file of filesToUpload) {
-        const fileExt = file.name.split(".").pop();
+        // The browser compresses to a JPEG first, but the server can't rely on
+        // that: only real images under the size cap are stored, and the file
+        // extension comes from the type, not from whatever name was sent.
+        const fileExt = IMAGE_EXTENSIONS[file.type];
+
+        if (!fileExt || file.size > MAX_PHOTO_BYTES) {
+            console.error("Rejected upload:", file.type, file.size);
+            continue;
+        }
+
         const filePath = `${profile.id}/${taskId}-${photoType}-${Date.now()}-${uploaded}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage

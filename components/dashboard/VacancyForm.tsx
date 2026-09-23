@@ -50,7 +50,7 @@ export default function VacancyForm({
         return (
             <p className="text-sm text-white/45">
                 This customer has no priced units recorded (flats, mini flats, shops, duplexes, bungalows or
-                terraces), so there's nothing to mark vacant.
+                terraces), so there&apos;s nothing to mark vacant.
             </p>
         );
     }

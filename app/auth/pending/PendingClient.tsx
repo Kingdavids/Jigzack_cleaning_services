@@ -35,8 +35,8 @@ export default function PendingClient({
 
     const [status, setStatus] = useState<ProfileStatus>(initialStatus);
     const [activeStage, setActiveStage] = useState(0);
-    const [isRedirecting, setIsRedirecting] = useState(false);
     const redirectedRef = useRef(false);
+    const isRedirecting = status === "declined" || (status === "approved" && emailVerified);
 
     const stages = useMemo(() => {
         if (role === "employee") {
@@ -71,14 +71,12 @@ export default function PendingClient({
 
         if (status === "approved" && emailVerified) {
             redirectedRef.current = true;
-            setIsRedirecting(true);
             router.push(`/auth/success?role=${role}`);
             return;
         }
 
         if (status === "declined") {
             redirectedRef.current = true;
-            setIsRedirecting(true);
             router.push("/auth/decline");
         }
     }, [status, emailVerified, role, router]);
