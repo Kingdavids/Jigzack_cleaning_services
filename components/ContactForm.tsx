@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { sendContactMessage, type ContactState } from "@/app/contact/actions";
@@ -24,21 +24,59 @@ const fieldClass =
 
 export default function ContactForm() {
     const [state, formAction] = useActionState<ContactState, FormData>(sendContactMessage, null);
-    const formRef = useRef<HTMLFormElement>(null);
+    const [sent, setSent] = useState(false);
 
     useEffect(() => {
         if (!state) return;
 
-        if (state.success) {
-            toast.success("Message sent. We'll get back to you soon.");
-            formRef.current?.reset();
-        } else if (state.error) {
-            toast.error(state.error);
-        }
+        if (state.success) setSent(true);
+        else if (state.error) toast.error(state.error);
     }, [state]);
 
+    if (sent) {
+        return (
+            <div
+                role="status"
+                className="animate-successIn mt-6 flex flex-col items-center rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-6 py-12 text-center"
+            >
+                <svg viewBox="0 0 64 64" className="h-20 w-20" fill="none" aria-hidden="true">
+                    <circle
+                        className="check-circle"
+                        cx="32"
+                        cy="32"
+                        r="28"
+                        stroke="#34d399"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                    />
+                    <path
+                        className="check-mark"
+                        d="M20 33 L28 41 L44 23"
+                        stroke="#34d399"
+                        strokeWidth="4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    />
+                </svg>
+
+                <h4 className="animate-successIn mt-5 text-2xl font-black [animation-delay:600ms]">Message sent</h4>
+                <p className="animate-successIn mt-2 max-w-xs text-white/70 [animation-delay:750ms]">
+                    Thank you for reaching out. We&apos;ll get back to you shortly.
+                </p>
+
+                <button
+                    type="button"
+                    onClick={() => setSent(false)}
+                    className="animate-successIn mt-6 rounded-xl border border-white/15 bg-white/[0.05] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10 [animation-delay:900ms]"
+                >
+                    Send another message
+                </button>
+            </div>
+        );
+    }
+
     return (
-        <form ref={formRef} action={formAction} className="mt-6 grid gap-4">
+        <form action={formAction} className="mt-6 grid gap-4">
             {/* Honeypot: hidden from people, filled in by bots. */}
             <input
                 type="text"

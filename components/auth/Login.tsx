@@ -114,18 +114,6 @@ export default function Login() {
 
             <CardContent className="px-0 pb-0">
                 <form onSubmit={handleLogin} className="space-y-5">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/45">
-                            Access
-                        </p>
-                        <p className="mt-1 text-sm text-white/70">
-                            Your account will be routed automatically as{" "}
-                            <span className="font-semibold text-amber-300">Admin</span>,{" "}
-                            <span className="font-semibold text-amber-300">Employee</span>, or{" "}
-                            <span className="font-semibold text-amber-300">Customer</span> based on your saved profile.
-                        </p>
-                    </div>
-
                     <div className="space-y-2">
                         <Label htmlFor="email" className="text-white/80">
                             Email
