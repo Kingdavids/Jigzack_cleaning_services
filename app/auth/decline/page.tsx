@@ -30,32 +30,32 @@ function DeclineContent() {
         role === "employee"
             ? {
                 badge: "Employee Review Result",
-                heading: "We’re unable to activate this employee account",
+                heading: "We couldn\u2019t approve this employee account",
                 subtitle:
-                    "Thank you for your interest in joining Jigzack. After review, we’re unable to approve this employee account at this time, so workspace access has not been enabled.",
+                    "Thanks for your interest in joining Jigzack. After reviewing your application, we couldn\u2019t approve it this time, so workspace access hasn\u2019t been enabled.",
                 reviewText:
-                    "This outcome may be related to submitted account details, verification status, or internal access requirements for employee onboarding.",
+                    "The reason could be the details submitted, your verification status, or our requirements for onboarding employees.",
                 supportText:
-                    "If you believe this decision was made in error or you need further clarification, please contact support for assistance.",
+                    "If you think this was a mistake, or you\u2019d like an explanation, please contact support.",
                 inactiveTitle: "Workspace inactive",
-                inactiveDesc: "Employee dashboard access has not been enabled",
+                inactiveDesc: "Employee dashboard access isn\u2019t enabled",
                 supportTitle: "Support available",
-                supportDesc: "Reach out if you believe this needs review",
+                supportDesc: "Get in touch if you\u2019d like this reviewed",
                 icon: BriefcaseBusiness,
             }
             : {
                 badge: "Customer Review Result",
-                heading: "We’re unable to activate this customer account",
+                heading: "We couldn\u2019t approve this customer account",
                 subtitle:
-                    "Thank you for your interest in Jigzack. After review, we’re unable to approve this customer account at this time, so dashboard and service access have not been enabled.",
+                    "Thanks for your interest in Jigzack. After reviewing your application, we couldn\u2019t approve it this time, so dashboard and service access haven\u2019t been enabled.",
                 reviewText:
-                    "This outcome may be related to submitted account details, verification status, or service setup requirements connected to the account.",
+                    "The reason could be the details submitted, your verification status, or the service setup for the account.",
                 supportText:
-                    "If you believe this decision was made in error or you need further clarification, please contact support for assistance.",
+                    "If you think this was a mistake, or you\u2019d like an explanation, please contact support.",
                 inactiveTitle: "Access inactive",
-                inactiveDesc: "Customer dashboard access has not been enabled",
+                inactiveDesc: "Customer dashboard access isn\u2019t enabled",
                 supportTitle: "Support available",
-                supportDesc: "Reach out if you believe this needs review",
+                supportDesc: "Get in touch if you\u2019d like this reviewed",
                 icon: UserRound,
             };
 

@@ -22,8 +22,7 @@ export default function ContactPage() {
                             </h2>
 
                             <p className="mt-4 text-white/75 text-base md:text-lg leading-relaxed max-w-xl">
-                                Need a pickup plan for your home or business? Want a quote for monthly service, or a waste management
-                                awareness session in your community? Reach out — we respond fast and we treat every request with care.
+                                Need a pickup plan for your home or business, a quote for monthly service, or a waste management awareness session in your community? Send us a message or call, and we&apos;ll get back to you.
                             </p>
 
                             <div className="mt-8 grid gap-4">
@@ -39,7 +38,7 @@ export default function ContactPage() {
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Operating cities</p>
                                     <p className="mt-1 text-white/85 font-semibold">
-                                        Lagos • Port Harcourt • Nationwide outreach programs
+                                        Lagos and Port Harcourt, plus outreach programs across Nigeria
                                     </p>
                                 </div>
                             </div>

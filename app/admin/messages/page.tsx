@@ -128,7 +128,7 @@ export default async function AdminMessagesPage() {
                         />
 
                         <p className="text-xs text-white/40">
-                            Recipients can&apos;t reply to a broadcast — use &quot;Send message&quot; above for a two-way conversation.
+                            Recipients can&apos;t reply to a broadcast. Use &quot;Send message&quot; above for a two-way conversation.
                         </p>
                     </SendMessageForm>
                 </div>

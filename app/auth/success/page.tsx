@@ -37,7 +37,7 @@ export default function SuccessPage({
                 </h1>
 
                 <p className="mt-4 text-white/70">
-                    Everything is set. Your access has been activated and your workspace is now available.
+                    You&apos;re approved. Your dashboard is ready to use.
                 </p>
 
                 <div className="mt-6 flex justify-center gap-2 text-green-300 text-sm uppercase tracking-widest">

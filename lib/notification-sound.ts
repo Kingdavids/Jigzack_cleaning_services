@@ -1,7 +1,7 @@
 let audioCtx: AudioContext | null = null;
 
 // Synthesized two-tone chime via Web Audio API instead of shipping an audio
-// file — no asset to license or bundle, and it degrades silently if the
+// file: no asset to license or bundle, and it degrades silently if the
 // browser hasn't granted audio yet (autoplay policies require a prior user
 // gesture, which normal dashboard interaction already provides).
 export function playNotificationSound() {
@@ -36,6 +36,6 @@ export function playNotificationSound() {
             osc.stop(start + 0.2);
         });
     } catch {
-        // Best-effort only — never let a sound failure break the notification.
+        // Best-effort only. Never let a sound failure break the notification.
     }
 }

@@ -43,7 +43,7 @@ export default function AddUnitForm({
             <input type="hidden" name="estateProfileId" value={estateProfileId} />
             <input
                 name="label"
-                placeholder="Unit label, e.g. Block A - Flat 4"
+                placeholder="Unit label, e.g. Block A, Flat 4"
                 required
                 className="h-10 flex-1 rounded-lg border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
             />

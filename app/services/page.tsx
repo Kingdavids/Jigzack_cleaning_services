@@ -19,7 +19,7 @@ export default function ServicesPage() {
                         Our Services<span className="text-amber-300">.</span>
                     </h2>
                     <p className="mt-3 text-white/75 max-w-2xl">
-                        Efficient, reliable, and environmentally friendly waste solutions for homes and businesses.
+                        Waste collection for homes and businesses.
                     </p>
 
                     <div className="mt-10 grid gap-6 md:grid-cols-3">
@@ -42,12 +42,11 @@ export default function ServicesPage() {
                             </h3>
 
                             <p className="mt-2 text-white/75 leading-relaxed">
-                                We take the stress out of household waste. With consistent pickups and a clean, respectful approach,
-                                your home stays fresh, your bins stay under control, and your neighborhood stays proud.
+                                Household waste collected on a regular schedule, so your bins don&apos;t pile up and your street stays clean.
                             </p>
 
                             <div className="mt-4 text-sm font-semibold text-amber-300/90 opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                                Reliable pickups • Cleaner surroundings
+                                Weekly, bi-weekly, monthly or custom schedules
                             </div>
                         </div>
 
@@ -70,12 +69,11 @@ export default function ServicesPage() {
                             </h3>
 
                             <p className="mt-2 text-white/75 leading-relaxed">
-                                Your business runs better when waste isn’t in the way. We deliver on-time collection that keeps your
-                                premises clean, your staff comfortable, and your operations compliant — without disrupting your day.
+                                Collection for shops, supermarkets, hotels, schools, eateries and other business premises, on a set schedule.
                             </p>
 
                             <div className="mt-4 text-sm font-semibold text-amber-300/90 opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                                On-time service • Business-ready cleanliness
+                                Rates set by property type
                             </div>
                         </div>
 
@@ -83,7 +81,7 @@ export default function ServicesPage() {
                             <div className="relative overflow-hidden rounded-xl border border-white/10">
                                 <img
                                     src="/images/field/plastics-truck-2.jpg"
-                                    alt="Eco-friendly waste handling and plastics"
+                                    alt="Truck loaded with bagged plastics"
                                     className="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-110"
                                     loading="lazy"
                                 />
@@ -94,16 +92,15 @@ export default function ServicesPage() {
                             </div>
 
                             <h3 className="mt-5 text-xl font-bold">
-                                Eco-Friendly Handling
+                                Plastics and general refuse
                             </h3>
 
                             <p className="mt-2 text-white/75 leading-relaxed">
-                                We don’t just move waste — we handle it responsibly. From plastics to general refuse, we follow
-                                safer disposal practices that reduce environmental impact and help keep our communities greener.
+                                We collect bagged plastics as well as general refuse, and dispose of both using safer disposal practices.
                             </p>
 
                             <div className="mt-4 text-sm font-semibold text-amber-300/90 opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                                Responsible disposal • Greener future
+                                Bagged plastics and general refuse
                             </div>
                         </div>
                     </div>

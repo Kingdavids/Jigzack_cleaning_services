@@ -41,7 +41,7 @@ export default function PromoteEstateForm({
     if (candidates.length === 0) {
         return (
             <p className="text-sm text-white/40">
-                No eligible customers to promote yet — an estate must first sign up and be approved as a regular customer.
+                No eligible customers to promote yet. An estate must first sign up and be approved as a regular customer.
             </p>
         );
     }
@@ -59,7 +59,7 @@ export default function PromoteEstateForm({
                 </option>
                 {candidates.map((c) => (
                     <option key={c.profile_id} value={c.profile_id}>
-                        {c.full_name} {c.address ? `— ${c.address}` : ""}
+                        {c.full_name}{c.address ? ` (${c.address})` : ""}
                     </option>
                 ))}
             </select>

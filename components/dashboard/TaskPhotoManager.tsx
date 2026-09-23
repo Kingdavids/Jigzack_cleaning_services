@@ -96,7 +96,7 @@ export default function TaskPhotoManager({
                     anyAttached = true;
                 } catch (err) {
                     console.error("Client-side compression failed for", file.name, err);
-                    toast.error(`Couldn't process "${file.name}" — try a different photo format (JPEG/PNG).`);
+                    toast.error(`Couldn't process "${file.name}". Try a different format (JPEG or PNG).`);
                 }
             }
 
@@ -181,7 +181,7 @@ export default function TaskPhotoManager({
             />
 
             {photos.length === 0 && (
-                <p className="text-xs text-white/40">No {photoType} photos yet — tap + to add up to {MAX_PHOTOS_PER_SLOT}.</p>
+                <p className="text-xs text-white/40">No {photoType} photos yet. Tap + to add up to {MAX_PHOTOS_PER_SLOT}.</p>
             )}
         </div>
     );

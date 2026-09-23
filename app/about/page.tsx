@@ -33,25 +33,15 @@ export default function AboutPage() {
                             </h2>
 
                             <p className="mt-5 text-white/80 leading-relaxed text-base md:text-lg">
-                                Jigzack Cleaning Services is a government-approved solid waste disposal company built on one simple belief:
-                                clean environments create better lives. We are proudly recognized under Lagos State waste management
-                                regulation through LAWMA (Lagos Waste Management Authority) approval — a standard that shapes how we collect,
-                                transport, and dispose waste with responsibility, safety, and consistency.
+                                Jigzack Cleaning Services is a solid waste disposal company approved by the Lagos Waste Management Authority (LAWMA). That approval sets the standard we follow when we collect, transport and dispose of waste.
                             </p>
 
                             <p className="mt-4 text-white/80 leading-relaxed text-base md:text-lg">
-                                From residential streets to busy commercial hubs, we operate actively across <span className="text-amber-300 font-semibold">Lagos</span> and
-                                <span className="text-amber-300 font-semibold"> Port Harcourt</span>, Nigeria — delivering scheduled pickups, dependable service, and
-                                clean handling that keeps homes comfortable and businesses compliant. Whether it’s a single household bin
-                                or a high-traffic facility, our process is designed to be smooth, punctual, and respectful to your space.
+                                We collect from homes and commercial facilities in <span className="text-amber-300 font-semibold">Lagos</span> and <span className="text-amber-300 font-semibold">Port Harcourt</span>, from a single household bin to busy commercial sites. Pickups are scheduled in advance, so you know when we&apos;re coming.
                             </p>
 
                             <p className="mt-4 text-white/80 leading-relaxed text-base md:text-lg">
-                                Beyond collection, Jigzack is committed to long-term change. We also support waste education and awareness
-                                initiatives — teaching communities and organizations around the nation practical waste management habits,
-                                smarter disposal methods, and eco-conscious practices that reduce pollution and protect public health.
-                                For us, it’s not just waste removal — it’s community care, environmental responsibility, and building a
-                                cleaner tomorrow that everyone can be proud of.
+                                We also run waste education and awareness sessions. We teach communities and organizations across Nigeria practical waste management habits and better ways to dispose of waste, to cut pollution and protect public health.
                             </p>
 
                             <div className="mt-8 grid grid-cols-2 gap-4">
@@ -133,7 +123,7 @@ export default function AboutPage() {
                                         },
                                         {
                                             quote:
-                                                "As a commercial facility, compliance matters. Jigzack made it easy — reliable collection, no delays, no mess.",
+                                                "As a commercial facility, compliance matters. Jigzack made it easy, with reliable collection, no delays and no mess.",
                                             name: "Facility Manager (Port Harcourt)",
                                         },
                                         {

@@ -130,7 +130,7 @@ export default function EmployeeSetupPage() {
                 state: form.state,
             });
 
-            // A unique profile_id means this employee already has a row —
+            // A unique profile_id means this employee already has a row:
             // treat a resubmit as success rather than showing an error.
             if (error && error.code !== "23505") {
                 toast.error(error.message || "Unable to save your details. Please try again.");

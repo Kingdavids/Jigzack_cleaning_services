@@ -39,7 +39,7 @@ export default async function PendingPage() {
         redirect("/auth/decline");
     }
 
-    // Email is verified but approval is still pending — make sure the
+    // Email is verified but approval is still pending, so make sure the
     // role-specific setup form was actually completed. Without this check,
     // anyone who leaves before finishing it (closes the tab, logs back in
     // later) lands here with no way back to the form they never submitted.

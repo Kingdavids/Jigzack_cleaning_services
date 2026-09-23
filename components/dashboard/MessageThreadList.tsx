@@ -482,7 +482,7 @@ export default function MessageThreadList({
                                     {isBroadcast ? (
                                         <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5 text-xs text-white/45">
                                             <Megaphone className="h-3.5 w-3.5 shrink-0" />
-                                            Broadcast message — replies aren&apos;t available.
+                                            Broadcast message. Replies aren&apos;t available.
                                         </div>
                                     ) : (
                                         <ReplyForm parentId={replyParentId} replyAction={replyAction} />

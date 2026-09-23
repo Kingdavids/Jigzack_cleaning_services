@@ -112,24 +112,24 @@ export default function PendingClient({
         if (role === "employee") {
             return {
                 badge: "Employee Account Review",
-                heading: "Your employee account is being prepared",
+                heading: "Your account is under review",
                 subtitle:
-                    "We’ve received your account details and employment profile. Our team is reviewing your access and preparing your workspace before your dashboard is activated.",
+                    "We\u2019ve received your details. Our team is reviewing them, and your dashboard opens once you\u2019re approved.",
                 note: emailVerified
-                    ? "Your email has been verified successfully. Your account is now waiting for final admin approval."
-                    : "Please verify your email address using the link sent to your inbox. Admin approval can only be completed after email confirmation.",
+                    ? "Your email is verified. Your account is now waiting for admin approval."
+                    : "Please confirm your email using the link we sent. Admin approval can only happen after your email is confirmed.",
                 icon: BriefcaseBusiness,
             };
         }
 
         return {
             badge: "Customer Account Review",
-            heading: "Your customer account is being prepared",
+            heading: "Your account is under review",
             subtitle:
-                "We’ve received your account details and property profile. Our team is reviewing your setup and preparing your service access before your dashboard is activated.",
+                "We\u2019ve received your details. Our team is reviewing them, and your dashboard opens once you\u2019re approved.",
             note: emailVerified
-                ? "Your email has been verified successfully. Your account is now waiting for final admin approval."
-                : "Please verify your email address using the link sent to your inbox. Admin approval can only be completed after email confirmation.",
+                ? "Your email is verified. Your account is now waiting for admin approval."
+                : "Please confirm your email using the link we sent. Admin approval can only happen after your email is confirmed.",
             icon: UserRound,
         };
     }, [role, emailVerified]);
@@ -179,9 +179,9 @@ export default function PendingClient({
                                         <ShieldCheck className="h-5 w-5 text-amber-300" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-white">Secure verification active</p>
+                                        <p className="text-sm font-semibold text-white">Approval status</p>
                                         <p className="text-xs text-white/45">
-                                            {status === "pending" ? "Your account is in the approval queue" : "Status updated in real time"}
+                                            {status === "pending" ? "Waiting in the approval queue" : "Updated automatically"}
                                         </p>
                                     </div>
                                 </div>
@@ -198,7 +198,7 @@ export default function PendingClient({
                                         </p>
                                         <p className="text-xs text-white/45">
                                             {emailVerified
-                                                ? "Your email has been confirmed successfully"
+                                                ? "Your email is confirmed"
                                                 : "Use the verification link sent to your inbox"}
                                         </p>
                                     </div>
@@ -235,9 +235,9 @@ export default function PendingClient({
                         </div>
 
                         <div className="mt-8 text-center">
-                            <p className="text-xs uppercase tracking-[0.25em] text-white/40">Live Review Flow</p>
+                            <p className="text-xs uppercase tracking-[0.25em] text-white/40">Status</p>
                             <h2 className="mt-3 text-2xl font-black text-white md:text-3xl">
-                                {isRedirecting ? "Finalizing your access" : "Your account is moving through approval"}
+                                {isRedirecting ? "Opening your dashboard" : "Waiting for approval"}
                             </h2>
                             <p className="mt-3 text-sm leading-6 text-white/60">
                                 {content.note}
@@ -296,8 +296,8 @@ export default function PendingClient({
                             <p className="text-xs uppercase tracking-[0.22em] text-white/40">Helpful Note</p>
                             <p className="mt-3 text-sm leading-6 text-white/65">
                                 {!emailVerified
-                                    ? "Please check your inbox and confirm your email address before returning. Approval can only be completed after email confirmation and admin review."
-                                    : "Your email has already been confirmed. The remaining step is final admin approval. This page will update automatically as soon as your status changes."}
+                                    ? "Check your inbox and confirm your email first. Approval only happens after your email is confirmed and an admin has reviewed your account."
+                                    : "Your email is already confirmed. The only step left is admin approval. This page updates by itself as soon as your status changes."}
                             </p>
                         </div>
                     </div>

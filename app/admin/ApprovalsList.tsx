@@ -128,7 +128,7 @@ export default function ApprovalsList({
                         {user.role === "customer" && units.length > 0 && (
                             <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.04] p-4">
                                 <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.15em] text-sky-300">
-                                    Link to unit (optional — makes this a tenant of an estate)
+                                    Link to unit (optional, makes this a tenant of an estate)
                                 </label>
                                 <select
                                     value={selectedUnitByUser[user.id] ?? ""}
@@ -137,10 +137,10 @@ export default function ApprovalsList({
                                     }
                                     className="h-11 w-full rounded-xl border border-white/10 bg-[#141518] px-3 text-sm text-white outline-none"
                                 >
-                                    <option value="">Not a tenant — standalone customer</option>
+                                    <option value="">Not a tenant (standalone customer)</option>
                                     {units.map((unit) => (
                                         <option key={unit.id} value={unit.id}>
-                                            {unit.estateName} — {unit.label}
+                                            {unit.estateName}, {unit.label}
                                         </option>
                                     ))}
                                 </select>
@@ -230,7 +230,7 @@ export default function ApprovalsList({
                                 ) : (
                                     <p className="text-sm text-amber-300/80">
                                         This customer hasn&apos;t submitted their property setup form
-                                        yet — no details to review.
+                                        yet, so there are no details to review.
                                     </p>
                                 )}
                             </div>
@@ -260,7 +260,7 @@ export default function ApprovalsList({
                                 ) : (
                                     <p className="text-sm text-amber-300/80">
                                         This employee hasn&apos;t submitted their verification details
-                                        yet — no details to review.
+                                        yet, so there are no details to review.
                                     </p>
                                 )}
                             </div>

@@ -33,8 +33,8 @@ export async function requireDashboardAccess(role: UserRole) {
             .eq("profile_id", profile.id)
             .single();
 
-        // Tenants (linked to a unit) don't pay their own registration fee —
-        // the estate they belong to is the paying account.
+        // Tenants (linked to a unit) don't pay their own registration fee.
+        // The estate they belong to is the paying account.
         if (customer && !customer.unit_id && !customer.registration_fee_paid) {
             redirect("/auth/registration-fee");
         }
