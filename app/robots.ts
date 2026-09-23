@@ -1,15 +1,16 @@
 import type { MetadataRoute } from "next";
+import { SITE } from "@/lib/seo";
 
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
-
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      // Accounts and dashboards are private; only the public pages are indexed.
-      disallow: ["/admin", "/customer", "/employee", "/auth"],
+      // Dashboards are private and never linked from public pages. /auth is
+      // left crawlable on purpose so search engines can see its noindex tag.
+      disallow: ["/admin", "/customer", "/employee", "/api"],
     },
-    ...(base ? { sitemap: `${base}/sitemap.xml` } : {}),
+    sitemap: `${SITE.url}/sitemap.xml`,
+    host: SITE.url,
   };
 }

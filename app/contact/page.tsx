@@ -1,8 +1,33 @@
+import type { Metadata } from "next";
+import JsonLd from "@/components/JsonLd";
+import { SITE, absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
 import ContactForm from "@/components/ContactForm";
+
+export const metadata: Metadata = pageMetadata({
+    title: "Contact Us",
+    description:
+        "Get a pickup plan for your home or business in Lagos or Port Harcourt. Call 0703 433 9721, email info@jigzack.com or send us a message.",
+    path: "/contact",
+});
 
 export default function ContactPage() {
     return (
         <main>
+            <JsonLd
+                data={[
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "ContactPage",
+                        url: absoluteUrl("/contact"),
+                        name: `Contact ${SITE.name}`,
+                        about: { "@id": `${SITE.url}/#business` },
+                    },
+                    breadcrumbJsonLd([
+                        { name: "Home", path: "/" },
+                        { name: "Contact Us", path: "/contact" },
+                    ]),
+                ]}
+            />
             <section className="relative px-6 md:px-10 py-24 overflow-hidden">
                 <div
                     className="absolute inset-0 opacity-35 animate-contactBg"
@@ -17,9 +42,9 @@ export default function ContactPage() {
                 <div className="relative max-w-6xl mx-auto text-white">
                     <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
                         <div className="animate-riseIn">
-                            <h2 className="text-3xl md:text-4xl font-black">
+                            <h1 className="text-3xl md:text-4xl font-black">
                                 Contact Us<span className="text-amber-300">.</span>
-                            </h2>
+                            </h1>
 
                             <p className="mt-4 text-white/75 text-base md:text-lg leading-relaxed max-w-xl">
                                 Need a pickup plan for your home or business, a quote for monthly service, or a waste management awareness session in your community? Send us a message or call, and we&apos;ll get back to you.

@@ -1,3 +1,6 @@
+import type { Metadata } from "next";
+import JsonLd from "@/components/JsonLd";
+import { SITE, absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
 import Image from "next/image";
 
 const LEADERS = [
@@ -11,9 +14,31 @@ const CREW = [
     { caption: "Our trucks", img: "/images/field/truck-rain.jpg" },
 ];
 
+export const metadata: Metadata = pageMetadata({
+    title: "About Us",
+    description:
+        "Jigzack Cleaning Services is a LAWMA-approved solid waste disposal company serving homes and commercial facilities in Lagos and Port Harcourt, with waste education programs across Nigeria.",
+    path: "/about",
+});
+
 export default function AboutPage() {
     return (
         <main>
+            <JsonLd
+                data={[
+                    {
+                        "@context": "https://schema.org",
+                        "@type": "AboutPage",
+                        url: absoluteUrl("/about"),
+                        name: `About ${SITE.name}`,
+                        about: { "@id": `${SITE.url}/#business` },
+                    },
+                    breadcrumbJsonLd([
+                        { name: "Home", path: "/" },
+                        { name: "About Us", path: "/about" },
+                    ]),
+                ]}
+            />
             <section className="relative px-6 md:px-10 py-24 overflow-hidden">
                 <div
                     className="absolute inset-0 opacity-30 animate-teamBg"
@@ -28,9 +53,9 @@ export default function AboutPage() {
                 <div className="relative max-w-6xl mx-auto text-white">
                     <div className="grid gap-10 lg:grid-cols-2 lg:items-center">
                         <div className="min-w-0 animate-riseIn">
-                            <h2 className="text-3xl md:text-4xl font-black">
+                            <h1 className="text-3xl md:text-4xl font-black">
                                 About Us<span className="text-amber-300">.</span>
-                            </h2>
+                            </h1>
 
                             <p className="mt-5 text-white/80 leading-relaxed text-base md:text-lg">
                                 Jigzack Cleaning Services is a solid waste disposal company approved by the Lagos Waste Management Authority (LAWMA). That approval sets the standard we follow when we collect, transport and dispose of waste.

@@ -1,9 +1,28 @@
+import type { Metadata } from "next";
+import JsonLd from "@/components/JsonLd";
+import { breadcrumbJsonLd, pageMetadata, servicesJsonLd } from "@/lib/seo";
 import Image from "next/image";
 import { Home as HomeIcon, Building2, Recycle } from "lucide-react";
+
+export const metadata: Metadata = pageMetadata({
+    title: "Waste Collection Services",
+    description:
+        "Domestic waste collection, commercial waste disposal, and bagged plastics and general refuse pickup in Lagos and Port Harcourt, on a fixed schedule by a LAWMA-approved operator.",
+    path: "/services",
+});
 
 export default function ServicesPage() {
     return (
         <main>
+            <JsonLd
+                data={[
+                    ...servicesJsonLd(),
+                    breadcrumbJsonLd([
+                        { name: "Home", path: "/" },
+                        { name: "Our Services", path: "/services" },
+                    ]),
+                ]}
+            />
             <section className="relative px-6 md:px-10 py-20 overflow-hidden">
                 <div
                     className="absolute inset-0 opacity-25 animate-serviceBg"
@@ -16,9 +35,9 @@ export default function ServicesPage() {
                 <div className="absolute inset-0 bg-slate-950/70" />
 
                 <div className="relative max-w-6xl mx-auto text-white">
-                    <h2 className="text-3xl md:text-4xl font-black">
+                    <h1 className="text-3xl md:text-4xl font-black">
                         Our Services<span className="text-amber-300">.</span>
-                    </h2>
+                    </h1>
                     <p className="mt-3 text-white/75 max-w-2xl">
                         Waste collection for homes and businesses.
                     </p>

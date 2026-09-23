@@ -1,13 +1,20 @@
 import type { MetadataRoute } from "next";
+import { SITE } from "@/lib/seo";
 
-const PAGES = ["", "/about", "/services", "/contact"];
+const PAGES: { path: string; changeFrequency: "weekly" | "monthly"; priority: number }[] = [
+  { path: "", changeFrequency: "weekly", priority: 1 },
+  { path: "/services", changeFrequency: "monthly", priority: 0.9 },
+  { path: "/about", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/contact", changeFrequency: "monthly", priority: 0.8 },
+];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://jigzackcleaningservices.com").replace(/\/$/, "");
+  const lastModified = new Date();
 
-  return PAGES.map((path) => ({
-    url: `${base}${path}`,
-    changeFrequency: path === "" ? "weekly" : "monthly",
-    priority: path === "" ? 1 : 0.7,
+  return PAGES.map(({ path, changeFrequency, priority }) => ({
+    url: `${SITE.url}${path}`,
+    lastModified,
+    changeFrequency,
+    priority,
   }));
 }
