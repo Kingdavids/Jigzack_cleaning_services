@@ -1444,3 +1444,12 @@ drop policy if exists "expense_receipts_delete_owner" on storage.objects;
 create policy "expense_receipts_delete_owner" on storage.objects
     for delete to authenticated using (bucket_id = 'expense-receipts' and public.is_owner());
 
+
+-- ============================================================
+-- Clearing the activity log (also in supabase/activity-clear-2026-09.sql)
+-- ============================================================
+
+drop policy if exists "activity_log_delete_owner" on public.activity_log;
+create policy "activity_log_delete_owner" on public.activity_log
+    for delete to authenticated using (public.is_owner());
+

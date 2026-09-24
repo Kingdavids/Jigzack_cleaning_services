@@ -282,3 +282,45 @@ export async function restoreEmployee(profileId: string): Promise<BulkResult> {
 
     return { success: true };
 }
+
+// ---------------------------------------------------------------------------
+// Activity log: owner only. Older entries only, or everything. The clearing
+// itself is written as a new entry afterwards, so it always leaves a trace.
+// ---------------------------------------------------------------------------
+export async function clearActivityLog(scope: "older30" | "older90" | "all", confirm: string): Promise<BulkResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!["older30", "older90", "all"].includes(scope)) return { success: false, error: "Invalid request." };
+    if (scope === "all" && confirm.trim() !== "DELETE") return { success: false, error: "Type DELETE to confirm." };
+
+    let query = supabase.from("activity_log").delete();
+
+    if (scope === "all") {
+        query = query.neq("id", "00000000-0000-0000-0000-000000000000");
+    } else {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - (scope === "older30" ? 30 : 90));
+        query = query.lt("created_at", cutoff.toISOString());
+    }
+
+    const { data, error } = await query.select("id");
+
+    if (error) {
+        console.error("clearActivityLog error:", error.message);
+        return { success: false, error: "Could not clear the activity log. Please try again." };
+    }
+
+    const deleted = data?.length ?? 0;
+
+    await logActivity(
+        supabase,
+        actor,
+        "activity_cleared",
+        `Cleared ${plural(deleted, "activity entry").replace("entrys", "entries")} (${scope === "all" ? "everything" : scope === "older30" ? "older than 30 days" : "older than 90 days"})`
+    );
+
+    revalidatePath("/admin/activity");
+
+    return { success: true, deleted };
+}

@@ -1,6 +1,8 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
+import ClearActivityCard from "@/components/dashboard/ClearActivityCard";
+import { isOwner } from "@/lib/auth/roles";
 
 type LogRow = {
     id: string;
@@ -55,7 +57,7 @@ export default async function AdminActivityPage({
             role="admin"
             profileId={profile.id}
             title="Activity"
-            subtitle="Who changed what in the admin area. Entries cannot be edited or deleted."
+            subtitle="Who changed what in the admin area. Entries cannot be edited, and only an owner can clear them."
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
@@ -111,6 +113,12 @@ export default async function AdminActivityPage({
                         </div>
                     )}
                 </SectionCard>
+
+                {isOwner(profile) && (
+                    <SectionCard title="Clear the log" description="Owners only. Remove old entries, or everything.">
+                        <ClearActivityCard />
+                    </SectionCard>
+                )}
             </div>
         </DashboardShell>
     );
