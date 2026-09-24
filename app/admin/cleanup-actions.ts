@@ -40,6 +40,11 @@ function cleanIds(ids: string[]) {
 
 const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
+// A delete the database refuses does not fail: it just removes nothing. So a
+// count of zero is reported as a problem instead of a success.
+const NOTHING_DELETED =
+    "Nothing was deleted. Either there was nothing to remove, or the database rule that allows it has not been applied yet. Run the latest SQL file from the supabase folder.";
+
 // ---------------------------------------------------------------------------
 // Tasks: any full admin. Works on every status, not only pending ones.
 // ---------------------------------------------------------------------------
@@ -58,6 +63,9 @@ export async function deleteTasks(ids: string[]): Promise<BulkResult> {
     }
 
     const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
 
     await logActivity(supabase, actor, "tasks_deleted", `Deleted ${plural(deleted, "task")}`);
 
@@ -95,10 +103,13 @@ export async function deleteInvoices(ids: string[], confirm: string): Promise<Bu
         return { success: false, error: "Could not delete those invoices. Please try again." };
     }
 
+    const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
+
     const files = (rows ?? []).map((r) => r.transfer_receipt_path as string | null).filter((p): p is string => Boolean(p));
     if (files.length > 0) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove(files);
-
-    const deleted = data?.length ?? 0;
 
     await logActivity(supabase, actor, "invoices_deleted", `Deleted ${plural(deleted, "invoice")}${paid > 0 ? ` (${paid} paid)` : ""}`);
 
@@ -129,10 +140,13 @@ export async function deleteExpenses(ids: string[]): Promise<BulkResult> {
         return { success: false, error: "Could not delete those expenses. Please try again." };
     }
 
+    const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
+
     const files = (rows ?? []).map((r) => r.receipt_path as string | null).filter((p): p is string => Boolean(p));
     if (files.length > 0) await supabase.storage.from(RECEIPT_BUCKET).remove(files);
-
-    const deleted = data?.length ?? 0;
 
     await logActivity(supabase, actor, "expenses_deleted", `Deleted ${plural(deleted, "expense")}`);
 
@@ -167,6 +181,9 @@ export async function deleteMessageThreads(rootIds: string[]): Promise<BulkResul
     }
 
     const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
 
     await logActivity(supabase, actor, "messages_deleted", `Deleted ${plural(deleted, "message")}`);
 
@@ -195,6 +212,9 @@ export async function deleteAllMessages(confirm: string): Promise<BulkResult> {
     }
 
     const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
 
     await logActivity(supabase, actor, "messages_cleared", `Deleted every message (${plural(deleted, "message")})`);
 
@@ -312,6 +332,9 @@ export async function clearActivityLog(scope: "older30" | "older90" | "all", con
     }
 
     const deleted = data?.length ?? 0;
+    if (deleted === 0) {
+        return { success: false, error: NOTHING_DELETED };
+    }
 
     await logActivity(
         supabase,
