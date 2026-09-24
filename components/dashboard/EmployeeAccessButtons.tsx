@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { removeEmployee, restoreEmployee } from "@/app/admin/cleanup-actions";
+import { deleteEmployeeForever, removeEmployee, restoreEmployee } from "@/app/admin/cleanup-actions";
 
 // Remove (stops sign-in, keeps every record) or restore an employee.
 export default function EmployeeAccessButtons({ profileId, name, removed }: { profileId: string; name: string; removed: boolean }) {
@@ -30,7 +30,30 @@ export default function EmployeeAccessButtons({ profileId, name, removed }: { pr
         router.refresh();
     };
 
+    const deleteForever = async () => {
+        const typed = window.prompt(
+            `Delete ${name} for good? This removes their login, profile and details, and frees their email address. Their expenses and messages are deleted too. Past jobs and photos stay on record. This cannot be undone.
+
+Type their name to confirm:`
+        );
+
+        if (typed === null) return;
+
+        setBusy(true);
+        const result = await deleteEmployeeForever(profileId, typed);
+        setBusy(false);
+
+        if (!result.success) {
+            toast.error(result.error ?? "Something went wrong.");
+            return;
+        }
+
+        toast.success("Employee deleted");
+        router.refresh();
+    };
+
     return (
+        <div className="flex flex-wrap gap-2">
         <button
             type="button"
             disabled={busy}
@@ -43,5 +66,14 @@ export default function EmployeeAccessButtons({ profileId, name, removed }: { pr
         >
             {busy ? "Working..." : removed ? "Restore" : "Remove"}
         </button>
+        <button
+            type="button"
+            disabled={busy}
+            onClick={deleteForever}
+            className="rounded-lg border border-red-400/40 bg-red-600/15 px-3 py-1.5 text-xs font-bold text-red-300 transition hover:bg-red-600/25 disabled:opacity-50"
+        >
+            Delete forever
+        </button>
+        </div>
     );
 }

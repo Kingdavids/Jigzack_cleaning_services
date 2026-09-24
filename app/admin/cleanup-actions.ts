@@ -347,3 +347,53 @@ export async function clearActivityLog(scope: "older30" | "older90" | "all", con
 
     return { success: true, deleted };
 }
+
+// Deletes an employee for good: login, profile and setup details, which also
+// frees their email address. Their expenses and messages go with them; jobs and
+// photos stay so customers keep their history. The exact name must be typed.
+export async function deleteEmployeeForever(profileId: string, confirmName: string): Promise<BulkResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!profileId || !UUID.test(profileId)) return { success: false, error: "Invalid request." };
+
+    const { data: target } = await supabase
+        .from("profiles")
+        .select("id, full_name, role")
+        .eq("id", profileId)
+        .maybeSingle();
+
+    if (!target || target.role !== "employee") return { success: false, error: "That person is not an employee." };
+
+    if (confirmName.trim().toLowerCase() !== (target.full_name ?? "").trim().toLowerCase()) {
+        return { success: false, error: "The name you typed does not match. Nothing was deleted." };
+    }
+
+    // Their expense receipt files are removed along with their records.
+    const { data: receipts } = await supabase.from("expenses").select("receipt_path").eq("employee_id", profileId);
+
+    const { error } = await supabase.rpc("admin_delete_employee", { p_profile_id: profileId });
+
+    if (error) {
+        console.error("admin_delete_employee error:", error.code, error.message);
+        return {
+            success: false,
+            error: /schema cache|could not find the function/i.test(error.message)
+                ? "Deleting employees is not switched on yet. Run supabase/employee-delete-2026-09.sql first."
+                : `Could not delete this employee. (${error.code || "unknown"}: ${error.message.slice(0, 120)})`,
+        };
+    }
+
+    const files = (receipts ?? []).map((r) => r.receipt_path as string | null).filter((p): p is string => Boolean(p));
+    if (files.length > 0) await supabase.storage.from(RECEIPT_BUCKET).remove(files);
+
+    await logActivity(supabase, actor, "employee_deleted", `Deleted the employee ${target.full_name ?? ""}`.trim());
+
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin/tasks");
+    revalidatePath("/admin/expenses");
+    revalidatePath("/admin/messages");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
