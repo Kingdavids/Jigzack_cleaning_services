@@ -260,24 +260,9 @@ $$;
 create policy "customers_select_tenant_estate" on public.customers
     for select using (profile_id = public.tenant_estate_profile_id());
 
--- Bypasses RLS so a paying customer can mark their own registration
--- fee paid after a verified Paystack transaction, without a broad
--- update policy that would let them edit any other column (balance,
--- status, etc.) on their own row.
-create or replace function public.mark_registration_fee_paid(p_reference text)
-returns void
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-    update public.customers
-    set registration_fee_paid = true,
-        registration_fee_reference = p_reference,
-        registration_fee_paid_at = now()
-    where profile_id = auth.uid();
-end;
-$$;
+-- The registration fee is paid by bank transfer. A customer can only report it
+-- (see report_registration_fee in the manual payments section at the end);
+-- an admin confirms it.
 
 -- ============================================================
 -- employees
@@ -594,11 +579,9 @@ create policy "task_photos_employee_delete" on storage.objects
 -- ============================================================
 revoke execute on function public.approved_admin_emails() from public, anon;
 revoke execute on function public.approved_admin_ids() from public, anon;
-revoke execute on function public.mark_registration_fee_paid(text) from public, anon;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 grant execute on function public.approved_admin_emails() to authenticated;
 grant execute on function public.approved_admin_ids() to authenticated;
-grant execute on function public.mark_registration_fee_paid(text) to authenticated;
 
 -- ============================================================
 -- Declined applications, staff expenses and the private receipts bucket
@@ -1046,4 +1029,78 @@ grant execute on function public.admin_delete_customer(uuid) to authenticated;
 drop policy if exists "task_photos_admin_delete" on storage.objects;
 create policy "task_photos_admin_delete" on storage.objects
     for delete to authenticated using (bucket_id = 'task-photos' and public.is_admin());
+
+
+-- ============================================================
+-- Manual payments (also in supabase/manual-payments-2026-09.sql)
+-- ============================================================
+-- 1. What the customer reported
+-- ---------------------------------------------------------------
+alter table public.customers
+    add column if not exists registration_fee_submitted_at timestamptz,
+    add column if not exists registration_fee_receipt_path text,
+    add column if not exists registration_fee_note text;
+
+-- The old function marked the fee paid straight after a Paystack payment.
+drop function if exists public.mark_registration_fee_paid(text);
+
+-- A customer can only say "I have paid". Confirming is an admin action. This
+-- runs with elevated rights so it does not need a broad update policy that
+-- would let a customer edit other columns (balance, status) on their own row.
+create or replace function public.report_registration_fee(p_note text, p_receipt_path text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    update public.customers
+    set registration_fee_submitted_at = now(),
+        registration_fee_note = nullif(left(coalesce(p_note, ''), 300), ''),
+        registration_fee_receipt_path = p_receipt_path
+    where profile_id = auth.uid()
+      and registration_fee_paid = false;
+end;
+$$;
+
+revoke execute on function public.report_registration_fee(text, text) from public, anon;
+grant execute on function public.report_registration_fee(text, text) to authenticated;
+
+-- ---------------------------------------------------------------
+-- 2. Private bucket for payment receipts
+-- ---------------------------------------------------------------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+    'payment-receipts', 'payment-receipts', false, 10485760,
+    array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf']
+)
+on conflict (id) do update
+    set public = false,
+        file_size_limit = excluded.file_size_limit,
+        allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "payment_receipts_upload" on storage.objects;
+create policy "payment_receipts_upload" on storage.objects
+    for insert to authenticated with check (
+        bucket_id = 'payment-receipts'
+        and (storage.foldername(name)) [1] = auth.uid()::text
+        and exists (
+            select 1 from public.profiles p
+            where p.id = auth.uid() and p.role = 'customer' and p.status = 'approved'
+        )
+    );
+
+drop policy if exists "payment_receipts_read" on storage.objects;
+create policy "payment_receipts_read" on storage.objects
+    for select to authenticated using (
+        bucket_id = 'payment-receipts'
+        and ((storage.foldername(name)) [1] = auth.uid()::text or public.is_admin())
+    );
+
+drop policy if exists "payment_receipts_delete_own" on storage.objects;
+create policy "payment_receipts_delete_own" on storage.objects
+    for delete to authenticated using (
+        bucket_id = 'payment-receipts'
+        and (storage.foldername(name)) [1] = auth.uid()::text
+    );
 

@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { isFullAdmin } from "@/lib/auth/roles";
 import CustomerAccountControls from "@/components/dashboard/CustomerAccountControls";
+import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
+import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import {
     generateCustomerBilling,
     saveVacancies,
@@ -68,6 +70,14 @@ export default async function AdminCustomerDetailPage({
             supabase.from("uploads").select("id", { count: "exact", head: true }).eq("customer_id", profileId),
         ]);
 
+    // A receipt the customer uploaded lives in a private bucket, so it is opened
+    // through a link that expires after an hour.
+    const feeReceiptPath = (customer as { registration_fee_receipt_path?: string | null }).registration_fee_receipt_path ?? null;
+    const feeReceiptUrl = feeReceiptPath
+        ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrl(feeReceiptPath, 3600)).data?.signedUrl ?? null
+        : null;
+    const feeSubmittedAt = (customer as { registration_fee_submitted_at?: string | null }).registration_fee_submitted_at ?? null;
+
     const { counted, notes } = describeFacilities(customer.facility_details);
     const vacancyList = describeFacilities(customer.vacancies).counted;
     const frequency = parseFrequency(customer.preferred_pickup_frequency);
@@ -121,6 +131,30 @@ export default async function AdminCustomerDetailPage({
                         ]}
                     />
                 </SectionCard>
+
+                {!tenantUnit && (
+                    <SectionCard title="Registration fee" description="The one-off fee, paid by bank transfer.">
+                        {isFullAdmin(profile) ? (
+                            <RegistrationFeeControls
+                                profileId={profileId}
+                                paid={Boolean(customer.registration_fee_paid)}
+                                reported={Boolean(feeSubmittedAt)}
+                                receiptUrl={feeReceiptUrl}
+                                reportedNote={(customer as { registration_fee_note?: string | null }).registration_fee_note ?? null}
+                                reportedAt={feeSubmittedAt ? formatDate(feeSubmittedAt) : null}
+                                paidText={`Paid ${formatDate(customer.registration_fee_paid_at)}${customer.registration_fee_reference ? `. ${customer.registration_fee_reference}` : ""}`}
+                            />
+                        ) : (
+                            <p className="text-sm text-white/70">
+                                {customer.registration_fee_paid
+                                    ? `Paid ${formatDate(customer.registration_fee_paid_at)}`
+                                    : feeSubmittedAt
+                                        ? "Reported as paid, waiting for an admin to confirm."
+                                        : "Not paid yet."}
+                            </p>
+                        )}
+                    </SectionCard>
+                )}
 
                 {isFullAdmin(profile) && (
                     <SectionCard title="Suspend or delete" description="Pause this customer, or remove them completely.">

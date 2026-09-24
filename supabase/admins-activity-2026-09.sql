@@ -112,6 +112,10 @@ drop policy if exists "expense_receipts_read_reader" on storage.objects;
 create policy "expense_receipts_read_reader" on storage.objects
     for select to authenticated using (bucket_id = 'expense-receipts' and public.is_staff_reader());
 
+drop policy if exists "payment_receipts_read_reader" on storage.objects;
+create policy "payment_receipts_read_reader" on storage.objects
+    for select to authenticated using (bucket_id = 'payment-receipts' and public.is_staff_reader());
+
 -- ---------------------------------------------------------------
 -- 3. Admin and supervisor invites (separate from employee invites)
 -- ---------------------------------------------------------------

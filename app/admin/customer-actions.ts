@@ -5,6 +5,8 @@ import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { isFullAdmin } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
+import { escapeHtml, sendEmail } from "@/lib/send-email";
+import { siteOrigin } from "@/lib/site-origin";
 
 export type CustomerAccountResult = { success: boolean; error?: string; message?: string };
 
@@ -139,4 +141,77 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
     revalidatePath("/admin");
 
     return { success: true, message: "Deleted." };
+}
+
+// The registration fee is paid by bank transfer. "confirm" covers both a
+// customer who reported paying and one who paid you directly (an existing
+// customer, say). "reject" clears the report so they can send it again.
+export async function setRegistrationFee(profileId: string, action: "confirm" | "reject", note: string): Promise<CustomerAccountResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!profileId || !["confirm", "reject"].includes(action)) return { success: false, error: "Invalid request." };
+
+    const { data: customer } = await supabase
+        .from("customers")
+        .select("full_name, email, registration_fee_paid")
+        .eq("profile_id", profileId)
+        .maybeSingle();
+
+    if (!customer) return { success: false, error: "Could not find that customer." };
+
+    const cleanNote = note.trim().slice(0, 300);
+
+    const update =
+        action === "confirm"
+            ? {
+                  registration_fee_paid: true,
+                  registration_fee_paid_at: new Date().toISOString(),
+                  registration_fee_reference: cleanNote || "Confirmed by admin",
+              }
+            : {
+                  registration_fee_paid: false,
+                  registration_fee_paid_at: null,
+                  registration_fee_submitted_at: null,
+                  registration_fee_receipt_path: null,
+              };
+
+    const { error } = await supabase.from("customers").update(update).eq("profile_id", profileId);
+
+    if (error) {
+        console.error("setRegistrationFee error:", error.message);
+        return {
+            success: false,
+            error: /registration_fee_submitted_at|registration_fee_receipt_path/.test(error.message)
+                ? "Not switched on yet. Run supabase/manual-payments-2026-09.sql first."
+                : "Could not update this customer. Please try again.",
+        };
+    }
+
+    if (action === "confirm" && customer.email && !customer.registration_fee_paid) {
+        await sendEmail({
+            to: [customer.email],
+            subject: "Your Jigzack registration fee is confirmed",
+            html: `
+                <p>Hi ${escapeHtml(customer.full_name ?? "there")},</p>
+                <p>We have confirmed your registration fee. Your dashboard is now open.</p>
+                <p><a href="${escapeHtml(`${await siteOrigin()}/auth`)}">Log in to your account</a></p>
+                <p>Jigzack Cleaning Services</p>
+            `,
+        });
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        action === "confirm" ? "registration_fee_confirmed" : "registration_fee_rejected",
+        `${action === "confirm" ? "Confirmed" : "Rejected"} the registration fee for ${customer.full_name}`,
+        { type: "profile", id: profileId }
+    );
+
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin");
+
+    return { success: true, message: action === "confirm" ? "Registration fee confirmed." : "Cleared. They can report it again." };
 }

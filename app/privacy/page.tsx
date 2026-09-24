@@ -53,8 +53,8 @@ export default function PrivacyPage() {
                             </>,
                             <>
                                 <strong className="text-white">Billing:</strong> your invoices, payments, receipts and the
-                                reference for your registration fee. Card and bank details are entered on Paystack&apos;s
-                                page and never reach us.
+                                reference for your registration fee, and any payment receipt you choose to upload. We
+                                do not collect card details: payments are made by bank transfer.
                             </>,
                             <>
                                 <strong className="text-white">Service records:</strong> your pickup schedule and the
@@ -99,7 +99,6 @@ export default function PrivacyPage() {
                             "Supabase, which hosts our database, sign-in and photo storage.",
                             "Railway, which hosts the website.",
                             "Resend, which sends our emails.",
-                            "Paystack, which processes payments.",
                             "Google Analytics, only if you accept analytics cookies.",
                         ]}
                     />

@@ -143,7 +143,7 @@ export async function createInvoice(
     return { success: true };
 }
 
-const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Paystack", "Other"];
+const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];
 
 export async function markInvoicePaid(paymentId: string, method: string, reference: string) {
     const actor = await requireAdmin();

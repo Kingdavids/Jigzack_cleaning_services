@@ -70,6 +70,7 @@ export default async function AdminPage() {
         photosRes,
         recentPhotosRes,
         expensesRes,
+        feeReportsRes,
     ] = await Promise.all([
         supabase
             .from("profiles")
@@ -119,6 +120,13 @@ export default async function AdminPage() {
             .limit(6),
         // Errors (the table not existing yet) simply leave this at zero.
         supabase.from("expenses").select("amount").eq("status", "submitted"),
+        // Customers who say they paid the registration fee. Errors (the column
+        // not existing yet) leave this at zero.
+        supabase
+            .from("customers")
+            .select("id", { count: "exact", head: true })
+            .not("registration_fee_submitted_at", "is", null)
+            .eq("registration_fee_paid", false),
     ]);
 
     const pending = (pendingRes.data ?? []) as PendingRow[];
@@ -222,6 +230,17 @@ export default async function AdminPage() {
                         helper={`${(paidRes.data ?? []).length} payment${(paidRes.data ?? []).length === 1 ? "" : "s"} received`}
                         href="/admin/payments"
                     />
+
+                    <div className="sm:col-span-2 xl:col-span-4">
+                        <StatCard
+                            icon={Wallet}
+                            label="Registration fees to confirm"
+                            value={String(feeReportsRes.count ?? 0)}
+                            helper={(feeReportsRes.count ?? 0) > 0 ? "Customers say they have paid. Check and confirm." : "Nothing waiting"}
+                            href="/admin/customers?fee=reported"
+                            tone={(feeReportsRes.count ?? 0) > 0 ? "alert" : "default"}
+                        />
+                    </div>
 
                     <div className="sm:col-span-2 xl:col-span-4">
                         <StatCard

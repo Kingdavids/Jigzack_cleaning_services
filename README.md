@@ -2,7 +2,7 @@
 
 Website and customer, employee and admin dashboards for Jigzack Cleaning Services, a LAWMA-approved waste collection company in Lagos and Port Harcourt.
 
-Built with Next.js 16 (App Router), Supabase (auth, Postgres, storage, realtime), Tailwind CSS 4, Resend for email and Paystack for the registration fee. Hosted on Railway.
+Built with Next.js 16 (App Router), Supabase (auth, Postgres, storage, realtime), Tailwind CSS 4, and Resend for email. Hosted on Railway.
 
 ## What is in it
 

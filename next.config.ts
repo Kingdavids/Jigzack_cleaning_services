@@ -2,8 +2,8 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 // Sensible browser protections for every response. There is no Content
-// Security Policy here on purpose: Paystack's checkout and Next's own inline
-// scripts need a carefully tuned one, and a wrong policy would break payments.
+// Security Policy here on purpose: Next's own inline scripts and the analytics
+// script need a carefully tuned one, and a wrong policy would break the site.
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },

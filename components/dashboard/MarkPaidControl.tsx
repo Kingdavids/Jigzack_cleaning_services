@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { markInvoicePaid } from "@/app/admin/actions";
 
-const METHODS = ["Bank transfer", "Cash", "POS", "Paystack", "Other"];
+const METHODS = ["Bank transfer", "Cash", "POS", "Other"];
 
 export default function MarkPaidControl({ paymentId }: { paymentId: string }) {
     const [method, setMethod] = useState(METHODS[0]);

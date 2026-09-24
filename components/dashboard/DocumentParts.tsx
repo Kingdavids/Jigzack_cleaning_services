@@ -1,13 +1,7 @@
 import Image from "next/image";
 import { describeFacilities, type FacilityDetails } from "@/lib/customer/facilities";
+import { BANK_ACCOUNT } from "@/lib/bank-details";
 
-export const BANK_ACCOUNT = {
-    name: "JIGZACK CLEANING SERVICES",
-    banks: [
-        { bank: "Sterling Bank", number: "0079266810" },
-        { bank: "GTBank", number: "0562133368" },
-    ],
-};
 
 export function DocumentHeader({
                                    title,

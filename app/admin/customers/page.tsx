@@ -27,9 +27,9 @@ type CustomerRow = {
 export default async function AdminCustomersPage({
                                                      searchParams,
                                                  }: {
-    searchParams: Promise<{ q?: string }>;
+    searchParams: Promise<{ q?: string; fee?: string }>;
 }) {
-    const { q } = await searchParams;
+    const { q, fee } = await searchParams;
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     // Strip characters that have meaning inside a PostgREST or() filter.
@@ -49,6 +49,12 @@ export default async function AdminCustomersPage({
                 .map((column) => `${column}.ilike.%${term}%`)
                 .join(",")
         );
+    }
+
+    // ?fee=reported: customers who say they paid the registration fee and are
+    // waiting for an admin to confirm it.
+    if (fee === "reported") {
+        query = query.not("registration_fee_submitted_at", "is", null).eq("registration_fee_paid", false);
     }
 
     const { data: customersData } = await query;
