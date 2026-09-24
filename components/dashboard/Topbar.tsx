@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { playNotificationSound } from "@/lib/notification-sound";
 import type { UserRole } from "@/lib/dashboard-types";
+import { LEVEL_LABEL, useViewer } from "@/components/dashboard/ViewerContext";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export default function Topbar({
@@ -26,6 +27,7 @@ export default function Topbar({
     onOpenMenu: () => void;
 }) {
     const router = useRouter();
+    const viewer = useViewer();
     const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
     const [justArrived, setJustArrived] = useState(false);
     const arrivedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -219,6 +221,25 @@ export default function Topbar({
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {viewer.level && viewer.name && (
+                            <div className="flex min-w-0 items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-1.5 pr-3">
+                                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-xs font-bold text-black">
+                                    {viewer.name
+                                        .split(/\s+/)
+                                        .filter(Boolean)
+                                        .slice(0, 2)
+                                        .map((part) => part[0]?.toUpperCase())
+                                        .join("")}
+                                </span>
+                                <span className="min-w-0 leading-tight">
+                                    <span className="block max-w-[9rem] truncate text-sm font-semibold text-white">{viewer.name}</span>
+                                    <span className="block text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+                                        {LEVEL_LABEL[viewer.level]}
+                                    </span>
+                                </span>
+                            </div>
+                        )}
+
                         <Link
                             href={`/${role}/messages`}
                             aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}

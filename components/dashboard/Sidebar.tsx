@@ -63,8 +63,8 @@ function SidebarNav({
     onNavigate?: () => void;
 }) {
     const items = navConfig[role];
-    const { isOwner } = useViewer();
-    const panelName = role === "admin" && isOwner ? "owner" : role;
+    const { level } = useViewer();
+    const panelName = role === "admin" && level ? level : role;
 
     return (
         <>

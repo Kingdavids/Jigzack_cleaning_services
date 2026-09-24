@@ -7,7 +7,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel";
 import OwnerOverview from "@/components/dashboard/OwnerOverview";
-import { isOwner } from "@/lib/auth/roles";
+import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 import {
     AlertTriangle,
     Briefcase,
@@ -166,16 +166,20 @@ export default async function AdminPage() {
     const collected = (paidRes.data ?? []).reduce((sum, row) => sum + invoiceTotal(row), 0);
 
     const owner = isOwner(profile);
+    const supervisor = isViewOnlyAdmin(profile);
+    const firstName = (profile.full_name ?? "").trim().split(/\s+/)[0] || "there";
 
     return (
         <DashboardShell
             role="admin"
             profileId={profile.id}
-            title={owner ? "Owner Dashboard" : "Admin Dashboard"}
+            title={owner ? "Owner Dashboard" : supervisor ? "Supervisor Dashboard" : "Admin Dashboard"}
             subtitle={
                 owner
-                    ? "How the business is doing, what needs you, and what your admins have been doing."
-                    : "What needs attention today. Each card opens the page with the full detail."
+                    ? `Welcome back, ${firstName}. How the business is doing, what needs you, and what your admins have been doing.`
+                    : supervisor
+                        ? `Welcome back, ${firstName}. You are a supervisor with view-only access, so you can look at everything but not change it.`
+                        : `Welcome back, ${firstName}. You are an admin. Each card opens the page with the full detail.`
             }
             unreadCount={unreadCount}
         >

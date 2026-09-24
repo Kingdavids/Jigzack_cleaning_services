@@ -14,8 +14,10 @@ export const metadata: Metadata = PRIVATE_PAGE;
 export default async function Layout({ children }: { children: ReactNode }) {
   const profile = await getUserProfile();
 
+  const level = isOwner(profile) ? "owner" : isViewOnlyAdmin(profile) ? "supervisor" : "admin";
+
   return (
-    <ViewerProvider isOwner={isOwner(profile)}>
+    <ViewerProvider isOwner={isOwner(profile)} name={profile.full_name ?? profile.email ?? null} level={level}>
       {isViewOnlyAdmin(profile) && (
         <div role="status" className="bg-sky-500/15 px-4 py-2 text-center text-sm font-semibold text-sky-200">
           You have view-only access. You can look at everything, but changes are turned off for your account.
