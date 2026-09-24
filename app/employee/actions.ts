@@ -298,14 +298,14 @@ export async function submitExpense(formData: FormData): Promise<ExpenseActionSt
     });
 
     if (error) {
-        console.error("submitExpense insert error:", error.message);
+        console.error("submitExpense insert error:", error.code, error.message, error.details, error.hint);
         if (receiptPath) await supabase.storage.from(RECEIPT_BUCKET).remove([receiptPath]);
 
         return {
             success: false,
-            error: /relation|does not exist/i.test(error.message)
+            error: /relation|does not exist|schema cache/i.test(error.message)
                 ? "Expenses aren't switched on yet. Please tell the admin."
-                : "Could not save this expense. Please try again.",
+                : `Could not save this expense. Please try again. (code ${error.code || "unknown"})`,
         };
     }
 

@@ -6,6 +6,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
+import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConversations";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -34,6 +35,19 @@ export default async function AdminMessagesPage() {
         .limit(200);
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
+
+    // Conversations between staff and customers. Admins can read every message,
+    // and reading them here changes nothing for the people involved.
+    const { data: watchedData } = await supabase
+        .from("messages")
+        .select(
+            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name, role), to_profile:profiles!messages_to_profile_id_fkey(full_name, role)"
+        )
+        .eq("is_broadcast", false)
+        .order("created_at", { ascending: false })
+        .limit(300);
+
+    const watched = (watchedData ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"];
 
     return (
         <DashboardShell
@@ -133,6 +147,15 @@ export default async function AdminMessagesPage() {
                     </SendMessageForm>
                 </div>
             </SectionCard>
+
+            <div className="mt-6">
+                <SectionCard
+                    title="Staff and customer conversations"
+                    description="What staff and customers are saying to each other. This is a read-only view and nobody is notified."
+                >
+                    <StaffCustomerConversations messages={watched} />
+                </SectionCard>
+            </div>
         </DashboardShell>
     );
 }

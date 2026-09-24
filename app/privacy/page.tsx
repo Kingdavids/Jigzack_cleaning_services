@@ -62,7 +62,8 @@ export default function PrivacyPage() {
                             </>,
                             <>
                                 <strong className="text-white">Messages:</strong> anything you send through your
-                                dashboard or the contact form, including your name, email and phone number.
+                                dashboard or the contact form, including your name, email and phone number. Messages
+                                between customers and our staff sent through the platform can be read by our administrators.
                             </>,
                             <>
                                 <strong className="text-white">Staff:</strong> for our employees, their name, email,

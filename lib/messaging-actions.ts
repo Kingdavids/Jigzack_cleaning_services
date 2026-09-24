@@ -85,6 +85,64 @@ export async function sendMessageToAdmin(
     return { success: true };
 }
 
+// Employees can message the customers they have a job for. The list of who is
+// allowed comes from the database (my_customer_contacts), and the same rule is
+// enforced again by the messages_insert_employee_customer policy. Admins can
+// read every message, so they see these conversations without any extra step.
+export async function sendMessageToCustomer(
+    _prevState: MessageActionState,
+    formData: FormData
+): Promise<MessageActionState> {
+    const profile = await getUserProfile();
+
+    if (profile.role !== "employee" || profile.status !== "approved") {
+        return { success: false, error: "Only approved staff can message customers." };
+    }
+
+    const supabase = await createClient();
+
+    const customerId = String(formData.get("customerId") || "");
+    const subject = String(formData.get("subject") || "").trim().slice(0, 200);
+    const body = String(formData.get("body") || "").trim().slice(0, 4000);
+
+    if (!customerId || !subject || !body) {
+        return { success: false, error: "Choose a customer and write a subject and message." };
+    }
+
+    const { data: contacts, error: contactsError } = await supabase.rpc("my_customer_contacts");
+
+    if (contactsError) {
+        console.error("my_customer_contacts error:", contactsError.message);
+        return { success: false, error: "Messaging customers is not switched on yet. Please tell the admin." };
+    }
+
+    if (!(contacts ?? []).some((c: { id: string }) => c.id === customerId)) {
+        return { success: false, error: "You can only message customers you have a job for." };
+    }
+
+    if (await isRecentDuplicate(supabase, { from_profile_id: profile.id, subject, body, parent_message_id: null })) {
+        return { success: true };
+    }
+
+    const { error } = await supabase.from("messages").insert({
+        from_profile_id: profile.id,
+        to_profile_id: customerId,
+        subject,
+        body,
+    });
+
+    if (error) {
+        console.error("sendMessageToCustomer insert error:", error.code, error.message);
+        return { success: false, error: "Could not send the message. Please try again." };
+    }
+
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
+    revalidatePath("/admin/messages");
+
+    return { success: true };
+}
+
 export async function replyToMessage(
     _prevState: MessageActionState,
     formData: FormData
