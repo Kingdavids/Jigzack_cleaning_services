@@ -10,10 +10,12 @@ export default function CustomerAccountControls({
                                                     profileId,
                                                     fullName,
                                                     suspended,
+                                                    canDelete = true,
                                                 }: {
     profileId: string;
     fullName: string;
     suspended: boolean;
+    canDelete?: boolean;
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
@@ -79,6 +81,13 @@ export default function CustomerAccountControls({
                 </button>
             </div>
 
+            {!canDelete && (
+                <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/60">
+                    Only an owner can delete a customer for good. Suspending is available to every admin.
+                </p>
+            )}
+
+            {canDelete && (
             <div className="rounded-2xl border border-red-400/25 bg-red-500/[0.05] p-4">
                 <p className="font-bold text-red-200">Delete this customer for good</p>
                 <p className="mt-1 text-sm text-red-100/70">
@@ -126,6 +135,7 @@ export default function CustomerAccountControls({
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 }

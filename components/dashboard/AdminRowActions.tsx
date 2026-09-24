@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { changeAdminAccess, revokeAdminInvite } from "@/app/admin/team-actions";
+import { changeAdminAccess, revokeAdminInvite, setOwnerAccess } from "@/app/admin/team-actions";
 
 type Mode = "admin" | "supervisor" | "remove";
 
@@ -14,11 +14,13 @@ export function AdminAccessButtons({
                                        isViewOnly,
                                        isRemoved,
                                        isSelf,
+                                       isOwnerTarget = false,
                                    }: {
     userId: string;
     isViewOnly: boolean;
     isRemoved: boolean;
     isSelf: boolean;
+    isOwnerTarget?: boolean;
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState<Mode | null>(null);
@@ -30,6 +32,26 @@ export function AdminAccessButtons({
 
         setBusy(mode);
         const result = await changeAdminAccess(userId, mode);
+        setBusy(null);
+
+        if (!result.success) {
+            toast.error(result.error ?? "Something went wrong.");
+            return;
+        }
+
+        toast.success("Access updated");
+        router.refresh();
+    };
+
+    const toggleOwner = async () => {
+        const question = isOwnerTarget
+            ? "Remove the owner level from this person? They stay a full admin."
+            : "Make this person an owner? Owners can delete customers and invite or remove admins.";
+
+        if (!window.confirm(question)) return;
+
+        setBusy("admin");
+        const result = await setOwnerAccess(userId, !isOwnerTarget);
         setBusy(null);
 
         if (!result.success) {
@@ -70,6 +92,15 @@ export function AdminAccessButtons({
                             className={`${base} border border-white/15 bg-white/5 text-white hover:bg-white/10`}
                         >
                             Make view-only
+                        </button>
+                    )}
+                    {!isViewOnly && (
+                        <button
+                            disabled={busy !== null}
+                            onClick={toggleOwner}
+                            className={`${base} border border-amber-300/40 bg-amber-300/10 text-amber-200 hover:bg-amber-300/20`}
+                        >
+                            {isOwnerTarget ? "Remove owner" : "Make owner"}
                         </button>
                     )}
                     <button

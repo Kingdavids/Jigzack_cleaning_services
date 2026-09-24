@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { isFullAdmin } from "@/lib/auth/roles";
+import { isOwner } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
@@ -12,10 +12,11 @@ import { siteOrigin } from "@/lib/site-origin";
 export type AdminInviteState = { success: boolean; error?: string; link?: string; emailed?: boolean } | null;
 export type TeamResult = { success: boolean; error?: string };
 
-async function requireFullAdmin() {
+// Inviting, changing and removing admins is owner only.
+async function requireOwner() {
     const profile = await getUserProfile();
 
-    if (!isFullAdmin(profile) || profile.status !== "approved") {
+    if (!isOwner(profile) || profile.status !== "approved") {
         throw new Error("Not authorized");
     }
 
@@ -28,7 +29,7 @@ const INVITE_DAYS = 3;
 // that address, and confirms it, becomes an admin (or a view-only supervisor).
 // The link works once and expires after three days.
 export async function createAdminInvite(_prev: AdminInviteState, formData: FormData): Promise<AdminInviteState> {
-    const actor = await requireFullAdmin();
+    const actor = await requireOwner();
     const supabase = await createClient();
 
     const email = String(formData.get("email") || "").trim().toLowerCase();
@@ -92,7 +93,7 @@ export async function createAdminInvite(_prev: AdminInviteState, formData: FormD
 }
 
 export async function revokeAdminInvite(inviteId: string): Promise<TeamResult> {
-    const actor = await requireFullAdmin();
+    const actor = await requireOwner();
     const supabase = await createClient();
 
     if (!inviteId) return { success: false, error: "Invalid request." };
@@ -113,7 +114,7 @@ export async function revokeAdminInvite(inviteId: string): Promise<TeamResult> {
 // Change what an existing admin can do. Removing access keeps their account
 // (and every record they made) but stops them signing in to the admin area.
 export async function changeAdminAccess(userId: string, mode: "admin" | "supervisor" | "remove"): Promise<TeamResult> {
-    const actor = await requireFullAdmin();
+    const actor = await requireOwner();
     const supabase = await createClient();
 
     if (!userId || !["admin", "supervisor", "remove"].includes(mode)) {
@@ -126,12 +127,28 @@ export async function changeAdminAccess(userId: string, mode: "admin" | "supervi
 
     const { data: target } = await supabase
         .from("profiles")
-        .select("id, full_name, email, role, status, read_only")
+        .select("id, full_name, email, role, status, read_only, is_owner")
         .eq("id", userId)
         .maybeSingle();
 
     if (!target || target.role !== "admin") {
         return { success: false, error: "That person is not an admin." };
+    }
+
+    // Never leave the business without an owner.
+    if (mode !== "admin" && target.is_owner) {
+        const { count: otherOwners } = await supabase
+            .from("profiles")
+            .select("id", { count: "exact", head: true })
+            .eq("role", "admin")
+            .eq("status", "approved")
+            .eq("read_only", false)
+            .eq("is_owner", true)
+            .neq("id", userId);
+
+        if (!otherOwners || otherOwners < 1) {
+            return { success: false, error: "There must always be at least one owner." };
+        }
     }
 
     // Never leave the business without a full admin.
@@ -151,10 +168,12 @@ export async function changeAdminAccess(userId: string, mode: "admin" | "supervi
         }
     }
 
+    // A view-only or removed admin is no longer an owner either.
+    const ownerColumn = "is_owner" in actor;
     const update =
         mode === "remove"
-            ? { status: "declined" }
-            : { status: "approved", read_only: mode === "supervisor" };
+            ? { status: "declined", ...(ownerColumn ? { is_owner: false } : {}) }
+            : { status: "approved", read_only: mode === "supervisor", ...(mode === "supervisor" && ownerColumn ? { is_owner: false } : {}) };
 
     const { error } = await supabase.from("profiles").update(update).eq("id", userId);
 
@@ -175,6 +194,49 @@ export async function changeAdminAccess(userId: string, mode: "admin" | "supervi
 
     revalidatePath("/admin/admins");
     revalidatePath("/admin/approvals");
+
+    return { success: true };
+}
+
+// Give or take away the owner level. Owners only, and never on yourself.
+export async function setOwnerAccess(userId: string, makeOwner: boolean): Promise<TeamResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!userId) return { success: false, error: "Invalid request." };
+    if (userId === actor.id) return { success: false, error: "You cannot change your own owner access. Ask another owner." };
+
+    const { data: target } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, status, read_only")
+        .eq("id", userId)
+        .maybeSingle();
+
+    if (!target || target.role !== "admin" || target.status !== "approved" || target.read_only) {
+        return { success: false, error: "Only a full admin can be an owner." };
+    }
+
+    const { error } = await supabase.from("profiles").update({ is_owner: makeOwner }).eq("id", userId);
+
+    if (error) {
+        console.error("setOwnerAccess error:", error.message);
+        return {
+            success: false,
+            error: /is_owner/.test(error.message)
+                ? "Owners are not switched on yet. Run supabase/owner-2026-09.sql first."
+                : "Could not update this admin. Please try again.",
+        };
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        makeOwner ? "owner_granted" : "owner_removed",
+        `${makeOwner ? "Made" : "Removed"} ${target.full_name ?? target.email ?? "an admin"} ${makeOwner ? "an owner" : "as owner"}`,
+        { type: "profile", id: userId }
+    );
+
+    revalidatePath("/admin/admins");
 
     return { success: true };
 }

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { isFullAdmin } from "@/lib/auth/roles";
+import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
@@ -14,6 +14,17 @@ async function requireFullAdmin() {
     const profile = await getUserProfile();
 
     if (!isFullAdmin(profile) || profile.status !== "approved") {
+        throw new Error("Not authorized");
+    }
+
+    return profile;
+}
+
+// Permanent deletion is owner only.
+async function requireOwner() {
+    const profile = await getUserProfile();
+
+    if (!isOwner(profile) || profile.status !== "approved") {
         throw new Error("Not authorized");
     }
 
@@ -90,7 +101,7 @@ export async function setCustomerSuspended(profileId: string, suspended: boolean
 // photos and messages. To make an accident hard, the customer's exact name has
 // to be typed in.
 export async function deleteCustomerAccount(profileId: string, confirmName: string): Promise<CustomerAccountResult> {
-    const actor = await requireFullAdmin();
+    const actor = await requireOwner();
     const supabase = await createClient();
 
     if (!profileId) return { success: false, error: "Invalid request." };
@@ -253,7 +264,7 @@ export async function clearInvoiceTransferReport(paymentId: string): Promise<Cus
 // deleted in the Supabase dashboard). It cannot be opened, so it is removed
 // from the list. Records that still have a login use the full delete instead.
 export async function deleteCustomerRecord(customerId: string): Promise<CustomerAccountResult> {
-    const actor = await requireFullAdmin();
+    const actor = await requireOwner();
     const supabase = await createClient();
 
     if (!customerId) return { success: false, error: "Invalid request." };

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { isFullAdmin } from "@/lib/auth/roles";
+import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import CustomerAccountControls from "@/components/dashboard/CustomerAccountControls";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
@@ -170,6 +170,7 @@ export default async function AdminCustomerDetailPage({
                             profileId={profileId}
                             fullName={customer.full_name}
                             suspended={customer.status === "inactive"}
+                            canDelete={isOwner(profile)}
                         />
                     </SectionCard>
                 )}

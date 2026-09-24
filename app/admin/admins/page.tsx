@@ -1,5 +1,5 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { isFullAdmin } from "@/lib/auth/roles";
+import { isOwner } from "@/lib/auth/roles";
 import { siteOrigin } from "@/lib/site-origin";
 import { formatDate } from "@/lib/customer/billing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -13,6 +13,7 @@ type AdminRow = {
     email: string | null;
     status: string;
     read_only: boolean | null;
+    is_owner?: boolean | null;
     created_at: string;
 };
 
@@ -20,16 +21,26 @@ type InviteRow = { id: string; token: string; email: string; role: string; expir
 
 export default async function AdminAdminsPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
-    const canManage = isFullAdmin(profile);
+    // Only owners invite or change admins.
+    const canManage = isOwner(profile);
     const origin = await siteOrigin();
 
     // Before supabase/admins-activity-2026-09.sql is run the read_only column
     // does not exist, so fall back to the plain list.
     let adminsResult = await supabase
         .from("profiles")
-        .select("id, full_name, email, status, read_only, created_at")
+        .select("id, full_name, email, status, read_only, is_owner, created_at")
         .eq("role", "admin")
         .order("created_at", { ascending: true });
+
+    // Before the owner update has been run there is no is_owner column.
+    if (adminsResult.error) {
+        adminsResult = (await supabase
+            .from("profiles")
+            .select("id, full_name, email, status, read_only, created_at")
+            .eq("role", "admin")
+            .order("created_at", { ascending: true })) as unknown as typeof adminsResult;
+    }
 
     let switchedOn = true;
     if (adminsResult.error) {
@@ -64,6 +75,12 @@ export default async function AdminAdminsPage() {
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
+                {switchedOn && !canManage && (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm text-white/65">
+                        Only an owner can invite, change or remove admins. Ask an owner if you need something changed here.
+                    </div>
+                )}
+
                 {!switchedOn && (
                     <div className="rounded-2xl border border-amber-300/30 bg-amber-300/10 p-4 text-sm text-amber-100">
                         Admin invites are not switched on yet. Run <code>supabase/admins-activity-2026-09.sql</code> in the
@@ -97,7 +114,7 @@ export default async function AdminAdminsPage() {
                                                     : "border-amber-300/30 bg-amber-300/10 text-amber-200"
                                             }`}
                                         >
-                                            {admin.read_only ? "Supervisor, view only" : "Full admin"}
+                                            {admin.read_only ? "Supervisor, view only" : admin.is_owner ? "Owner" : "Full admin"}
                                         </span>
                                     </p>
                                     <p className="truncate text-sm text-white/55">{admin.email}</p>
@@ -110,6 +127,7 @@ export default async function AdminAdminsPage() {
                                         isViewOnly={Boolean(admin.read_only)}
                                         isRemoved={false}
                                         isSelf={admin.id === profile.id}
+                                        isOwnerTarget={Boolean(admin.is_owner)}
                                     />
                                 )}
                             </div>

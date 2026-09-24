@@ -6,6 +6,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import OrphanCustomerActions from "@/components/dashboard/OrphanCustomerActions";
+import { isOwner } from "@/lib/auth/roles";
 
 type CustomerRow = {
     id: string;
@@ -205,7 +206,11 @@ export default async function AdminCustomersPage({
                                             <p className="text-xs text-amber-200/80">
                                                 No login is attached to this record, so it cannot be opened. You can remove it.
                                             </p>
-                                            <OrphanCustomerActions customerId={customer.id} fullName={customer.full_name} />
+                                            {isOwner(profile) ? (
+                                                <OrphanCustomerActions customerId={customer.id} fullName={customer.full_name} />
+                                            ) : (
+                                                <span className="text-xs text-white/40">An owner can remove it.</span>
+                                            )}
                                         </div>
                                     </div>
                                 ))
