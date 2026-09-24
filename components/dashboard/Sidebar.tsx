@@ -21,6 +21,7 @@ import {
     type LucideIcon,
 } from "lucide-react";
 import { UserRole } from "@/lib/dashboard-types";
+import { useViewer } from "@/components/dashboard/ViewerContext";
 
 const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIcon }[]> = {
     admin: [
@@ -62,6 +63,8 @@ function SidebarNav({
     onNavigate?: () => void;
 }) {
     const items = navConfig[role];
+    const { isOwner } = useViewer();
+    const panelName = role === "admin" && isOwner ? "owner" : role;
 
     return (
         <>
@@ -73,7 +76,7 @@ function SidebarNav({
                     <h2 className="text-lg font-bold tracking-tight">
                         Jigzack<span className="text-amber-300">.</span>
                     </h2>
-                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">{role} panel</p>
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">{panelName} panel</p>
                 </div>
             </Link>
 

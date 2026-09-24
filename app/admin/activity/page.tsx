@@ -34,11 +34,21 @@ export default async function AdminActivityPage({
     const who = /^[0-9a-f-]{36}$/i.test(params.who ?? "") ? (params.who as string) : "";
     const q = (params.q ?? "").trim().slice(0, 80).replace(/[%,()]/g, " ");
 
-    const { data: adminData } = await supabase
+    const viewerIsOwner = isOwner(profile);
+
+    // Other admins do not see owners: not in the list of who to filter by, and
+    // not the entries an owner wrote.
+    const { data: ownerRows } = viewerIsOwner
+        ? { data: [] as { id: string }[] }
+        : await supabase.from("profiles").select("id").eq("is_owner", true);
+    const ownerIds = (ownerRows ?? []).map((o) => o.id);
+
+    const { data: adminRows } = await supabase
         .from("profiles")
         .select("id, full_name")
         .eq("role", "admin")
         .order("full_name", { ascending: true });
+    const adminData = (adminRows ?? []).filter((a) => !ownerIds.includes(a.id));
 
     let query = supabase
         .from("activity_log")
@@ -46,6 +56,7 @@ export default async function AdminActivityPage({
         .order("created_at", { ascending: false })
         .limit(200);
 
+    if (ownerIds.length > 0) query = query.not("actor_id", "in", `(${ownerIds.join(",")})`);
     if (who) query = query.eq("actor_id", who);
     if (q) query = query.ilike("summary", `%${q}%`);
 
@@ -77,7 +88,7 @@ export default async function AdminActivityPage({
                             className="h-11 rounded-xl border border-white/10 bg-[#141518] px-3 text-sm text-white outline-none"
                         >
                             <option value="">All admins</option>
-                            {(adminData ?? []).map((a) => (
+                            {adminData.map((a) => (
                                 <option key={a.id} value={a.id}>
                                     {a.full_name}
                                 </option>

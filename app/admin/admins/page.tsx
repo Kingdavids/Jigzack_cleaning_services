@@ -63,8 +63,10 @@ export default async function AdminAdminsPage() {
 
     const invites = (inviteData ?? []) as InviteRow[];
 
-    const active = admins.filter((a) => a.status === "approved");
-    const removed = admins.filter((a) => a.status !== "approved");
+    // Other admins do not see owners in this list.
+    const visible = canManage ? admins : admins.filter((a) => !a.is_owner);
+    const active = visible.filter((a) => a.status === "approved");
+    const removed = visible.filter((a) => a.status !== "approved");
 
     return (
         <DashboardShell
@@ -135,7 +137,7 @@ export default async function AdminAdminsPage() {
                     </div>
                 </SectionCard>
 
-                {invites.length > 0 && (
+                {canManage && invites.length > 0 && (
                     <SectionCard title="Waiting to join" description="Invites that have not been used yet.">
                         <div className="space-y-3">
                             {invites.map((invite) => (

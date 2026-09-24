@@ -6,6 +6,8 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel";
+import OwnerOverview from "@/components/dashboard/OwnerOverview";
+import { isOwner } from "@/lib/auth/roles";
 import {
     AlertTriangle,
     Briefcase,
@@ -163,15 +165,23 @@ export default async function AdminPage() {
     const outstanding = unpaid.reduce((sum, row) => sum + invoiceTotal(row), 0);
     const collected = (paidRes.data ?? []).reduce((sum, row) => sum + invoiceTotal(row), 0);
 
+    const owner = isOwner(profile);
+
     return (
         <DashboardShell
             role="admin"
             profileId={profile.id}
-            title="Admin Dashboard"
-            subtitle="What needs attention today. Each card opens the page with the full detail."
+            title={owner ? "Owner Dashboard" : "Admin Dashboard"}
+            subtitle={
+                owner
+                    ? "How the business is doing, what needs you, and what your admins have been doing."
+                    : "What needs attention today. Each card opens the page with the full detail."
+            }
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
+                {owner && <OwnerOverview supabase={supabase} collected={collected} outstanding={outstanding} />}
+
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard
                         icon={UserCheck}

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { isViewOnlyAdmin } from "@/lib/auth/roles";
+import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
+import { ViewerProvider } from "@/components/dashboard/ViewerContext";
 import { PRIVATE_PAGE } from "@/lib/seo";
 
 // Signed-in areas are never indexed.
@@ -14,13 +15,13 @@ export default async function Layout({ children }: { children: ReactNode }) {
   const profile = await getUserProfile();
 
   return (
-    <>
+    <ViewerProvider isOwner={isOwner(profile)}>
       {isViewOnlyAdmin(profile) && (
         <div role="status" className="bg-sky-500/15 px-4 py-2 text-center text-sm font-semibold text-sky-200">
           You have view-only access. You can look at everything, but changes are turned off for your account.
         </div>
       )}
       {children}
-    </>
+    </ViewerProvider>
   );
 }
