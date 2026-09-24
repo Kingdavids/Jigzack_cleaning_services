@@ -500,7 +500,8 @@ export async function setUserApproval(
     userId: string,
     status: "approved" | "declined",
     unitId: string | null,
-    reason?: string | null
+    reason?: string | null,
+    waiveFee = false
 ): Promise<ApprovalResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -544,6 +545,7 @@ export async function setUserApproval(
 
     const notes: string[] = [];
     let isTenant = false;
+    let feeWaived = false;
 
     if (status === "approved" && target.role === "customer") {
         if (unitId) {
@@ -551,6 +553,28 @@ export async function setUserApproval(
             isTenant = true;
             notes.push("Linked to their estate unit.");
         } else {
+            // An existing customer who was already with Jigzack before the app
+            // does not pay the registration fee. Marking it paid opens their
+            // dashboard on first login.
+            if (waiveFee) {
+                const { error: waiveError } = await supabase
+                    .from("customers")
+                    .update({
+                        registration_fee_paid: true,
+                        registration_fee_paid_at: new Date().toISOString(),
+                        registration_fee_reference: "Existing customer, fee waived",
+                    })
+                    .eq("profile_id", userId);
+
+                if (waiveError) {
+                    console.error("setUserApproval waive error:", waiveError.message);
+                    notes.push("Could not waive the registration fee. Confirm it from their customer page.");
+                } else {
+                    feeWaived = true;
+                    notes.push("Registration fee waived (existing customer).");
+                }
+            }
+
             const { data: customer } = await supabase
                 .from("customers")
                 .select(BILLABLE_SELECT)
@@ -590,13 +614,14 @@ export async function setUserApproval(
             status,
             origin: await siteOrigin(),
             isTenant,
+            feeWaived,
             reason: cleanReason,
         });
         const emailed = await sendEmail({ to: [target.email], subject, html });
         notes.push(emailed ? `Emailed ${target.email}.` : "Approval email not sent (email isn't configured).");
     }
 
-    await logActivity(supabase, actor, status === "approved" ? "account_approved" : "account_declined", `${status === "approved" ? "Approved" : "Declined"} ${target.full_name ?? target.email ?? "an account"} (${target.role})`, { type: "profile", id: userId });
+    await logActivity(supabase, actor, status === "approved" ? "account_approved" : "account_declined", `${status === "approved" ? "Approved" : "Declined"} ${target.full_name ?? target.email ?? "an account"} (${target.role})${feeWaived ? ", registration fee waived" : ""}`,{ type: "profile", id: userId });
     revalidatePath("/admin/approvals");
     revalidatePath("/admin/customers");
     revalidatePath("/admin/tasks");

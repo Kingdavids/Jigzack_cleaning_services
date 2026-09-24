@@ -59,6 +59,8 @@ export default function ApprovalsList({
     const [loadingId, setLoadingId] = useState<string | null>(null);
     const [selectedUnitByUser, setSelectedUnitByUser] = useState<Record<string, string>>({});
 
+    const [existingIds, setExistingIds] = useState<Record<string, boolean>>({});
+
     const [decliningId, setDecliningId] = useState<string | null>(null);
     const [reasonByUser, setReasonByUser] = useState<Record<string, string>>({});
 
@@ -69,7 +71,8 @@ export default function ApprovalsList({
             id,
             status,
             selectedUnitByUser[id] || null,
-            status === "declined" ? reasonByUser[id] || null : null
+            status === "declined" ? reasonByUser[id] || null : null,
+            status === "approved" && Boolean(existingIds[id]) && !selectedUnitByUser[id]
         );
 
         setLoadingId(null);
@@ -189,6 +192,24 @@ export default function ApprovalsList({
                                     ))}
                                 </select>
                             </div>
+                        )}
+
+                        {user.role === "customer" && !selectedUnitByUser[user.id] && (
+                            <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.04] p-4">
+                                <input
+                                    type="checkbox"
+                                    checked={Boolean(existingIds[user.id])}
+                                    onChange={(e) => setExistingIds((prev) => ({ ...prev, [user.id]: e.target.checked }))}
+                                    className="mt-1 h-4 w-4 accent-emerald-400"
+                                />
+                                <span className="text-sm">
+                                    <span className="font-semibold text-emerald-300">Existing customer, no registration fee</span>
+                                    <span className="block text-white/60">
+                                        Tick this for someone who was already with Jigzack before the app. Their dashboard opens
+                                        without the fee, and the approval email says so.
+                                    </span>
+                                </span>
+                            </label>
                         )}
 
                         {user.role === "customer" && (

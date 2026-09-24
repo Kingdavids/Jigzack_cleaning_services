@@ -8,6 +8,7 @@ export function approvalEmail({
                                   status,
                                   origin,
                                   isTenant,
+                                  feeWaived = false,
                                   reason,
                               }: {
     name: string | null;
@@ -15,6 +16,7 @@ export function approvalEmail({
     status: "approved" | "declined";
     origin: string;
     isTenant: boolean;
+    feeWaived?: boolean;
     reason?: string | null;
 }) {
     const greeting = `Hi ${escapeHtml(name?.trim() || "there")},`;
@@ -39,7 +41,9 @@ export function approvalEmail({
             ? "Log in to see your assigned tasks."
             : isTenant
                 ? "Log in to raise complaints and view your estate's shared utility bill."
-                : `Log in to see your pickup schedule, invoices and messages. On your first login you'll be asked to pay a one-time registration fee of ₦${fee.toLocaleString()} to activate your dashboard.`;
+                : feeWaived
+                    ? "As an existing customer there is no registration fee. Log in to see your pickup schedule, invoices and messages."
+                    : `Log in to see your pickup schedule, invoices and messages. On your first login you'll be asked to pay a one-time registration fee of ₦${fee.toLocaleString()} to activate your dashboard.`;
 
     return {
         subject: "Your Jigzack Cleaning Services account is approved",
