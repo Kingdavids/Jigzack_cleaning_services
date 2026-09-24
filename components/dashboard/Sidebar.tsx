@@ -14,6 +14,7 @@ import {
     Building2,
     UserPlus,
     CalendarDays,
+    Receipt,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Uploads", href: "/admin/uploads", icon: Camera },
         { label: "Messages", href: "/admin/messages", icon: MessageSquare },
         { label: "Payments", href: "/admin/payments", icon: CreditCard },
+        { label: "Expenses", href: "/admin/expenses", icon: Receipt },
     ],
     customer: [
         { label: "Dashboard", href: "/customer", icon: LayoutDashboard },
@@ -41,6 +43,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Dashboard", href: "/employee", icon: LayoutDashboard },
         { label: "Assigned Tasks", href: "/employee/tasks", icon: ClipboardList },
         { label: "Uploads", href: "/employee/uploads", icon: Camera },
+        { label: "Expenses", href: "/employee/expenses", icon: Receipt },
         { label: "Messages", href: "/employee/messages", icon: MessageSquare },
     ],
 };

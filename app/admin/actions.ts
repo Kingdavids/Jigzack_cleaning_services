@@ -456,10 +456,38 @@ export async function revokeEmployeeInvite(inviteId: string) {
 
 export type ApprovalResult = { success: boolean; error?: string; notes?: string[] };
 
+// Someone who was declined and then got in touch: put them back in the
+// pending list, where the normal approve and decline controls apply. Their
+// earlier reason is kept so the history isn't lost.
+export async function reopenApplication(userId: string): Promise<ApprovalResult> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!userId) return { success: false, error: "Invalid request." };
+
+    const { data: target } = await supabase.from("profiles").select("id, status").eq("id", userId).single();
+
+    if (!target) return { success: false, error: "Could not find that user." };
+    if (target.status !== "declined") return { success: true, notes: ["This application isn't declined."] };
+
+    const { error } = await supabase.from("profiles").update({ status: "pending" }).eq("id", userId);
+
+    if (error) {
+        console.error("reopenApplication error:", error.message);
+        return { success: false, error: "Could not reopen this application. Please try again." };
+    }
+
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin");
+
+    return { success: true, notes: ["Moved back to pending. Review it under Signup approvals."] };
+}
+
 export async function setUserApproval(
     userId: string,
     status: "approved" | "declined",
-    unitId: string | null
+    unitId: string | null,
+    reason?: string | null
 ): Promise<ApprovalResult> {
     await requireAdmin();
     const supabase = await createClient();
@@ -479,7 +507,22 @@ export async function setUserApproval(
     // A double click must not approve twice or email the person twice.
     if (target.status === status) return { success: true, notes: [`Already ${status}.`] };
 
-    const { error } = await supabase.from("profiles").update({ status }).eq("id", userId);
+    const cleanReason = status === "declined" ? (reason ?? "").trim().slice(0, 500) || null : null;
+
+    let { error } = await supabase
+        .from("profiles")
+        .update({
+            status,
+            decline_reason: cleanReason,
+            declined_at: status === "declined" ? new Date().toISOString() : null,
+        })
+        .eq("id", userId);
+
+    // The reason columns come from supabase/declined-and-expenses-2026-09.sql.
+    // Until that has been run, still record the decision itself.
+    if (error && /decline_reason|declined_at/.test(error.message)) {
+        ({ error } = await supabase.from("profiles").update({ status }).eq("id", userId));
+    }
 
     if (error) {
         console.error("setUserApproval update error:", error.message);
@@ -534,6 +577,7 @@ export async function setUserApproval(
             status,
             origin: await siteOrigin(),
             isTenant,
+            reason: cleanReason,
         });
         const emailed = await sendEmail({ to: [target.email], subject, html });
         notes.push(emailed ? `Emailed ${target.email}.` : "Approval email not sent (email isn't configured).");
@@ -839,4 +883,42 @@ export async function deleteTask(taskId: string) {
     revalidatePath("/admin/tasks");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer/schedule");
+}
+
+// ---------------------------------------------------------------------------
+// Staff expenses
+// ---------------------------------------------------------------------------
+
+export async function reviewExpense(
+    expenseId: string,
+    status: "approved" | "reimbursed" | "rejected",
+    adminNote: string
+): Promise<{ success: boolean; error?: string }> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!expenseId || !["approved", "reimbursed", "rejected"].includes(status)) {
+        return { success: false, error: "Invalid request." };
+    }
+
+    const { error } = await supabase
+        .from("expenses")
+        .update({
+            status,
+            admin_note: adminNote.trim().slice(0, 500) || null,
+            reviewed_by: admin.id,
+            reviewed_at: new Date().toISOString(),
+        })
+        .eq("id", expenseId);
+
+    if (error) {
+        console.error("reviewExpense error:", error.message);
+        return { success: false, error: "Could not update this expense. Please try again." };
+    }
+
+    revalidatePath("/admin/expenses");
+    revalidatePath("/admin");
+    revalidatePath("/employee/expenses");
+
+    return { success: true };
 }

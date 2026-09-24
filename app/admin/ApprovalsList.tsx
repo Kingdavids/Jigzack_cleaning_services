@@ -59,10 +59,18 @@ export default function ApprovalsList({
     const [loadingId, setLoadingId] = useState<string | null>(null);
     const [selectedUnitByUser, setSelectedUnitByUser] = useState<Record<string, string>>({});
 
+    const [decliningId, setDecliningId] = useState<string | null>(null);
+    const [reasonByUser, setReasonByUser] = useState<Record<string, string>>({});
+
     const updateStatus = async (id: string, status: "approved" | "declined") => {
         setLoadingId(id);
 
-        const result = await setUserApproval(id, status, selectedUnitByUser[id] || null);
+        const result = await setUserApproval(
+            id,
+            status,
+            selectedUnitByUser[id] || null,
+            status === "declined" ? reasonByUser[id] || null : null
+        );
 
         setLoadingId(null);
 
@@ -70,6 +78,8 @@ export default function ApprovalsList({
             toast.error(result.error ?? "Something went wrong. Please try again.");
             return;
         }
+
+        setDecliningId(null);
 
         toast.success(status === "approved" ? "Account approved" : "Account declined", {
             description: result.notes?.join(" "),
@@ -117,13 +127,47 @@ export default function ApprovalsList({
 
                                 <button
                                     disabled={loadingId === user.id}
-                                    onClick={() => updateStatus(user.id, "declined")}
+                                    onClick={() => setDecliningId(decliningId === user.id ? null : user.id)}
                                     className="rounded-2xl border border-red-400/30 bg-red-500/10 px-5 py-2 font-bold text-red-300 hover:bg-red-500/20 disabled:opacity-50"
                                 >
                                     Decline
                                 </button>
                             </div>
                         </div>
+
+                        {decliningId === user.id && (
+                            <div className="mt-4 rounded-2xl border border-red-400/20 bg-red-500/[0.05] p-4">
+                                <label
+                                    htmlFor={`reason-${user.id}`}
+                                    className="mb-2 block text-xs font-semibold uppercase tracking-[0.15em] text-red-300"
+                                >
+                                    Reason (optional, sent to them in the email)
+                                </label>
+                                <textarea
+                                    id={`reason-${user.id}`}
+                                    value={reasonByUser[user.id] ?? ""}
+                                    maxLength={500}
+                                    onChange={(e) => setReasonByUser((prev) => ({ ...prev, [user.id]: e.target.value }))}
+                                    placeholder="For example: we don't service that area yet."
+                                    className="min-h-[80px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-red-300/40"
+                                />
+                                <div className="mt-3 flex gap-3">
+                                    <button
+                                        disabled={loadingId === user.id}
+                                        onClick={() => updateStatus(user.id, "declined")}
+                                        className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50"
+                                    >
+                                        Confirm decline
+                                    </button>
+                                    <button
+                                        onClick={() => setDecliningId(null)}
+                                        className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/10"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {user.role === "customer" && units.length > 0 && (
                             <div className="mt-4 rounded-2xl border border-sky-400/20 bg-sky-400/[0.04] p-4">

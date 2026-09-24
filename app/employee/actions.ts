@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
+import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 
 export async function startTask(formData: FormData) {
     const profile = await getUserProfile();
@@ -209,4 +211,137 @@ export async function deleteTaskPhoto(uploadId: string) {
     revalidatePath("/admin/uploads");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
+}
+// ---------------------------------------------------------------------------
+// Expenses: staff log what they spent; only the admin (and the person who
+// logged it) can see the entry. Receipts go in a private bucket.
+// ---------------------------------------------------------------------------
+
+export type ExpenseActionState = { success: boolean; error?: string } | null;
+
+const lagosToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+
+export async function submitExpense(formData: FormData): Promise<ExpenseActionState> {
+    const profile = await getUserProfile();
+
+    if (profile.role !== "employee" || profile.status !== "approved") {
+        return { success: false, error: "Only approved staff can log expenses." };
+    }
+
+    const amount = Math.round(Number(String(formData.get("amount") ?? "").replace(/,/g, "")) * 100) / 100;
+    const category = String(formData.get("category") ?? "");
+    const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+    const date = String(formData.get("date") ?? "");
+    const taskId = String(formData.get("taskId") ?? "");
+    const receipt = formData.get("receipt");
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 5_000_000) {
+        return { success: false, error: "Enter an amount between ₦1 and ₦5,000,000." };
+    }
+
+    if (!EXPENSE_CATEGORIES.some((c) => c.value === category)) {
+        return { success: false, error: "Choose a category." };
+    }
+
+    if (note.length < 3) {
+        return { success: false, error: "Add a short note saying what the money was for." };
+    }
+
+    const today = lagosToday();
+    const earliest = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today || date < earliest) {
+        return { success: false, error: "Choose a date within the last 60 days that is not in the future." };
+    }
+
+    const supabase = await createClient();
+
+    // Only attach a task that is really assigned to this person.
+    let linkedTask: string | null = null;
+    if (taskId) {
+        const { data: task } = await supabase
+            .from("tasks")
+            .select("id")
+            .eq("id", taskId)
+            .eq("employee_id", profile.id)
+            .maybeSingle();
+        linkedTask = task?.id ?? null;
+    }
+
+    let receiptPath: string | null = null;
+
+    if (receipt instanceof File && receipt.size > 0) {
+        const extension = RECEIPT_EXTENSIONS[receipt.type];
+
+        if (!extension || receipt.size > MAX_RECEIPT_BYTES) {
+            return { success: false, error: "The receipt must be a photo or PDF under 10MB." };
+        }
+
+        receiptPath = `${profile.id}/${randomUUID()}.${extension}`;
+
+        const { error: uploadError } = await supabase.storage.from(RECEIPT_BUCKET).upload(receiptPath, receipt, { upsert: false });
+
+        if (uploadError) {
+            console.error("Receipt upload failed:", uploadError.message);
+            return { success: false, error: "Could not upload the receipt. Please try again." };
+        }
+    }
+
+    const { error } = await supabase.from("expenses").insert({
+        employee_id: profile.id,
+        task_id: linkedTask,
+        amount,
+        category,
+        note,
+        expense_date: date,
+        receipt_path: receiptPath,
+    });
+
+    if (error) {
+        console.error("submitExpense insert error:", error.message);
+        if (receiptPath) await supabase.storage.from(RECEIPT_BUCKET).remove([receiptPath]);
+
+        return {
+            success: false,
+            error: /relation|does not exist/i.test(error.message)
+                ? "Expenses aren't switched on yet. Please tell the admin."
+                : "Could not save this expense. Please try again.",
+        };
+    }
+
+    revalidatePath("/employee/expenses");
+    revalidatePath("/admin/expenses");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
+
+export async function deleteExpense(expenseId: string): Promise<ExpenseActionState> {
+    const profile = await getUserProfile();
+    const supabase = await createClient();
+
+    const { data: expense } = await supabase
+        .from("expenses")
+        .select("id, status, receipt_path")
+        .eq("id", expenseId)
+        .eq("employee_id", profile.id)
+        .maybeSingle();
+
+    if (!expense) return { success: false, error: "Could not find that expense." };
+    if (expense.status !== "submitted") return { success: false, error: "The admin has already reviewed this one." };
+
+    const { error } = await supabase.from("expenses").delete().eq("id", expenseId).eq("employee_id", profile.id);
+
+    if (error) {
+        console.error("deleteExpense error:", error.message);
+        return { success: false, error: "Could not remove this expense." };
+    }
+
+    if (expense.receipt_path) await supabase.storage.from(RECEIPT_BUCKET).remove([expense.receipt_path]);
+
+    revalidatePath("/employee/expenses");
+    revalidatePath("/admin/expenses");
+    revalidatePath("/admin");
+
+    return { success: true };
 }

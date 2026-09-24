@@ -8,12 +8,14 @@ export function approvalEmail({
                                   status,
                                   origin,
                                   isTenant,
+                                  reason,
                               }: {
     name: string | null;
     role: string;
     status: "approved" | "declined";
     origin: string;
     isTenant: boolean;
+    reason?: string | null;
 }) {
     const greeting = `Hi ${escapeHtml(name?.trim() || "there")},`;
     const loginUrl = `${origin}/auth`;
@@ -24,6 +26,7 @@ export function approvalEmail({
             html: `
                 <p>${greeting}</p>
                 <p>Thank you for applying. Unfortunately we couldn't approve your account at this time.</p>
+                ${reason ? `<p>Reason: ${escapeHtml(reason)}</p>` : ""}
                 <p>If you think this is a mistake, or you'd like to send us more information, please get in touch on ${SUPPORT_PHONES}.</p>
                 <p>Jigzack Cleaning Services</p>
             `,

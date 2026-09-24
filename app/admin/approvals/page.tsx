@@ -2,6 +2,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import ApprovalsList from "../ApprovalsList";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
+import DeclinedList, { type DeclinedUser } from "@/components/dashboard/DeclinedList";
 
 export default async function AdminApprovalsPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -50,6 +51,25 @@ export default async function AdminApprovalsPage() {
         estateName: u.estate?.full_name ?? "Estate",
     }));
 
+    // Declined applications, newest first. The reason columns arrive with
+    // supabase/declined-and-expenses-2026-09.sql; until then fall back to the
+    // basics so this page never breaks.
+    let declinedResult = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role, decline_reason, declined_at")
+        .eq("status", "declined")
+        .order("created_at", { ascending: false });
+
+    if (declinedResult.error) {
+        declinedResult = (await supabase
+            .from("profiles")
+            .select("id, full_name, email, role")
+            .eq("status", "declined")
+            .order("created_at", { ascending: false })) as typeof declinedResult;
+    }
+
+    const declined = (declinedResult.data ?? []) as unknown as DeclinedUser[];
+
     return (
         <DashboardShell
             role="admin"
@@ -66,6 +86,15 @@ export default async function AdminApprovalsPage() {
                     units={units}
                 />
             </SectionCard>
+
+            <div className="mt-6">
+                <SectionCard
+                    title="Declined applications"
+                    description="If someone contacts you after being declined, move them back to pending and review them again."
+                >
+                    <DeclinedList users={declined} />
+                </SectionCard>
+            </div>
         </DashboardShell>
     );
 }

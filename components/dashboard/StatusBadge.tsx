@@ -8,6 +8,10 @@ export default function StatusBadge({ status }: { status: string }) {
         failed: "border-red-400/20 bg-red-400/10 text-red-300",
         active: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         inactive: "border-zinc-400/20 bg-zinc-400/10 text-zinc-300",
+        submitted: "border-yellow-400/20 bg-yellow-400/10 text-yellow-300",
+        approved: "border-sky-400/20 bg-sky-400/10 text-sky-300",
+        reimbursed: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
+        rejected: "border-red-400/20 bg-red-400/10 text-red-300",
     };
 
     return (

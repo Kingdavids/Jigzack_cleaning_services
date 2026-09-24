@@ -11,6 +11,7 @@ import {
     Briefcase,
     CalendarCheck,
     MessageSquare,
+    Receipt,
     TrendingUp,
     UserCheck,
     Users,
@@ -68,6 +69,7 @@ export default async function AdminPage() {
         paidRes,
         photosRes,
         recentPhotosRes,
+        expensesRes,
     ] = await Promise.all([
         supabase
             .from("profiles")
@@ -115,6 +117,8 @@ export default async function AdminPage() {
             .select("id, image_url, photo_type, task_title")
             .order("created_at", { ascending: false })
             .limit(6),
+        // Errors (the table not existing yet) simply leave this at zero.
+        supabase.from("expenses").select("amount").eq("status", "submitted"),
     ]);
 
     const pending = (pendingRes.data ?? []) as PendingRow[];
@@ -128,6 +132,8 @@ export default async function AdminPage() {
     const upcoming = (upcomingRes.data ?? []) as unknown as TaskRow[];
     const unpaid = (unpaidRes.data ?? []) as unknown as UnpaidRow[];
     const recentPhotos = (recentPhotosRes.data ?? []) as PhotoRow[];
+    const pendingExpenses = (expensesRes.data ?? []) as { amount: number }[];
+    const pendingExpenseTotal = pendingExpenses.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
 
     const estates = customers.filter((c) => c.is_estate).length;
     const withVacancies = customers.filter((c) => Object.values(c.vacancies ?? {}).some((n) => Number(n) > 0)).length;
@@ -216,6 +222,21 @@ export default async function AdminPage() {
                         helper={`${(paidRes.data ?? []).length} payment${(paidRes.data ?? []).length === 1 ? "" : "s"} received`}
                         href="/admin/payments"
                     />
+
+                    <div className="sm:col-span-2 xl:col-span-4">
+                        <StatCard
+                            icon={Receipt}
+                            label="Staff expenses to review"
+                            value={naira(pendingExpenseTotal)}
+                            helper={
+                                pendingExpenses.length > 0
+                                    ? `${pendingExpenses.length} entr${pendingExpenses.length === 1 ? "y" : "ies"} waiting for you`
+                                    : "Nothing waiting"
+                            }
+                            href="/admin/expenses"
+                            tone={pendingExpenses.length > 0 ? "alert" : "default"}
+                        />
+                    </div>
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-2">
