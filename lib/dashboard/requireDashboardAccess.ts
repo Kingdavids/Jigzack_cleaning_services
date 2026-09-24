@@ -33,6 +33,11 @@ export async function requireDashboardAccess(role: UserRole) {
             .eq("profile_id", profile.id)
             .single();
 
+        // A suspended account (set by an admin) cannot open the dashboard.
+        if (customer && customer.status === "inactive") {
+            redirect("/auth/suspended");
+        }
+
         // Tenants (linked to a unit) don't pay their own registration fee.
         // The estate they belong to is the paying account.
         if (customer && !customer.unit_id && !customer.registration_fee_paid) {

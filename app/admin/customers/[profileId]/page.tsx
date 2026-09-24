@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
+import { isFullAdmin } from "@/lib/auth/roles";
+import CustomerAccountControls from "@/components/dashboard/CustomerAccountControls";
 import {
     generateCustomerBilling,
     saveVacancies,
@@ -119,6 +121,16 @@ export default async function AdminCustomerDetailPage({
                         ]}
                     />
                 </SectionCard>
+
+                {isFullAdmin(profile) && (
+                    <SectionCard title="Suspend or delete" description="Pause this customer, or remove them completely.">
+                        <CustomerAccountControls
+                            profileId={profileId}
+                            fullName={customer.full_name}
+                            suspended={customer.status === "inactive"}
+                        />
+                    </SectionCard>
+                )}
 
                 <SectionCard title="Account holder" description="Contact details from their setup form.">
                     <DetailList

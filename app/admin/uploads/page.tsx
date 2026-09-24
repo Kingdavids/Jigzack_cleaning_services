@@ -2,6 +2,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import UploadsGallery from "@/components/dashboard/UploadsGallery";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -44,6 +45,7 @@ export default async function AdminUploadsPage() {
                     </div>
                 ) : (
                     <UploadsGallery
+                        canDelete={isFullAdmin(profile)}
                         uploads={uploads.map((upload) => ({
                             id: upload.id,
                             task_id: upload.task_id,

@@ -1,7 +1,10 @@
 'use client';
 
 import { useMemo, useState } from "react";
-import { Maximize2, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { deleteTaskPhoto } from "@/app/employee/actions";
 import PhotoLightbox from "@/components/dashboard/PhotoLightbox";
 
 export type GalleryUpload = {
@@ -45,7 +48,25 @@ function formatDay(ms: number) {
 
 // Uploads grouped by task, with the before photos and the after photos in
 // their own labelled columns. Filter by type, search, and change the order.
-export default function UploadsGallery({ uploads }: { uploads: GalleryUpload[] }) {
+export default function UploadsGallery({ uploads, canDelete = false }: { uploads: GalleryUpload[]; canDelete?: boolean }) {
+    const router = useRouter();
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    const removePhoto = async (id: string) => {
+        if (!window.confirm("Delete this photo for good?")) return;
+
+        setDeletingId(id);
+        try {
+            await deleteTaskPhoto(id);
+            toast.success("Photo deleted");
+            router.refresh();
+        } catch {
+            toast.error("Could not delete this photo.");
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
     const [filter, setFilter] = useState<Filter>("all");
     const [order, setOrder] = useState<Order>("newest");
     const [query, setQuery] = useState("");
@@ -117,24 +138,33 @@ export default function UploadsGallery({ uploads }: { uploads: GalleryUpload[] }
                 ) : (
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                         {list.map((photo) => (
-                            <button
-                                key={photo.id}
-                                type="button"
-                                onClick={() => setOpenIndex(flat.findIndex((p) => p.id === photo.id))}
-                                aria-label={`View ${style.label.toLowerCase()} photo of ${group.title}`}
-                                className="group relative block aspect-square overflow-hidden rounded-lg border border-white/10"
-                            >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                    src={photo.image_url as string}
-                                    alt={`${style.label} photo of ${group.title}`}
-                                    loading="lazy"
-                                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                                />
-                                <span className="absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/65 text-white opacity-0 transition group-hover:opacity-100">
-                                    <Maximize2 className="h-3 w-3" />
-                                </span>
-                            </button>
+                            <div key={photo.id} className="group relative aspect-square overflow-hidden rounded-lg border border-white/10">
+                                <button
+                                    type="button"
+                                    onClick={() => setOpenIndex(flat.findIndex((p) => p.id === photo.id))}
+                                    aria-label={`View ${style.label.toLowerCase()} photo of ${group.title}`}
+                                    className="absolute inset-0 block h-full w-full"
+                                >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={photo.image_url as string}
+                                        alt={`${style.label} photo of ${group.title}`}
+                                        loading="lazy"
+                                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                                    />
+                                </button>
+                                {canDelete && (
+                                    <button
+                                        type="button"
+                                        disabled={deletingId === photo.id}
+                                        onClick={() => removePhoto(photo.id)}
+                                        aria-label="Delete photo"
+                                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-red-600/90 text-white opacity-100 transition hover:bg-red-500 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                )}
+                            </div>
                         ))}
                     </div>
                 )}

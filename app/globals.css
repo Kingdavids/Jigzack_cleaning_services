@@ -510,3 +510,19 @@ input[type="password"]::-webkit-contacts-auto-fill-button {
         stroke-dashoffset: 0;
     }
 }
+
+/* Dropdown lists: the browser draws the open list itself, and with a light
+   system theme it showed white text on a white background. Tell it the page
+   is dark and give the options a solid dark background. */
+select,
+input[type="date"],
+input[type="month"],
+input[type="time"] {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #141518;
+  color: #ffffff;
+}
