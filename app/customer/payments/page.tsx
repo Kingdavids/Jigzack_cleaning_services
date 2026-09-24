@@ -8,11 +8,25 @@ export default async function CustomerPaymentsPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
     const { billingProfileId, isTenant } = await resolveBilling(supabase, profile.id, customer);
 
-    const { data: invoicesData } = await supabase
+    // transfer_reported_at arrives with supabase/manual-payments-2026-09.sql;
+    // until then load the invoices without it so the page never breaks.
+    const baseColumns = "id, amount, arrears, description, invoice_month, status, paid_at, payment_method, payment_reference, created_at";
+
+    let invoicesResult = await supabase
         .from("payments")
-        .select("id, amount, arrears, description, invoice_month, status, paid_at, payment_method, payment_reference, created_at")
+        .select(`${baseColumns}, transfer_reported_at`)
         .eq("customer_id", billingProfileId)
         .order("created_at", { ascending: false });
+
+    if (invoicesResult.error) {
+        invoicesResult = (await supabase
+            .from("payments")
+            .select(baseColumns)
+            .eq("customer_id", billingProfileId)
+            .order("created_at", { ascending: false })) as unknown as typeof invoicesResult;
+    }
+
+    const invoicesData = invoicesResult.data;
 
     const invoices = (invoicesData ?? []) as InvoiceRow[];
 
@@ -62,7 +76,7 @@ export default async function CustomerPaymentsPage() {
                     ))}
                 </div>
 
-                <InvoiceList invoices={invoices} />
+                <InvoiceList invoices={invoices} canReport={!isTenant} />
             </SectionCard>
         </DashboardShell>
     );

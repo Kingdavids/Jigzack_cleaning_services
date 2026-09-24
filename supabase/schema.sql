@@ -1104,3 +1104,35 @@ create policy "payment_receipts_delete_own" on storage.objects
         and (storage.foldername(name)) [1] = auth.uid()::text
     );
 
+
+
+-- ---------------------------------------------------------------
+-- 3. Invoices: "I paid by transfer" with an optional receipt
+-- ---------------------------------------------------------------
+alter table public.payments
+    add column if not exists transfer_reported_at timestamptz,
+    add column if not exists transfer_note text,
+    add column if not exists transfer_receipt_path text;
+
+-- A customer can only say "I have paid" for their own unpaid invoice. Marking
+-- an invoice paid stays an admin action. This runs with elevated rights so it
+-- does not need a broad update policy on payments.
+create or replace function public.report_invoice_transfer(p_payment_id uuid, p_note text, p_receipt_path text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    update public.payments
+    set transfer_reported_at = now(),
+        transfer_note = nullif(left(coalesce(p_note, ''), 300), ''),
+        transfer_receipt_path = p_receipt_path
+    where id = p_payment_id
+      and customer_id = auth.uid()
+      and status = 'pending';
+end;
+$$;
+
+revoke execute on function public.report_invoice_transfer(uuid, text, text) from public, anon;
+grant execute on function public.report_invoice_transfer(uuid, text, text) to authenticated;

@@ -42,19 +42,13 @@ export default async function AdminCustomerDetailPage({
     const { profileId } = await params;
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
-    const { data: customer } = await supabase.from("customers").select("*").eq("profile_id", profileId).single();
-    if (!customer) notFound();
-
-    const [{ data: account }, { data: unit }, { data: invoices }, { data: tasks }, { count: photoCount }] =
+    // Everything for this page is fetched in one parallel batch. The unit (only
+    // tenants have one) and the private receipt link depend on the customer row,
+    // so they follow straight after, together.
+    const [{ data: customer }, { data: account }, { data: invoices }, { data: tasks }, { count: photoCount }] =
         await Promise.all([
+            supabase.from("customers").select("*").eq("profile_id", profileId).single(),
             supabase.from("profiles").select("status, created_at").eq("id", profileId).single(),
-            customer.unit_id
-                ? supabase
-                    .from("units")
-                    .select("label, estate:profiles!units_estate_profile_id_fkey(full_name)")
-                    .eq("id", customer.unit_id)
-                    .single()
-                : Promise.resolve({ data: null }),
             supabase
                 .from("payments")
                 .select("id, amount, arrears, status, invoice_month, created_at")
@@ -70,12 +64,26 @@ export default async function AdminCustomerDetailPage({
             supabase.from("uploads").select("id", { count: "exact", head: true }).eq("customer_id", profileId),
         ]);
 
+    if (!customer) notFound();
+
     // A receipt the customer uploaded lives in a private bucket, so it is opened
     // through a link that expires after an hour.
     const feeReceiptPath = (customer as { registration_fee_receipt_path?: string | null }).registration_fee_receipt_path ?? null;
-    const feeReceiptUrl = feeReceiptPath
-        ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrl(feeReceiptPath, 3600)).data?.signedUrl ?? null
-        : null;
+
+    const [{ data: unit }, receiptSigned] = await Promise.all([
+        customer.unit_id
+            ? supabase
+                .from("units")
+                .select("label, estate:profiles!units_estate_profile_id_fkey(full_name)")
+                .eq("id", customer.unit_id)
+                .single()
+            : Promise.resolve({ data: null }),
+        feeReceiptPath
+            ? supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrl(feeReceiptPath, 3600)
+            : Promise.resolve({ data: null }),
+    ]);
+
+    const feeReceiptUrl = receiptSigned.data?.signedUrl ?? null;
     const feeSubmittedAt = (customer as { registration_fee_submitted_at?: string | null }).registration_fee_submitted_at ?? null;
 
     const { counted, notes } = describeFacilities(customer.facility_details);

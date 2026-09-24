@@ -215,3 +215,31 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
 
     return { success: true, message: action === "confirm" ? "Registration fee confirmed." : "Cleared. They can report it again." };
 }
+
+// The customer said they paid by transfer but nothing arrived. Clear the report
+// so the invoice goes back to plain "awaiting payment".
+export async function clearInvoiceTransferReport(paymentId: string): Promise<CustomerAccountResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!paymentId) return { success: false, error: "Invalid request." };
+
+    const { error } = await supabase
+        .from("payments")
+        .update({ transfer_reported_at: null, transfer_note: null, transfer_receipt_path: null })
+        .eq("id", paymentId)
+        .eq("status", "pending");
+
+    if (error) {
+        console.error("clearInvoiceTransferReport error:", error.message);
+        return { success: false, error: "Could not update this invoice. Please try again." };
+    }
+
+    await logActivity(supabase, actor, "invoice_transfer_cleared", "Marked a reported transfer as not received", { type: "payment", id: paymentId });
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+    revalidatePath("/admin");
+
+    return { success: true, message: "Cleared." };
+}

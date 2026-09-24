@@ -9,6 +9,8 @@ import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
 import MarkPaidControl from "@/components/dashboard/MarkPaidControl";
 import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
+import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
+import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -25,6 +27,10 @@ type PaymentRow = {
     line_items: unknown;
     auto_generated: boolean;
     customer: ProfileRef;
+    // What the customer reported when they said they paid by transfer.
+    transfer_reported_at?: string | null;
+    transfer_note?: string | null;
+    transfer_receipt_path?: string | null;
 };
 
 export default async function AdminPaymentsPage() {
@@ -39,15 +45,33 @@ export default async function AdminPaymentsPage() {
 
     const customerOptions = directoryData ?? [];
 
-    const { data: paymentsData } = await supabase
+    // The transfer_* columns arrive with supabase/manual-payments-2026-09.sql;
+    // until then load the invoices without them so the page never breaks.
+    const baseColumns =
+        "id, amount, arrears, status, description, invoice_month, created_at, paid_at, payment_method, line_items, auto_generated, customer:profiles!payments_customer_id_fkey(full_name)";
+
+    let paymentsResult = await supabase
         .from("payments")
-        .select(
-            "id, amount, arrears, status, description, invoice_month, created_at, paid_at, payment_method, line_items, auto_generated, customer:profiles!payments_customer_id_fkey(full_name)"
-        )
+        .select(`${baseColumns}, transfer_reported_at, transfer_note, transfer_receipt_path`)
         .order("created_at", { ascending: false })
         .limit(40);
 
-    const payments = (paymentsData ?? []) as unknown as PaymentRow[];
+    if (paymentsResult.error) {
+        paymentsResult = (await supabase
+            .from("payments")
+            .select(baseColumns)
+            .order("created_at", { ascending: false })
+            .limit(40)) as unknown as typeof paymentsResult;
+    }
+
+    const payments = (paymentsResult.data ?? []) as unknown as PaymentRow[];
+
+    // Receipts are private, so each one opens through a link that expires in an hour.
+    const receiptPaths = payments.map((p) => p.transfer_receipt_path).filter((p): p is string => Boolean(p));
+    const signed = receiptPaths.length
+        ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrls(receiptPaths, 3600)).data ?? []
+        : [];
+    const receiptUrl = new Map(signed.map((s) => [s.path, s.signedUrl]));
 
     return (
         <DashboardShell
@@ -102,6 +126,14 @@ export default async function AdminPaymentsPage() {
                                         </p>
                                     ) : (
                                         <>
+                                            {payment.transfer_reported_at && (
+                                                <InvoiceTransferReview
+                                                    paymentId={payment.id}
+                                                    reportedAt={formatDate(payment.transfer_reported_at)}
+                                                    note={payment.transfer_note ?? null}
+                                                    receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
+                                                />
+                                            )}
                                             <InvoiceEditor
                                                 action={updateInvoice}
                                                 invoice={{

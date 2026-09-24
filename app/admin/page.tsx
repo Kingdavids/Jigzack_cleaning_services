@@ -71,6 +71,7 @@ export default async function AdminPage() {
         recentPhotosRes,
         expensesRes,
         feeReportsRes,
+        transferReportsRes,
     ] = await Promise.all([
         supabase
             .from("profiles")
@@ -127,6 +128,12 @@ export default async function AdminPage() {
             .select("id", { count: "exact", head: true })
             .not("registration_fee_submitted_at", "is", null)
             .eq("registration_fee_paid", false),
+        // Invoices customers say they paid by transfer, not yet confirmed.
+        supabase
+            .from("payments")
+            .select("id", { count: "exact", head: true })
+            .not("transfer_reported_at", "is", null)
+            .eq("status", "pending"),
     ]);
 
     const pending = (pendingRes.data ?? []) as PendingRow[];
@@ -231,7 +238,7 @@ export default async function AdminPage() {
                         href="/admin/payments"
                     />
 
-                    <div className="sm:col-span-2 xl:col-span-4">
+                    <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2 xl:col-span-4">
                         <StatCard
                             icon={Wallet}
                             label="Registration fees to confirm"
@@ -239,6 +246,14 @@ export default async function AdminPage() {
                             helper={(feeReportsRes.count ?? 0) > 0 ? "Customers say they have paid. Check and confirm." : "Nothing waiting"}
                             href="/admin/customers?fee=reported"
                             tone={(feeReportsRes.count ?? 0) > 0 ? "alert" : "default"}
+                        />
+                        <StatCard
+                            icon={Wallet}
+                            label="Invoice transfers to confirm"
+                            value={String(transferReportsRes.count ?? 0)}
+                            helper={(transferReportsRes.count ?? 0) > 0 ? "Customers say they paid an invoice. Check and confirm." : "Nothing waiting"}
+                            href="/admin/payments"
+                            tone={(transferReportsRes.count ?? 0) > 0 ? "alert" : "default"}
                         />
                     </div>
 

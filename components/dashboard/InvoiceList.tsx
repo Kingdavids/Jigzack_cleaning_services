@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileText, Receipt } from "lucide-react";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import { formatDate, invoiceNumber, naira } from "@/lib/customer/billing";
+import InvoiceTransferForm from "@/components/dashboard/InvoiceTransferForm";
 
 export type InvoiceRow = {
     id: string;
@@ -14,6 +15,8 @@ export type InvoiceRow = {
     payment_method: string | null;
     payment_reference: string | null;
     created_at: string;
+    // Set when the customer said they paid by transfer and it is not yet confirmed.
+    transfer_reported_at?: string | null;
 };
 
 const STATUS_NOTE: Record<string, string> = {
@@ -21,7 +24,7 @@ const STATUS_NOTE: Record<string, string> = {
     failed: "This payment didn't go through. Contact support if you've already paid.",
 };
 
-export default function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
+export default function InvoiceList({ invoices, canReport = false }: { invoices: InvoiceRow[]; canReport?: boolean }) {
     if (invoices.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -37,6 +40,7 @@ export default function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
                 const amount = Number(invoice.amount ?? 0);
                 const arrears = Number(invoice.arrears ?? 0);
                 const isPaid = status === "paid";
+                const reported = !isPaid && Boolean(invoice.transfer_reported_at);
 
                 return (
                     <div key={invoice.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
@@ -70,10 +74,13 @@ export default function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
                                     ? `Paid ${formatDate(invoice.paid_at ?? invoice.created_at)}${
                                         invoice.payment_method ? ` via ${invoice.payment_method}` : ""
                                     }${invoice.payment_reference ? ` · ref ${invoice.payment_reference}` : ""}`
-                                    : STATUS_NOTE[status] ?? ""}
+                                    : reported
+                                        ? `You reported this payment on ${formatDate(invoice.transfer_reported_at)}. We will confirm it soon.`
+                                        : STATUS_NOTE[status] ?? ""}
                             </p>
 
-                            <div className="flex shrink-0 gap-2">
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                                {canReport && status === "pending" && !reported && <InvoiceTransferForm paymentId={invoice.id} />}
                                 <Link
                                     href={`/customer/invoices/${invoice.id}`}
                                     className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
