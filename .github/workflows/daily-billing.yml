@@ -1,0 +1,28 @@
+name: Daily billing
+
+# Keeps pickups scheduled four weeks ahead and creates the monthly invoices on
+# the 1st. The work happens in app/api/cron/billing; this only rings its doorbell.
+# Add the CRON_SECRET repository secret (same value as in Railway) for it to work.
+
+on:
+  schedule:
+    # 04:00 UTC is 05:00 in Lagos.
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call the billing job
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set as a repository secret." >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            https://www.jigzackcleaningservices.com/api/cron/billing

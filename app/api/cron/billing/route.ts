@@ -1,0 +1,78 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
+import { monthLabel } from "@/lib/billing/pricing";
+import { escapeHtml, sendEmail } from "@/lib/send-email";
+
+// Called once a day by the GitHub Actions workflow in .github/workflows.
+// Pickups are topped up every day (existing dates are skipped). Monthly
+// invoices are created on the 1st, Lagos time, and never twice for a month.
+// There is no signed-in user here, so it runs with the service key, and the
+// shared secret is the only thing that lets a request in.
+
+export const dynamic = "force-dynamic";
+
+function sameSecret(given: string, expected: string) {
+    // Hash first so the comparison is fixed length and timing safe.
+    const a = createHash("sha256").update(given).digest();
+    const b = createHash("sha256").update(expected).digest();
+    return timingSafeEqual(a, b);
+}
+
+export async function POST(request: NextRequest) {
+    const secret = process.env.CRON_SECRET;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!secret || !serviceKey || !url) {
+        return NextResponse.json({ error: "Scheduled billing is not configured." }, { status: 503 });
+    }
+
+    const given = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+
+    if (!given || !sameSecret(given, secret)) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    const lagosDay = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    const isFirstOfMonth = lagosDay.endsWith("-01");
+    const forceInvoices = request.nextUrl.searchParams.get("invoices") === "force";
+
+    const schedules = await runScheduleGeneration(supabase);
+    const invoices = isFirstOfMonth || forceInvoices ? await runInvoiceGeneration(supabase) : null;
+
+    const changed = schedules.created > 0 || (invoices?.created ?? 0) > 0 || (invoices?.error ?? 0) > 0;
+
+    if (changed) {
+        const { data: admins } = await supabase
+            .from("profiles")
+            .select("email")
+            .eq("role", "admin")
+            .eq("status", "approved");
+
+        const to = (admins ?? []).map((a) => a.email as string).filter(Boolean);
+
+        const lines = [
+            `<p>The daily billing job ran on ${escapeHtml(lagosDay)}.</p>`,
+            `<p>Pickups added: <strong>${schedules.created}</strong> across ${schedules.customers} customers.</p>`,
+        ];
+
+        if (invoices) {
+            lines.push(
+                `<p>Invoices for ${escapeHtml(monthLabel())}: <strong>${invoices.created}</strong> created, ${invoices.exists} already existed` +
+                    (invoices["no-pricing"] > 0 ? `, ${invoices["no-pricing"]} skipped because no priced property types are recorded` : "") +
+                    (invoices.error > 0 ? `, <strong>${invoices.error} failed</strong>` : "") +
+                    ".</p>"
+            );
+        }
+
+        lines.push("<p>Review and edit them in the admin dashboard under Tasks and Payments.</p>");
+
+        await sendEmail({ to, subject: "Jigzack billing job summary", html: lines.join("") });
+    }
+
+    return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices });
+}

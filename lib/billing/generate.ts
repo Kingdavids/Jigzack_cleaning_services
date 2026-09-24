@@ -1,9 +1,9 @@
-import type { createClient } from "@/utils/supabase/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
 import { buildLineItems, itemsTotal, monthLabel } from "@/lib/billing/pricing";
 import { addDays, describeFrequency, generateDates, parseFrequency, todayKey } from "@/lib/billing/schedule";
 
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+type SupabaseServerClient = SupabaseClient;
 
 export type BillableCustomer = {
     profile_id: string | null;

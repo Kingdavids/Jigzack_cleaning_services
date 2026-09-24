@@ -16,6 +16,7 @@ import {
     recalculateOpenInvoice,
     type BillableCustomer,
 } from "@/lib/billing/generate";
+import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -547,48 +548,20 @@ export async function setUserApproval(
     return { success: true, notes };
 }
 
-async function approvedBillableCustomers(supabase: Awaited<ReturnType<typeof createClient>>) {
-    const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id")
-        .eq("role", "customer")
-        .eq("status", "approved");
-
-    const ids = (profiles ?? []).map((p) => p.id as string);
-    if (ids.length === 0) return [];
-
-    const { data } = await supabase
-        .from("customers")
-        .select(BILLABLE_SELECT)
-        .in("profile_id", ids)
-        .is("unit_id", null)
-        .eq("status", "active");
-
-    return (data ?? []) as unknown as BillableCustomer[];
-}
-
 export type GenerateResult = { success: boolean; message: string };
 
 export async function generateAllSchedules(): Promise<GenerateResult> {
     await requireAdmin();
     const supabase = await createClient();
 
-    const customers = await approvedBillableCustomers(supabase);
-    let created = 0;
-    let unrecognised = 0;
-
-    for (const customer of customers) {
-        const result = await generateScheduleFor(supabase, customer);
-        created += result.created;
-        if (!result.recognised) unrecognised += 1;
-    }
+    const { customers, created, unrecognised } = await runScheduleGeneration(supabase);
 
     revalidatePath("/admin/tasks");
 
     return {
         success: true,
         message:
-            `Added ${created} pickups across ${customers.length} customers.` +
+            `Added ${created} pickups across ${customers} customers.` +
             (unrecognised > 0 ? ` ${unrecognised} had a frequency we couldn't read and defaulted to weekly.` : ""),
     };
 }
@@ -597,12 +570,7 @@ export async function generateAllInvoices(): Promise<GenerateResult> {
     await requireAdmin();
     const supabase = await createClient();
 
-    const customers = await approvedBillableCustomers(supabase);
-    const tally = { created: 0, exists: 0, "no-pricing": 0, error: 0 };
-
-    for (const customer of customers) {
-        tally[await generateInvoiceFor(supabase, customer)] += 1;
-    }
+    const tally = await runInvoiceGeneration(supabase);
 
     revalidatePath("/admin/payments");
     revalidatePath("/customer/payments");
