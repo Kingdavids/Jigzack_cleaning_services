@@ -59,6 +59,7 @@ export default async function AdminApprovalsPage() {
         .select("id, full_name, email, role, decline_reason, declined_at")
         .eq("status", "declined")
         .neq("role", "admin")
+        .or("decline_reason.is.null,decline_reason.not.ilike.Removed*")
         .order("created_at", { ascending: false });
 
     if (declinedResult.error) {

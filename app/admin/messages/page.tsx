@@ -8,6 +8,8 @@ import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
 import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConversations";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
+import ClearMessagesCard from "@/components/dashboard/ClearMessagesCard";
+import { isOwner } from "@/lib/auth/roles";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -158,6 +160,14 @@ export default async function AdminMessagesPage() {
                     <StaffCustomerConversations messages={watched} />
                 </SectionCard>
             </div>
+
+            {isOwner(profile) && (
+                <div className="mt-6">
+                    <SectionCard title="Clear out messages" description="Owners only. For removing test messages.">
+                        <ClearMessagesCard />
+                    </SectionCard>
+                </div>
+            )}
         </DashboardShell>
     );
 }

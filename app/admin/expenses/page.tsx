@@ -6,6 +6,9 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ExpenseReviewControls from "@/components/dashboard/ExpenseReviewControls";
+import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
+import { deleteExpenses } from "../cleanup-actions";
+import { isOwner } from "@/lib/auth/roles";
 import { Clock, HandCoins, Receipt, Wallet } from "lucide-react";
 
 const STATUSES = ["submitted", "approved", "reimbursed", "rejected"] as const;
@@ -64,6 +67,7 @@ export default async function AdminExpensesPage({
         : [];
     const receiptUrl = new Map(signed.map((s) => [s.path, s.signedUrl]));
 
+    const canBulk = isOwner(profile);
     const counted = expenses.filter((e) => e.status !== "rejected");
     const sum = (list: ExpenseRow[]) => list.reduce((total, e) => total + Number(e.amount), 0);
     const awaiting = expenses.filter((e) => e.status === "submitted");
@@ -153,12 +157,21 @@ export default async function AdminExpensesPage({
                 </SectionCard>
 
                 <SectionCard title="Entries" description={`${entries(expenses.length)} for ${month}${status ? `, ${status}` : ""}. Newest first.`}>
+                    <BulkSelectProvider
+                        enabled={canBulk && expenses.length > 0}
+                        allIds={expenses.map((e) => e.id)}
+                        action={deleteExpenses}
+                        noun="expense"
+                    >
                     {expenses.length === 0 ? (
                         <p className="text-sm text-white/50">No expenses match.</p>
                     ) : (
                         <div className="space-y-3">
                             {expenses.map((expense) => (
-                                <div key={expense.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                <div key={expense.id} className={`relative rounded-2xl border border-white/10 bg-white/[0.03] p-4 ${canBulk ? "pl-11" : ""}`}>
+                                    <div className="absolute left-3.5 top-5">
+                                        <BulkCheckbox id={expense.id} label="Select expense" />
+                                    </div>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <p className="font-bold">{expense.employee?.full_name ?? "Unknown staff"}</p>
@@ -191,6 +204,7 @@ export default async function AdminExpensesPage({
                             ))}
                         </div>
                     )}
+                    </BulkSelectProvider>
                 </SectionCard>
             </div>
         </DashboardShell>

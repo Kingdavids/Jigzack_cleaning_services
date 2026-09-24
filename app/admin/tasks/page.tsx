@@ -6,6 +6,9 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import TaskAdminControls from "@/components/dashboard/TaskAdminControls";
+import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
+import { deleteTasks } from "../cleanup-actions";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 
 type ProfileRef = { full_name: string | null } | null;
@@ -61,6 +64,7 @@ export default async function AdminTasksPage() {
     const allTasks = (tasksData ?? []) as unknown as TaskRow[];
     const isOpen = (task: TaskRow) => !["completed", "declined"].includes((task.status ?? "pending").toLowerCase());
     const tasks = [...allTasks.filter(isOpen), ...allTasks.filter((t) => !isOpen(t)).reverse().slice(0, 15)];
+    const canBulk = isFullAdmin(profile);
     const unassigned = allTasks.filter((t) => isOpen(t) && !t.employee_id).length;
 
     return (
@@ -86,6 +90,12 @@ export default async function AdminTasksPage() {
 
             <SectionCard title="Task progress" description="Upcoming and in-progress work first, then the latest finished.">
                 <div className="space-y-4">
+                    <BulkSelectProvider
+                        enabled={canBulk && tasks.length > 0}
+                        allIds={tasks.map((t) => t.id)}
+                        action={deleteTasks}
+                        noun="task"
+                    >
                     {tasks.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
                             No tasks yet.
@@ -94,8 +104,11 @@ export default async function AdminTasksPage() {
                         tasks.map((task) => (
                             <div
                                 key={task.id}
-                                className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
+                                className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
                             >
+                                <div className="absolute left-4 top-6">
+                                    <BulkCheckbox id={task.id} label="Select task" />
+                                </div>
                                 <div className="flex flex-col gap-3 md:flex-row md:justify-between">
                                     <div>
                                         <p className="font-bold text-lg">{task.title}</p>
@@ -123,6 +136,7 @@ export default async function AdminTasksPage() {
                             </div>
                         ))
                     )}
+                    </BulkSelectProvider>
 
                     <AssignTaskForm action={createTask}>
                         <input

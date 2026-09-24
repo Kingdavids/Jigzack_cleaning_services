@@ -12,6 +12,9 @@ import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
+import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
+import { deleteInvoices } from "../cleanup-actions";
+import { isOwner } from "@/lib/auth/roles";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -67,6 +70,7 @@ export default async function AdminPaymentsPage() {
     }
 
     const payments = (paymentsResult.data ?? []) as unknown as PaymentRow[];
+    const canBulk = isOwner(profile);
 
     // Receipts are private, so each one opens through a link that expires in an hour.
     const receiptPaths = payments.map((p) => p.transfer_receipt_path).filter((p): p is string => Boolean(p));
@@ -92,6 +96,13 @@ export default async function AdminPaymentsPage() {
                 </SectionCard>
 
                 <SectionCard title="Invoices" description="Most recent first.">
+                    <BulkSelectProvider
+                        enabled={canBulk && payments.length > 0}
+                        allIds={payments.map((p) => p.id)}
+                        paidIds={payments.filter((p) => p.status === "paid").map((p) => p.id)}
+                        action={deleteInvoices}
+                        noun="invoice"
+                    >
                     <div className="space-y-4">
                         {payments.length === 0 ? (
                             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -101,8 +112,11 @@ export default async function AdminPaymentsPage() {
                             payments.map((payment) => (
                                 <div
                                     key={payment.id}
-                                    className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20"
+                                    className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
                                 >
+                                    <div className="absolute left-4 top-6">
+                                        <BulkCheckbox id={payment.id} label="Select invoice" />
+                                    </div>
                                     <div className="flex items-center justify-between gap-4">
                                         <div>
                                             <p className="font-bold">{payment.customer?.full_name ?? "Unknown customer"}</p>
@@ -155,6 +169,7 @@ export default async function AdminPaymentsPage() {
                             ))
                         )}
                     </div>
+                    </BulkSelectProvider>
                 </SectionCard>
 
                 <SectionCard title="Create a one-off invoice" description="For anything outside the monthly charge.">

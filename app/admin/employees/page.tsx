@@ -4,6 +4,8 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import EmployeeInviteForm from "@/components/dashboard/EmployeeInviteForm";
 import InviteRowActions from "@/components/dashboard/InviteRowActions";
+import EmployeeAccessButtons from "@/components/dashboard/EmployeeAccessButtons";
+import { isOwner } from "@/lib/auth/roles";
 
 type InviteRow = {
     id: string;
@@ -40,6 +42,18 @@ export default async function AdminEmployeesPage() {
         .order("full_name", { ascending: true });
 
     const employees = employeesData ?? [];
+    const canManage = isOwner(profile);
+
+    // People an owner removed. Their records stay and they can be restored.
+    const { data: removedData } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .eq("role", "employee")
+        .eq("status", "declined")
+        .ilike("decline_reason", "Removed by%")
+        .order("full_name", { ascending: true });
+
+    const removedEmployees = removedData ?? [];
 
     return (
         <DashboardShell
@@ -112,11 +126,34 @@ export default async function AdminEmployeesPage() {
                                 <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                                     <p className="text-sm font-semibold">{employee.full_name}</p>
                                     <p className="mt-0.5 text-xs text-white/45">{employee.email}</p>
+                                    {canManage && (
+                                        <div className="mt-3">
+                                            <EmployeeAccessButtons profileId={employee.id} name={employee.full_name ?? "this employee"} removed={false} />
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     )}
                 </SectionCard>
+
+                {removedEmployees.length > 0 && (
+                    <SectionCard title="Removed employees" description="They cannot sign in. Their past jobs, photos and expenses stay on record.">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {removedEmployees.map((employee) => (
+                                <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                    <p className="text-sm font-semibold text-white/70">{employee.full_name}</p>
+                                    <p className="mt-0.5 text-xs text-white/45">{employee.email}</p>
+                                    {canManage && (
+                                        <div className="mt-3">
+                                            <EmployeeAccessButtons profileId={employee.id} name={employee.full_name ?? "this employee"} removed />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </SectionCard>
+                )}
             </div>
         </DashboardShell>
     );
