@@ -3,6 +3,7 @@ import { naira } from "@/lib/customer/billing";
 import { newInvoiceEmail, reminderEmail } from "@/lib/billing-email";
 import { sendEmail } from "@/lib/send-email";
 import { SITE } from "@/lib/seo";
+import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 
 // Emails customers about their invoices: one when an automatic invoice is new,
 // then reminders 7 and 21 days later if it is still unpaid. What has already
@@ -20,6 +21,7 @@ const PAUSE_MS = 600;
 
 type InvoiceRow = {
     id: string;
+    customer_id: string | null;
     amount: number;
     arrears: number | null;
     invoice_month: string | null;
@@ -45,7 +47,7 @@ export async function runBillingEmails(supabase: SupabaseClient): Promise<Billin
     const { data, error } = await supabase
         .from("payments")
         .select(
-            "id, amount, arrears, invoice_month, created_at, auto_generated, invoice_emailed_at, reminders_sent, customer:profiles!payments_customer_id_fkey(full_name, email)"
+            "id, customer_id, amount, arrears, invoice_month, created_at, auto_generated, invoice_emailed_at, reminders_sent, customer:profiles!payments_customer_id_fkey(full_name, email)"
         )
         .eq("auto_generated", true)
         .neq("status", "paid");
@@ -57,7 +59,9 @@ export async function runBillingEmails(supabase: SupabaseClient): Promise<Billin
     }
 
     const today = dayNumber(lagosDay(new Date()));
-    const invoices = (data ?? []) as unknown as InvoiceRow[];
+    // Nobody in Recently deleted gets an email.
+    const deleted = await deletedProfileIds(supabase);
+    const invoices = ((data ?? []) as unknown as InvoiceRow[]).filter((i) => !i.customer_id || !deleted.has(i.customer_id));
     let sentAny = false;
 
     for (const invoice of invoices) {

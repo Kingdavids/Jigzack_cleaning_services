@@ -11,6 +11,7 @@ import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
+import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -43,7 +44,8 @@ export default async function AdminPaymentsPage() {
         .eq("status", "approved")
         .order("full_name", { ascending: true });
 
-    const customerOptions = directoryData ?? [];
+    const hidden = await deletedProfileIds(supabase);
+    const customerOptions = (directoryData ?? []).filter((c) => !hidden.has(c.id));
 
     // The transfer_* columns arrive with supabase/manual-payments-2026-09.sql;
     // until then load the invoices without them so the page never breaks.

@@ -6,6 +6,7 @@ import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import CustomerAccountControls from "@/components/dashboard/CustomerAccountControls";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
+import { daysLeft } from "@/lib/admin/deletedCustomers";
 import {
     generateCustomerBilling,
     saveVacancies,
@@ -165,12 +166,14 @@ export default async function AdminCustomerDetailPage({
                 )}
 
                 {isFullAdmin(profile) && (
-                    <SectionCard title="Suspend or delete" description="Pause this customer, or remove them completely.">
+                    <SectionCard title="Suspend or delete" description="Pause this customer, or move them to Recently deleted.">
                         <CustomerAccountControls
                             profileId={profileId}
                             fullName={customer.full_name}
                             suspended={customer.status === "inactive"}
-                            canDelete={isOwner(profile)}
+                            deleted={customer.status === "deleted"}
+                            daysLeft={daysLeft((customer as { deleted_at?: string | null }).deleted_at ?? null)}
+                            isOwner={isOwner(profile)}
                         />
                     </SectionCard>
                 )}

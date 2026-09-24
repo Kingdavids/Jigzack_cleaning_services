@@ -6,6 +6,7 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import TaskAdminControls from "@/components/dashboard/TaskAdminControls";
+import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -42,7 +43,8 @@ export default async function AdminTasksPage() {
         .eq("status", "approved")
         .order("full_name", { ascending: true });
 
-    const directory = directoryData ?? [];
+    const hidden = await deletedProfileIds(supabase);
+    const directory = (directoryData ?? []).filter((p) => !hidden.has(p.id));
     const employeeOptions = directory.filter((p) => p.role === "employee");
     const customerOptions = directory.filter((p) => p.role === "customer");
 

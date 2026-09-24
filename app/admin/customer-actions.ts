@@ -50,6 +50,7 @@ export async function setCustomerSuspended(profileId: string, suspended: boolean
         .maybeSingle();
 
     if (!customer) return { success: false, error: "Could not find that customer." };
+    if (customer.status === "deleted") return { success: false, error: "This customer is in Recently deleted. Restore them first." };
 
     const { error } = await supabase
         .from("customers")
@@ -97,9 +98,9 @@ export async function setCustomerSuspended(profileId: string, suspended: boolean
     };
 }
 
-// Permanent. Removes the login, the customer record, their invoices, tasks,
-// photos and messages. To make an accident hard, the customer's exact name has
-// to be typed in.
+// Permanent, and only for a customer already in Recently deleted. Removes the
+// login, the customer record, their invoices, tasks, photos and messages. The
+// customer's exact name has to be typed in.
 export async function deleteCustomerAccount(profileId: string, confirmName: string): Promise<CustomerAccountResult> {
     const actor = await requireOwner();
     const supabase = await createClient();
@@ -108,11 +109,12 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
 
     const { data: customer } = await supabase
         .from("customers")
-        .select("full_name")
+        .select("full_name, status")
         .eq("profile_id", profileId)
         .maybeSingle();
 
     if (!customer) return { success: false, error: "Could not find that customer." };
+    if (customer.status !== "deleted") return { success: false, error: "Move this customer to Recently deleted first." };
 
     if (confirmName.trim().toLowerCase() !== customer.full_name.trim().toLowerCase()) {
         return { success: false, error: "The name you typed does not match. Nothing was deleted." };
@@ -291,4 +293,106 @@ export async function deleteCustomerRecord(customerId: string): Promise<Customer
     revalidatePath("/admin");
 
     return { success: true, message: "Removed." };
+}
+
+// Deleting a customer moves them to Recently deleted. Nothing is erased: they
+// cannot sign in, they are left out of invoices and schedules, and an owner can
+// restore them for 30 days. After that the daily job erases them for good.
+export async function softDeleteCustomer(profileId: string, confirmName: string): Promise<CustomerAccountResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!profileId) return { success: false, error: "Invalid request." };
+
+    const { data: customer } = await supabase
+        .from("customers")
+        .select("full_name, status")
+        .eq("profile_id", profileId)
+        .maybeSingle();
+
+    if (!customer) return { success: false, error: "Could not find that customer." };
+    if (customer.status === "deleted") return { success: true, message: "Already in Recently deleted." };
+
+    if (confirmName.trim().toLowerCase() !== customer.full_name.trim().toLowerCase()) {
+        return { success: false, error: "The name you typed does not match. Nothing was deleted." };
+    }
+
+    const { error } = await supabase
+        .from("customers")
+        .update({
+            status: "deleted",
+            deleted_at: new Date().toISOString(),
+            deleted_by: actor.id,
+            deleted_prev_status: customer.status,
+        })
+        .eq("profile_id", profileId);
+
+    if (error) {
+        console.error("softDeleteCustomer error:", error.code, error.message);
+        return {
+            success: false,
+            error: /deleted_at|deleted_by|customers_status_check|deleted_prev_status/.test(error.message)
+                ? "Recently deleted is not switched on yet. Run supabase/recently-deleted-2026-09.sql first."
+                : `Could not delete this customer. (${error.code || "unknown"})`,
+        };
+    }
+
+    // Their upcoming automatic pickups make no sense any more.
+    await supabase
+        .from("tasks")
+        .delete()
+        .eq("customer_id", profileId)
+        .eq("status", "pending")
+        .eq("auto_generated", true)
+        .gte("scheduled_date", lagosToday());
+
+    await logActivity(supabase, actor, "customer_deleted", `Moved ${customer.full_name} to Recently deleted`, { type: "profile", id: profileId });
+
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
+
+    return { success: true, message: "Moved to Recently deleted. An owner can restore them for 30 days." };
+}
+
+// Owners only (the database enforces it too): bring a deleted customer back
+// exactly as they were, with the status they had before.
+export async function restoreCustomer(profileId: string): Promise<CustomerAccountResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!profileId) return { success: false, error: "Invalid request." };
+
+    const { data: customer } = await supabase
+        .from("customers")
+        .select("full_name, status, deleted_prev_status")
+        .eq("profile_id", profileId)
+        .maybeSingle();
+
+    if (!customer) return { success: false, error: "Could not find that customer." };
+    if (customer.status !== "deleted") return { success: true, message: "This customer is not deleted." };
+
+    const { error } = await supabase
+        .from("customers")
+        .update({
+            status: customer.deleted_prev_status === "inactive" ? "inactive" : "active",
+            deleted_at: null,
+            deleted_by: null,
+            deleted_prev_status: null,
+        })
+        .eq("profile_id", profileId);
+
+    if (error) {
+        console.error("restoreCustomer error:", error.code, error.message);
+        return { success: false, error: `Could not restore this customer. (${error.code || "unknown"})` };
+    }
+
+    await logActivity(supabase, actor, "customer_restored", `Restored ${customer.full_name} from Recently deleted`, { type: "profile", id: profileId });
+
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin");
+
+    return { success: true, message: "Restored. Their pickups will be scheduled again on the next run." };
 }

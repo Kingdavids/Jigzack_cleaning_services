@@ -12,6 +12,7 @@ export default function StatusBadge({ status }: { status: string }) {
         approved: "border-sky-400/20 bg-sky-400/10 text-sky-300",
         reimbursed: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         rejected: "border-red-400/20 bg-red-400/10 text-red-300",
+        deleted: "border-red-400/20 bg-red-400/10 text-red-300",
     };
 
     return (

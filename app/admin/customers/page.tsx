@@ -7,6 +7,8 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import OrphanCustomerActions from "@/components/dashboard/OrphanCustomerActions";
 import { isOwner } from "@/lib/auth/roles";
+import { daysLeft } from "@/lib/admin/deletedCustomers";
+import RecentlyDeletedList, { type DeletedCustomer } from "@/components/dashboard/RecentlyDeletedList";
 
 type CustomerRow = {
     id: string;
@@ -42,6 +44,7 @@ export default async function AdminCustomersPage({
         .select(
             "id, profile_id, full_name, email, phone, address, lga, property_type, preferred_pickup_frequency, account_code, last_serviced, status, is_estate, unit_id, created_at"
         )
+        .neq("status", "deleted")
         .order("created_at", { ascending: false })
         .limit(200);
 
@@ -61,6 +64,18 @@ export default async function AdminCustomersPage({
 
     const { data: customersData } = await query;
     const customers = (customersData ?? []) as CustomerRow[];
+
+    // Customers waiting in Recently deleted (an owner can restore them).
+    const { data: deletedData } = await supabase
+        .from("customers")
+        .select("id, profile_id, full_name, email, deleted_at")
+        .eq("status", "deleted")
+        .order("deleted_at", { ascending: false });
+
+    const deletedCustomers: DeletedCustomer[] = ((deletedData ?? []) as unknown as Omit<DeletedCustomer, "daysLeft">[]).map((c) => ({
+        ...c,
+        daysLeft: daysLeft(c.deleted_at),
+    }));
 
     const { data: unpaidData } = await supabase
         .from("payments")
@@ -219,6 +234,17 @@ export default async function AdminCustomersPage({
                     </div>
                 )}
             </SectionCard>
+
+            {deletedCustomers.length > 0 && (
+                <div className="mt-6">
+                    <SectionCard
+                        title="Recently deleted"
+                        description="Kept for 30 days, then erased for good. An owner can restore anyone here."
+                    >
+                        <RecentlyDeletedList customers={deletedCustomers} isOwner={isOwner(profile)} />
+                    </SectionCard>
+                </div>
+            )}
         </DashboardShell>
     );
 }

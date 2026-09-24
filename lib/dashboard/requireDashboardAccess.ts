@@ -34,7 +34,7 @@ export async function requireDashboardAccess(role: UserRole) {
             .single();
 
         // A suspended account (set by an admin) cannot open the dashboard.
-        if (customer && customer.status === "inactive") {
+        if (customer && (customer.status === "inactive" || customer.status === "deleted")) {
             redirect("/auth/suspended");
         }
 

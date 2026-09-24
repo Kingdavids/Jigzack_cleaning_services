@@ -137,12 +137,12 @@ export default async function AdminPage() {
     ]);
 
     const pending = (pendingRes.data ?? []) as PendingRow[];
-    const customers = (customersRes.data ?? []) as {
+    const customers = ((customersRes.data ?? []) as {
         id: string;
         is_estate: boolean | null;
         vacancies: Record<string, number> | null;
         status: string | null;
-    }[];
+    }[]).filter((c) => c.status !== "deleted");
     const todayTasks = (todayRes.data ?? []) as { status: string | null }[];
     const upcoming = (upcomingRes.data ?? []) as unknown as TaskRow[];
     const unpaid = (unpaidRes.data ?? []) as unknown as UnpaidRow[];

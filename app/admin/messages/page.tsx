@@ -7,6 +7,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import MessageThreadList, { type MessageRow } from "@/components/dashboard/MessageThreadList";
 import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConversations";
+import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -18,7 +19,8 @@ export default async function AdminMessagesPage() {
         .eq("status", "approved")
         .order("full_name", { ascending: true });
 
-    const directory = directoryData ?? [];
+    const hidden = await deletedProfileIds(supabase);
+    const directory = (directoryData ?? []).filter((p) => !hidden.has(p.id));
 
     const { data: messagesData } = await supabase
         .from("messages")

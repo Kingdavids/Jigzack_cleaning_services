@@ -48,6 +48,23 @@ export async function POST(request: NextRequest) {
     // Invoice and reminder emails to customers go out after the invoices exist.
     const emails = await runBillingEmails(supabase);
 
+    // Erase customers who have been in Recently deleted for 30 days, along with
+    // their photo files. Before the recently-deleted SQL has run this does nothing.
+    let purged = 0;
+    const { data: purge } = await supabase.rpc("purge_deleted_customers", { p_days: 30 });
+
+    if (purge && typeof purge === "object") {
+        const result = purge as { purged?: number; photo_urls?: string[] };
+        purged = Number(result.purged ?? 0);
+
+        const paths = (result.photo_urls ?? [])
+            .map((u) => u.split("/task-photos/")[1])
+            .filter(Boolean)
+            .map((p) => decodeURIComponent(p));
+
+        if (paths.length > 0) await supabase.storage.from("task-photos").remove(paths);
+    }
+
     const changed =
         schedules.created > 0 ||
         (invoices?.created ?? 0) > 0 ||
@@ -55,6 +72,7 @@ export async function POST(request: NextRequest) {
         emails.newInvoices > 0 ||
         emails.reminders > 0 ||
         emails.failed > 0 ||
+        purged > 0 ||
         Boolean(emails.skipped);
 
     if (changed) {
@@ -86,6 +104,8 @@ export async function POST(request: NextRequest) {
                 ".</p>"
         );
 
+        if (purged > 0) lines.push(`<p>Erased <strong>${purged}</strong> customer${purged === 1 ? "" : "s"} that had been in Recently deleted for 30 days.</p>`);
+
         if (emails.skipped) lines.push(`<p><strong>Customer emails were skipped.</strong> ${escapeHtml(emails.skipped)}</p>`);
 
         lines.push("<p>Review and edit them in the admin dashboard under Tasks and Payments.</p>");
@@ -93,5 +113,5 @@ export async function POST(request: NextRequest) {
         await sendEmail({ to, subject: "Jigzack billing job summary", html: lines.join("") });
     }
 
-    return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices, emails });
+    return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices, emails, purged });
 }
