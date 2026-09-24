@@ -7,6 +7,7 @@ import { AuthProvider } from "@/components/context/AuthProvider";
 import { Toaster } from "sonner";
 import SiteChrome from "@/components/SiteChrome";
 import JsonLd from "@/components/JsonLd";
+import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 import { SITE, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
 
 const jakarta = Plus_Jakarta_Sans({
@@ -42,6 +43,8 @@ export const metadata: Metadata = {
     creator: SITE.name,
     publisher: SITE.name,
     formatDetection: { telephone: true, email: true, address: false },
+    // When added to an iPhone home screen it opens full screen, named Jigzack.
+    appleWebApp: { capable: true, title: "Jigzack", statusBarStyle: "black" },
     openGraph: {
         title: "Jigzack Cleaning Services",
         description: SITE.description,
@@ -72,6 +75,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <html lang="en-NG" className={jakarta.variable}>
         <body className="bg-slate-950 text-white">
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
+        <RegisterServiceWorker />
         <AuthProvider>
             <SiteChrome>{children}</SiteChrome>
             <Toaster />
