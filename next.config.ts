@@ -17,6 +17,18 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // Once the bare domain points at this app, send it to the www address so
+  // search engines and visitors only ever see one version of the site.
+  async redirects() {
+    return [
+      {
+        source: "/:path*",
+        has: [{ type: "host", value: "jigzackcleaningservices.com" }],
+        destination: "https://www.jigzackcleaningservices.com/:path*",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
