@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 import { sendContactMessage, type ContactState } from "@/app/contact/actions";
+import { trackEvent } from "@/lib/analytics";
 
 function SubmitButton() {
     const { pending } = useFormStatus();
@@ -31,6 +32,7 @@ export default function ContactForm() {
 
     useEffect(() => {
         if (state && !state.success && state.error) toast.error(state.error);
+        if (state?.success) trackEvent("generate_lead", { method: "contact_form" });
     }, [state]);
 
     if (sent) {

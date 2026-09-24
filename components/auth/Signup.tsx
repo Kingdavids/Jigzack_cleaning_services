@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
+import { trackEvent } from "@/lib/analytics";
 
 // Public signup creates customers only. An employee account can only be
 // created through an admin-issued invite link (inviteToken) -- the database
@@ -70,6 +72,7 @@ export default function Signup({
             // There's no session until the confirmation link is clicked, so
             // /auth/pending (which needs one) would just bounce back to the
             // login screen. This page is public and says what to do next.
+            if (!isEmployeeInvite) trackEvent("sign_up", { method: "email" });
             router.push(`/auth/verify-email?email=${encodeURIComponent(email)}`);
         } catch {
             toast.error("Something went wrong. Please try again.");
@@ -144,6 +147,18 @@ export default function Signup({
 
                     <p className="text-center text-xs text-white/55 leading-5">
                         We&apos;ll email you a link to confirm your address. New accounts also need admin approval before dashboard access.
+                    </p>
+
+                    <p className="text-center text-xs text-white/45 leading-5">
+                        By creating an account you agree to our{" "}
+                        <Link href="/terms" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-amber-300">
+                            Terms of Service
+                        </Link>{" "}
+                        and{" "}
+                        <Link href="/privacy" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-amber-300">
+                            Privacy Policy
+                        </Link>
+                        .
                     </p>
                 </form>
             </CardContent>

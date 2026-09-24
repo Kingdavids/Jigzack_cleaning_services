@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
+import CookieConsent from "@/components/CookieConsent";
 
 // Dashboards render their own DashboardShell/Topbar navigation, so the
 // public marketing navbar and footer are skipped on those routes.
@@ -20,6 +21,7 @@ export default function SiteChrome({ children }: { children: ReactNode }) {
             <Navbar />
             <div className="pt-24 md:pt-28">{children}</div>
             <Footer />
+            <CookieConsent />
         </>
     );
 }

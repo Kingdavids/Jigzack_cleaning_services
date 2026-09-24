@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ShieldCheck } from "lucide-react";
+import CookieSettingsButton from "@/components/CookieSettingsButton";
 
 export default function Footer() {
     return (
@@ -53,7 +54,11 @@ export default function Footer() {
 
                 <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
                     <p>&copy; {new Date().getFullYear()} Jigzack Cleaning Services. All rights reserved.</p>
-                    <p>Lagos State Waste Management Authority (LAWMA) approved operator.</p>
+                    <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+                        <Link href="/privacy" className="transition hover:text-amber-300">Privacy Policy</Link>
+                        <Link href="/terms" className="transition hover:text-amber-300">Terms of Service</Link>
+                        <CookieSettingsButton />
+                    </div>
                 </div>
             </div>
         </footer>
