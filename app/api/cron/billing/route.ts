@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
+import { runBillingEmails } from "@/lib/billing/notify";
 import { monthLabel } from "@/lib/billing/pricing";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 
@@ -44,7 +45,17 @@ export async function POST(request: NextRequest) {
     const schedules = await runScheduleGeneration(supabase);
     const invoices = isFirstOfMonth || forceInvoices ? await runInvoiceGeneration(supabase) : null;
 
-    const changed = schedules.created > 0 || (invoices?.created ?? 0) > 0 || (invoices?.error ?? 0) > 0;
+    // Invoice and reminder emails to customers go out after the invoices exist.
+    const emails = await runBillingEmails(supabase);
+
+    const changed =
+        schedules.created > 0 ||
+        (invoices?.created ?? 0) > 0 ||
+        (invoices?.error ?? 0) > 0 ||
+        emails.newInvoices > 0 ||
+        emails.reminders > 0 ||
+        emails.failed > 0 ||
+        Boolean(emails.skipped);
 
     if (changed) {
         const { data: admins } = await supabase
@@ -69,10 +80,18 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        lines.push(
+            `<p>Customer emails: <strong>${emails.newInvoices}</strong> new invoice notices, <strong>${emails.reminders}</strong> payment reminders` +
+                (emails.failed > 0 ? `, <strong>${emails.failed} could not be sent</strong>` : "") +
+                ".</p>"
+        );
+
+        if (emails.skipped) lines.push(`<p><strong>Customer emails were skipped.</strong> ${escapeHtml(emails.skipped)}</p>`);
+
         lines.push("<p>Review and edit them in the admin dashboard under Tasks and Payments.</p>");
 
         await sendEmail({ to, subject: "Jigzack billing job summary", html: lines.join("") });
     }
 
-    return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices });
+    return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices, emails });
 }

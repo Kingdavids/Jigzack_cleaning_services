@@ -402,6 +402,10 @@ create table public.payments (
     -- [{ "label": "Flat", "quantity": 8, "unit_price": 5000, "note": "2 vacant" }]
     line_items jsonb,
     auto_generated boolean not null default false,
+    -- Which customer emails the daily job has already sent for this invoice.
+    invoice_emailed_at timestamptz,
+    reminders_sent integer not null default 0,
+    last_reminder_at timestamptz,
     created_at timestamptz not null default now()
 );
 
