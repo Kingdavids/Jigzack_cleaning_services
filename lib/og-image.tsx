@@ -58,7 +58,7 @@ export async function renderOgImage() {
                 </div>
 
                 <div style={{ display: "flex", fontSize: 28, color: "#fcd34d", fontWeight: 700 }}>
-                    jigzackcleaningservices.com
+                    www.jigzackcleaningservices.com
                 </div>
             </div>
         ),

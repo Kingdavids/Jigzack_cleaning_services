@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 export const SITE = {
     name: "Jigzack Cleaning Services",
     shortName: "Jigzack",
-    url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://jigzackcleaningservices.com").replace(/\/$/, ""),
+    url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.jigzackcleaningservices.com").replace(/\/$/, ""),
     phone: "+2347034339721",
     email: "info@jigzack.com",
     locale: "en_NG",
