@@ -3,9 +3,11 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Megaphone, Trash2 } from "lucide-react";
+import { ChevronDown, Megaphone, Paperclip, Trash2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { markThreadRead, type MessageActionState } from "@/lib/messaging-actions";
+import { MESSAGE_SELECT, MESSAGE_SELECT_BASE } from "@/lib/message-select";
+import AttachmentLink from "@/components/dashboard/AttachmentLink";
 
 export type MessageRow = {
     id: string;
@@ -18,6 +20,8 @@ export type MessageRow = {
     read_at?: string | null;
     is_broadcast?: boolean;
     group_id?: string | null;
+    attachment_path?: string | null;
+    attachment_name?: string | null;
     from_profile: { full_name: string | null } | null;
     to_profile: { full_name: string | null } | null;
 };
@@ -25,8 +29,6 @@ export type MessageRow = {
 type ReplyAction = (prevState: MessageActionState, formData: FormData) => Promise<MessageActionState>;
 
 const PAGE_SIZE = 8;
-const MESSAGE_SELECT =
-    "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, group_id, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)";
 
 function formatWhen(value: string) {
     const date = new Date(value);
@@ -83,6 +85,7 @@ function ReplySubmit() {
 function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: ReplyAction }) {
     const [state, formAction] = useActionState<MessageActionState, FormData>(replyAction, null);
     const formRef = useRef<HTMLFormElement>(null);
+    const [fileName, setFileName] = useState<string | null>(null);
 
     useEffect(() => {
         if (!state) return;
@@ -98,17 +101,39 @@ function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: R
         <form
             ref={formRef}
             action={formAction}
+            onReset={() => setFileName(null)}
             onClick={(e) => e.stopPropagation()}
-            className="mt-3 flex gap-2"
+            className="mt-3"
         >
-            <input type="hidden" name="parentMessageId" value={parentId} />
-            <input
-                name="body"
-                placeholder="Reply…"
-                required
-                className="h-9 flex-1 rounded-lg border border-white/10 bg-white/8 px-3 text-xs text-white outline-none placeholder:text-white/30"
-            />
-            <ReplySubmit />
+            <div className="flex gap-2">
+                <input type="hidden" name="parentMessageId" value={parentId} />
+                <input
+                    name="body"
+                    placeholder="Reply…"
+                    required
+                    className="h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/8 px-3 text-xs text-white outline-none placeholder:text-white/30"
+                />
+                <label
+                    title="Attach a photo or PDF"
+                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border transition ${
+                        fileName
+                            ? "border-amber-400/50 bg-amber-400/10 text-amber-300"
+                            : "border-white/10 bg-white/8 text-white/60 hover:text-white"
+                    }`}
+                >
+                    <Paperclip className="h-4 w-4" />
+                    <span className="sr-only">Attach a photo or PDF</span>
+                    <input
+                        type="file"
+                        name="attachment"
+                        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+                        onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+                        className="sr-only"
+                    />
+                </label>
+                <ReplySubmit />
+            </div>
+            {fileName && <p className="mt-1.5 truncate text-[11px] text-amber-300/80">Attached: {fileName}</p>}
         </form>
     );
 }
@@ -177,6 +202,13 @@ function MessageBubble({
                     }`}
                 >
                     {message.body}
+                    {message.attachment_path && (
+                        <AttachmentLink
+                            path={message.attachment_path}
+                            name={message.attachment_name ?? null}
+                            tone={isMine ? "dark" : "light"}
+                        />
+                    )}
                 </div>
 
                 <div className="mt-1 flex items-center gap-2 px-1">
@@ -216,7 +248,10 @@ export default function MessageThreadList({
         // no from_profile/to_profile names -- so re-fetch it with the same
         // embedded select the initial page load used before adding it in.
         const fetchAndAdd = async (id: string) => {
-            const { data } = await supabase.from("messages").select(MESSAGE_SELECT).eq("id", id).single();
+            let { data } = await supabase.from("messages").select(MESSAGE_SELECT).eq("id", id).single();
+
+            // Before the attachments SQL has been run, the extra columns do not exist.
+            if (!data) ({ data } = await supabase.from("messages").select(MESSAGE_SELECT_BASE).eq("id", id).single());
 
             if (!data) return;
 

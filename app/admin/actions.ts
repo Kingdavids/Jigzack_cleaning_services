@@ -19,6 +19,7 @@ import {
     type BillableCustomer,
 } from "@/lib/billing/generate";
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
+import { removeUnreferencedAttachments, saveMessageAttachment } from "@/lib/message-attachments";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -204,15 +205,20 @@ export async function sendMessage(
         return { success: true };
     }
 
+    const attachment = await saveMessageAttachment(supabase, profile.id, formData);
+    if (attachment && "error" in attachment) return { success: false, error: attachment.error };
+
     const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: toProfileId,
         subject,
         body,
+        ...(attachment ? { attachment_path: attachment.path, attachment_name: attachment.name } : {}),
     });
 
     if (error) {
         console.error("sendMessage insert error:", error.message);
+        if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
         return { success: false, error: "Could not send message. Please try again." };
     }
 
@@ -546,6 +552,7 @@ export async function setUserApproval(
     const notes: string[] = [];
     let isTenant = false;
     let feeWaived = false;
+    let isCommercial = false;
 
     if (status === "approved" && target.role === "customer") {
         if (unitId) {
@@ -553,6 +560,11 @@ export async function setUserApproval(
             isTenant = true;
             notes.push("Linked to their estate unit.");
         } else {
+            // Commercial sites are surveyed before they are quoted.
+            const { data: kind } = await supabase.from("customers").select("property_type").eq("profile_id", userId).maybeSingle();
+            isCommercial = String(kind?.property_type ?? "").toLowerCase() === "commercial";
+            if (isCommercial) notes.push("Commercial facility: arrange a site visit before quoting. The approval email tells them so.");
+
             // An existing customer who was already with Jigzack before the app
             // does not pay the registration fee. Marking it paid opens their
             // dashboard on first login.
@@ -615,6 +627,7 @@ export async function setUserApproval(
             origin: await siteOrigin(),
             isTenant,
             feeWaived,
+            isCommercial,
             reason: cleanReason,
         });
         const emailed = await sendEmail({ to: [target.email], subject, html });

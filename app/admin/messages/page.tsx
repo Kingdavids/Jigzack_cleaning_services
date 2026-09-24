@@ -2,6 +2,7 @@ import { Megaphone } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { sendBroadcast, sendMessage } from "../actions";
 import { deleteMessage, replyToMessage } from "@/lib/messaging-actions";
+import { loadMessages } from "@/lib/message-attachments";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
@@ -24,34 +25,33 @@ export default async function AdminMessagesPage() {
     const hidden = await deletedProfileIds(supabase);
     const directory = (directoryData ?? []).filter((p) => !hidden.has(p.id));
 
-    const { data: messagesData } = await supabase
-        .from("messages")
-        .select(
-            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, group_id, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
-        )
-        // Admins can technically read every message (messages_all_admin), but
-        // each send fans out to one row per recipient -- loading them all
-        // showed the same message once per admin and once per broadcast
-        // recipient. Only this admin's own side of each conversation belongs
-        // in their inbox.
-        .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
-        .order("created_at", { ascending: false })
-        .limit(200);
+    const messagesData = await loadMessages((select) =>
+        supabase
+            .from("messages")
+            .select(select)
+            // Admins can technically read every message (messages_all_admin), but
+            // each send fans out to one row per recipient -- loading them all
+            // showed the same message once per admin and once per broadcast
+            // recipient. Only this admin's own side of each conversation belongs
+            // in their inbox.
+            .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+            .order("created_at", { ascending: false })
+            .limit(200)
+    );
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
 
     // Conversations between staff and customers. Admins can read every message,
     // and reading them here changes nothing for the people involved.
-    const { data: watchedData } = await supabase
-        .from("messages")
-        .select(
-            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name, role), to_profile:profiles!messages_to_profile_id_fkey(full_name, role)"
-        )
-        .eq("is_broadcast", false)
-        .order("created_at", { ascending: false })
-        .limit(300);
+    const watchedColumns =
+        "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, is_broadcast, from_profile:profiles!messages_from_profile_id_fkey(full_name, role), to_profile:profiles!messages_to_profile_id_fkey(full_name, role)";
+    const watchedQuery = (select: string) =>
+        supabase.from("messages").select(select).eq("is_broadcast", false).order("created_at", { ascending: false }).limit(300);
 
-    const watched = (watchedData ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"];
+    let watchedResult = await watchedQuery(`${watchedColumns}, attachment_path, attachment_name`);
+    if (watchedResult.error) watchedResult = await watchedQuery(watchedColumns);
+
+    const watched = (watchedResult.data ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"];
 
     return (
         <DashboardShell
@@ -108,6 +108,7 @@ export default async function AdminMessagesPage() {
                         submitLabel="Send Broadcast"
                         submitPendingLabel="Broadcasting…"
                         successMessage="Broadcast sent"
+                        attachments={false}
                         className="space-y-3 rounded-xl border border-sky-400/20 bg-gradient-to-b from-sky-400/[0.06] to-transparent p-4"
                     >
                         <div className="flex items-center gap-2 text-sky-300">

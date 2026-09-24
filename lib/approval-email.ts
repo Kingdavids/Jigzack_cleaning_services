@@ -9,6 +9,7 @@ export function approvalEmail({
                                   origin,
                                   isTenant,
                                   feeWaived = false,
+                                  isCommercial = false,
                                   reason,
                               }: {
     name: string | null;
@@ -17,6 +18,7 @@ export function approvalEmail({
     origin: string;
     isTenant: boolean;
     feeWaived?: boolean;
+    isCommercial?: boolean;
     reason?: string | null;
 }) {
     const greeting = `Hi ${escapeHtml(name?.trim() || "there")},`;
@@ -51,6 +53,11 @@ export function approvalEmail({
             <p>${greeting}</p>
             <p>Good news: your account has been approved.</p>
             <p>${next}</p>
+            ${
+                isCommercial && role === "customer" && !isTenant
+                    ? "<p>Because you are a commercial facility, we inspect and survey the site before we give a quote. Our team will contact you to arrange the visit.</p>"
+                    : ""
+            }
             <p><a href="${escapeHtml(loginUrl)}">Log in to your account</a></p>
             <p>Questions? Call us on ${SUPPORT_PHONES}.</p>
             <p>Jigzack Cleaning Services</p>

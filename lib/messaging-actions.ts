@@ -4,8 +4,14 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
+import { removeUnreferencedAttachments, saveMessageAttachment, type SavedAttachment } from "@/lib/message-attachments";
 
 export type MessageActionState = { success: boolean; error?: string } | null;
+
+// Only adds the attachment columns when there is a file, so sending plain
+// messages keeps working even before the attachments SQL has been run.
+const attachmentFields = (attachment: SavedAttachment | null | { error: string }) =>
+    attachment && "path" in attachment ? { attachment_path: attachment.path, attachment_name: attachment.name } : {};
 
 // A double-click, a retried request or a slow network can submit the same
 // form twice before the button's pending state lands. An identical message
@@ -62,6 +68,9 @@ export async function sendMessageToAdmin(
     // sees it and gets the live alert -- not just whichever admin account
     // happens to be oldest. The shared group_id lets the sender's list show
     // it once instead of once per admin.
+    const attachment = await saveMessageAttachment(supabase, profile.id, formData);
+    if (attachment && "error" in attachment) return { success: false, error: attachment.error };
+
     const groupId = randomUUID();
     const rows = (adminIds as string[]).map((adminId) => ({
         from_profile_id: profile.id,
@@ -69,12 +78,14 @@ export async function sendMessageToAdmin(
         subject,
         body,
         group_id: groupId,
+        ...attachmentFields(attachment),
     }));
 
     const { error: insertError } = await supabase.from("messages").insert(rows);
 
     if (insertError) {
         console.error("messages insert error:", insertError.message);
+        if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
         return { success: false, error: "Could not send message. Please try again." };
     }
 
@@ -124,15 +135,20 @@ export async function sendMessageToCustomer(
         return { success: true };
     }
 
+    const attachment = await saveMessageAttachment(supabase, profile.id, formData);
+    if (attachment && "error" in attachment) return { success: false, error: attachment.error };
+
     const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: customerId,
         subject,
         body,
+        ...attachmentFields(attachment),
     });
 
     if (error) {
         console.error("sendMessageToCustomer insert error:", error.code, error.message);
+        if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
         return { success: false, error: "Could not send the message. Please try again." };
     }
 
@@ -189,16 +205,21 @@ export async function replyToMessage(
         return { success: true };
     }
 
+    const attachment = await saveMessageAttachment(supabase, profile.id, formData);
+    if (attachment && "error" in attachment) return { success: false, error: attachment.error };
+
     const { error } = await supabase.from("messages").insert({
         from_profile_id: profile.id,
         to_profile_id: otherPartyId,
         subject,
         body,
         parent_message_id: threadRootId,
+        ...attachmentFields(attachment),
     });
 
     if (error) {
         console.error("replyToMessage insert error:", error.message);
+        if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
         return { success: false, error: "Could not send reply. Please try again." };
     }
 
@@ -238,6 +259,13 @@ export async function deleteMessage(formData: FormData) {
 
     if (!messageId) return;
 
+    // Note any files first, so they can be removed once no message uses them.
+    // The column may not exist yet, in which case there are no files.
+    const { data: withFiles } = groupId
+        ? await supabase.from("messages").select("attachment_path").eq("group_id", groupId).eq("from_profile_id", profile.id)
+        : await supabase.from("messages").select("attachment_path").eq("id", messageId);
+    const filePaths = (withFiles ?? []).map((row) => row.attachment_path as string | null);
+
     // A sender's list shows a fan-out (broadcast / message to all admins) as
     // one card, so deleting it has to remove every copy the sender owns --
     // otherwise the next copy would just pop up in its place.
@@ -249,6 +277,8 @@ export async function deleteMessage(formData: FormData) {
         console.error("deleteMessage error:", error.message);
         return;
     }
+
+    await removeUnreferencedAttachments(supabase, filePaths);
 
     revalidatePath("/employee/messages");
     revalidatePath("/customer/messages");

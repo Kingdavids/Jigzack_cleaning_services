@@ -1,4 +1,5 @@
 import type { MessageRow } from "@/components/dashboard/MessageThreadList";
+import AttachmentLink from "@/components/dashboard/AttachmentLink";
 
 type WatchedMessage = Omit<MessageRow, "from_profile" | "to_profile"> & {
     from_profile: { full_name: string | null; role: string | null } | null;
@@ -53,6 +54,9 @@ export default function StaffCustomerConversations({ messages }: { messages: Wat
                                         {message.from_profile?.full_name ?? "Unknown"} · {when(message.created_at)}
                                     </p>
                                     <p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{message.body}</p>
+                                    {message.attachment_path && (
+                                        <AttachmentLink path={message.attachment_path} name={message.attachment_name ?? null} />
+                                    )}
                                 </div>
                             ))}
                         </div>

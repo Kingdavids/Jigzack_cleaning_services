@@ -79,7 +79,7 @@ export async function reportRegistrationFee(formData: FormData): Promise<Payment
             html: `
                 <p><strong>${escapeHtml(customer.full_name)}</strong> says they have paid the registration fee${receiptPath ? " and attached a receipt" : ""}.</p>
                 ${note ? `<p>Their note: ${escapeHtml(note)}</p>` : ""}
-                <p><a href="${escapeHtml(`${origin}/admin/customers/${profile.id}`)}">Check and confirm it</a></p>
+                <p><a href="${escapeHtml(`${origin}/admin/payments#registration-fees`)}">Check and confirm it</a></p>
             `,
         });
     }

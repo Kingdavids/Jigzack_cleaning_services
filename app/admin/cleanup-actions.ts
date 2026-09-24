@@ -7,6 +7,7 @@ import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { RECEIPT_BUCKET } from "@/lib/expenses";
+import { removeUnreferencedAttachments } from "@/lib/message-attachments";
 
 export type BulkResult = { success: boolean; error?: string; deleted?: number };
 
@@ -157,6 +158,22 @@ export async function deleteExpenses(ids: string[]): Promise<BulkResult> {
     return { success: true, deleted };
 }
 
+// Deletes messages and reports which rows went, including any attached files.
+// Before the attachments SQL has been run there is no such column, so it asks
+// again without it.
+async function deleteMessagesReturning(run: (select: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>) {
+    let result = await run("id, attachment_path");
+
+    if (result.error && /attachment_path/.test(result.error.message)) {
+        result = await run("id");
+    }
+
+    return {
+        error: result.error,
+        rows: (result.data ?? []) as { id: string; attachment_path?: string | null }[],
+    };
+}
+
 // ---------------------------------------------------------------------------
 // Messages: owner only. Removes every message, or the whole thread of the ones
 // picked, so no orphan replies are left behind.
@@ -169,21 +186,21 @@ export async function deleteMessageThreads(rootIds: string[]): Promise<BulkResul
     if (clean.length === 0) return { success: false, error: "Nothing selected." };
 
     const list = clean.join(",");
-    const { data, error } = await supabase
-        .from("messages")
-        .delete()
-        .or(`id.in.(${list}),parent_message_id.in.(${list})`)
-        .select("id");
+    const { rows, error } = await deleteMessagesReturning((select) =>
+        supabase.from("messages").delete().or(`id.in.(${list}),parent_message_id.in.(${list})`).select(select)
+    );
 
     if (error) {
         console.error("deleteMessageThreads error:", error.message);
         return { success: false, error: "Could not delete those messages. Please try again." };
     }
 
-    const deleted = data?.length ?? 0;
+    const deleted = rows.length;
     if (deleted === 0) {
         return { success: false, error: NOTHING_DELETED };
     }
+
+    await removeUnreferencedAttachments(supabase, rows.map((row) => row.attachment_path));
 
     await logActivity(supabase, actor, "messages_deleted", `Deleted ${plural(deleted, "message")}`);
 
@@ -200,21 +217,21 @@ export async function deleteAllMessages(confirm: string): Promise<BulkResult> {
 
     if (confirm.trim() !== "DELETE") return { success: false, error: "Type DELETE to confirm." };
 
-    const { data, error } = await supabase
-        .from("messages")
-        .delete()
-        .neq("id", "00000000-0000-0000-0000-000000000000")
-        .select("id");
+    const { rows, error } = await deleteMessagesReturning((select) =>
+        supabase.from("messages").delete().neq("id", "00000000-0000-0000-0000-000000000000").select(select)
+    );
 
     if (error) {
         console.error("deleteAllMessages error:", error.message);
         return { success: false, error: "Could not delete the messages. Please try again." };
     }
 
-    const deleted = data?.length ?? 0;
+    const deleted = rows.length;
     if (deleted === 0) {
         return { success: false, error: NOTHING_DELETED };
     }
+
+    await removeUnreferencedAttachments(supabase, rows.map((row) => row.attachment_path));
 
     await logActivity(supabase, actor, "messages_cleared", `Deleted every message (${plural(deleted, "message")})`);
 

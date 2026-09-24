@@ -254,7 +254,7 @@ export default async function AdminPage() {
                             label="Registration fees to confirm"
                             value={String(feeReportsRes.count ?? 0)}
                             helper={(feeReportsRes.count ?? 0) > 0 ? "Customers say they have paid. Check and confirm." : "Nothing waiting"}
-                            href="/admin/customers?fee=reported"
+                            href="/admin/payments#registration-fees"
                             tone={(feeReportsRes.count ?? 0) > 0 ? "alert" : "default"}
                         />
                         <StatCard

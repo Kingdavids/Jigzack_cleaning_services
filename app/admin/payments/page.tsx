@@ -14,7 +14,8 @@ import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
 import { deleteInvoices } from "../cleanup-actions";
-import { isOwner } from "@/lib/auth/roles";
+import { isFullAdmin, isOwner } from "@/lib/auth/roles";
+import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -71,9 +72,39 @@ export default async function AdminPaymentsPage() {
 
     const payments = (paymentsResult.data ?? []) as unknown as PaymentRow[];
     const canBulk = isOwner(profile);
+    const canAct = isFullAdmin(profile);
+
+    // One-off registration fees still to be settled: approved customers who are
+    // not tenants (tenants are waived) and have not been marked as paid.
+    const { data: feeData } = await supabase
+        .from("customers")
+        .select("*")
+        .in("profile_id", customerOptions.map((c) => c.id))
+        .is("unit_id", null)
+        .eq("registration_fee_paid", false);
+
+    type FeeRow = {
+        profile_id: string;
+        full_name: string | null;
+        phone: string | null;
+        registration_fee_submitted_at?: string | null;
+        registration_fee_note?: string | null;
+        registration_fee_receipt_path?: string | null;
+    };
+
+    const feeRows = ((feeData ?? []) as unknown as FeeRow[]).sort((a, b) => {
+        const aReported = a.registration_fee_submitted_at ? 0 : 1;
+        const bReported = b.registration_fee_submitted_at ? 0 : 1;
+        return aReported - bReported || (a.full_name ?? "").localeCompare(b.full_name ?? "");
+    });
+    const feeReported = feeRows.filter((f) => f.registration_fee_submitted_at);
+    const feeOwing = feeRows.filter((f) => !f.registration_fee_submitted_at);
 
     // Receipts are private, so each one opens through a link that expires in an hour.
-    const receiptPaths = payments.map((p) => p.transfer_receipt_path).filter((p): p is string => Boolean(p));
+    const receiptPaths = [
+        ...payments.map((p) => p.transfer_receipt_path),
+        ...feeRows.map((f) => f.registration_fee_receipt_path),
+    ].filter((p): p is string => Boolean(p));
     const signed = receiptPaths.length
         ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrls(receiptPaths, 3600)).data ?? []
         : [];
@@ -88,6 +119,75 @@ export default async function AdminPaymentsPage() {
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
+                <div id="registration-fees" className="scroll-mt-24">
+                    <SectionCard
+                        title="Registration fees"
+                        description="The one-off fee new customers pay by bank transfer. Confirm each one when the money arrives. Tenants and existing customers are not charged."
+                    >
+                        {feeRows.length === 0 ? (
+                            <p className="text-sm text-white/55">No registration fees are waiting.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {feeReported.length > 0 && (
+                                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-amber-300">
+                                        Waiting for you to confirm ({feeReported.length})
+                                    </p>
+                                )}
+                                {feeReported.map((fee) => (
+                                    <div key={fee.profile_id} className="rounded-2xl border border-amber-300/25 bg-white/[0.03] p-4">
+                                        <p className="font-bold">{fee.full_name ?? "Unknown customer"}</p>
+                                        {canAct ? (
+                                            <div className="mt-3">
+                                                <RegistrationFeeControls
+                                                    profileId={fee.profile_id}
+                                                    paid={false}
+                                                    reported
+                                                    receiptUrl={fee.registration_fee_receipt_path ? receiptUrl.get(fee.registration_fee_receipt_path) ?? null : null}
+                                                    reportedNote={fee.registration_fee_note ?? null}
+                                                    reportedAt={fee.registration_fee_submitted_at ? formatDate(fee.registration_fee_submitted_at) : null}
+                                                    paidText=""
+                                                />
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1 text-sm text-white/60">Reported as paid, waiting for an admin to confirm.</p>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {feeOwing.length > 0 && (
+                                    <details className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                                        <summary className="cursor-pointer text-sm font-semibold text-white/80">
+                                            Not paid yet ({feeOwing.length})
+                                        </summary>
+                                        <div className="mt-4 space-y-4">
+                                            {feeOwing.map((fee) => (
+                                                <div key={fee.profile_id} className="rounded-xl border border-white/10 p-4">
+                                                    <p className="font-bold">{fee.full_name ?? "Unknown customer"}</p>
+                                                    {canAct ? (
+                                                        <div className="mt-3">
+                                                            <RegistrationFeeControls
+                                                                profileId={fee.profile_id}
+                                                                paid={false}
+                                                                reported={false}
+                                                                receiptUrl={null}
+                                                                reportedNote={null}
+                                                                reportedAt={null}
+                                                                paidText=""
+                                                            />
+                                                        </div>
+                                                    ) : (
+                                                        <p className="mt-1 text-sm text-white/60">Not paid yet.</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </details>
+                                )}
+                            </div>
+                        )}
+                    </SectionCard>
+                </div>
+
                 <SectionCard
                     title="Monthly invoices"
                     description={`Creates a ${monthLabel()} invoice for every active customer that doesn't have one yet: flat ₦5,000, mini flat ₦5,000, shop ₦2,000, duplex ₦8,000, bungalow ₦7,000, terrace ₦10,000, minus any vacant units.`}

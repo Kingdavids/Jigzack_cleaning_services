@@ -27,6 +27,7 @@ export default function SendMessageForm({
                                              submitPendingLabel = "Sending…",
                                              successMessage = "Message sent",
                                              className,
+                                             attachments = true,
                                          }: {
     action: (prevState: MessageActionState, formData: FormData) => Promise<MessageActionState>;
     label: string;
@@ -35,6 +36,8 @@ export default function SendMessageForm({
     submitPendingLabel?: string;
     successMessage?: string;
     className?: string;
+    // Broadcasts are one-way announcements and go out without files.
+    attachments?: boolean;
 }) {
     const [state, formAction] = useActionState<MessageActionState, FormData>(action, null);
     const formRef = useRef<HTMLFormElement>(null);
@@ -58,6 +61,17 @@ export default function SendMessageForm({
         >
             <p className="text-xs uppercase tracking-[0.2em] text-white/45">{label}</p>
             {children}
+            {attachments && (
+                <label className="block text-xs text-white/50">
+                    Attach a photo or PDF (optional, up to 10MB)
+                    <input
+                        type="file"
+                        name="attachment"
+                        accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf"
+                        className="mt-1 block w-full text-xs text-white/70 file:mr-3 file:rounded-lg file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-white/15"
+                    />
+                </label>
+            )}
             <SubmitButton idleLabel={submitLabel} pendingLabel={submitPendingLabel} />
         </form>
     );

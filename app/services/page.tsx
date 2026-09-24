@@ -96,8 +96,12 @@ export default function ServicesPage() {
                                 Collection for shops, supermarkets, hotels, schools, eateries and other business premises, on a set schedule.
                             </p>
 
+                            <p className="mt-3 text-sm leading-relaxed text-amber-200/90">
+                                Every commercial site is inspected before we quote, so the price fits your waste.
+                            </p>
+
                             <div className="mt-4 text-sm font-semibold text-amber-300/90 opacity-0 translate-y-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-y-0">
-                                Rates set by property type
+                                Quoted after a site visit
                             </div>
                         </div>
 

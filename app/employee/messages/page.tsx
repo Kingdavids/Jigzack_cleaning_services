@@ -1,5 +1,6 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { deleteMessage, replyToMessage, sendMessageToAdmin, sendMessageToCustomer } from "@/lib/messaging-actions";
+import { loadMessages } from "@/lib/message-attachments";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import SendMessageForm from "@/components/dashboard/SendMessageForm";
@@ -8,14 +9,14 @@ import MessageThreadList, { type MessageRow } from "@/components/dashboard/Messa
 export default async function EmployeeMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");
 
-    const { data: messagesData } = await supabase
-        .from("messages")
-        .select(
-            "id, subject, body, created_at, parent_message_id, from_profile_id, to_profile_id, read_at, is_broadcast, group_id, from_profile:profiles!messages_from_profile_id_fkey(full_name), to_profile:profiles!messages_to_profile_id_fkey(full_name)"
-        )
-        .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
-        .order("created_at", { ascending: false })
-        .limit(50);
+    const messagesData = await loadMessages((select) =>
+        supabase
+            .from("messages")
+            .select(select)
+            .or(`from_profile_id.eq.${profile.id},to_profile_id.eq.${profile.id}`)
+            .order("created_at", { ascending: false })
+            .limit(50)
+    );
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
 

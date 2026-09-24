@@ -536,6 +536,16 @@ export default function CustomerSetupPage() {
                                 />
                             </div>
 
+                            {form.propertyType === "commercial" && (
+                                <div className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.07] p-4 text-sm leading-relaxed text-white/85 md:col-span-2 xl:col-span-3">
+                                    <p className="font-semibold text-amber-200">Commercial facilities are inspected first</p>
+                                    <p className="mt-1">
+                                        We visit and survey every commercial site before we give a quote, because the right price depends on the
+                                        amount and type of waste. Once your account is approved, our team will contact you to arrange the visit.
+                                    </p>
+                                </div>
+                            )}
+
                             <div>
                                 <FieldLabel>Preferred Pickup Frequency</FieldLabel>
                                 <SelectInput

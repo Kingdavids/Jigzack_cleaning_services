@@ -92,6 +92,16 @@ export default async function CustomerPage() {
                     </div>
                 )}
 
+                {!isTenant && String(customer?.property_type ?? "").toLowerCase() === "commercial" && invoices.length === 0 && (
+                    <div className="rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-4 py-3 text-sm text-amber-100">
+                        <p className="font-semibold">Your site will be inspected before we quote</p>
+                        <p className="mt-1 text-amber-100/80">
+                            We survey every commercial facility first, because the right price depends on your waste. Our team will contact you to
+                            arrange the visit. Use Messages if you would like to suggest a time.
+                        </p>
+                    </div>
+                )}
+
                 <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
                     {!isTenant && (
                         <>
