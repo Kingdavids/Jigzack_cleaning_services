@@ -18,9 +18,11 @@ import { trackEvent } from "@/lib/analytics";
 export default function Signup({
                                    inviteToken,
                                    presetEmail,
+                                   inviteKind = "employee",
                                }: {
     inviteToken?: string;
     presetEmail?: string | null;
+    inviteKind?: "employee" | "admin" | "supervisor";
 }) {
     const [isLoading, setIsLoading] = useState(false);
     const router = useRouter();
@@ -85,11 +87,19 @@ export default function Signup({
         <>
             <CardHeader className="px-0 pt-0 pb-4">
                 <CardTitle className="text-2xl md:text-3xl font-black tracking-tight text-white">
-                    {isEmployeeInvite ? "Create your employee account" : "Create account"}
+                    {!isEmployeeInvite
+                        ? "Create account"
+                        : inviteKind === "employee"
+                            ? "Create your employee account"
+                            : inviteKind === "supervisor"
+                                ? "Create your supervisor account"
+                                : "Create your admin account"}
                 </CardTitle>
                 <CardDescription className="text-white/65">
                     {isEmployeeInvite
-                        ? "You've been invited to join the Jigzack team."
+                        ? inviteKind === "employee"
+                            ? "You've been invited to join the Jigzack team."
+                            : "You've been invited to help run Jigzack. Sign up with the email address the invite was sent to."
                         : "Register as a customer to book and track waste collection."}
                 </CardDescription>
             </CardHeader>

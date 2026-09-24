@@ -58,6 +58,7 @@ export default async function AdminApprovalsPage() {
         .from("profiles")
         .select("id, full_name, email, role, decline_reason, declined_at")
         .eq("status", "declined")
+        .neq("role", "admin")
         .order("created_at", { ascending: false });
 
     if (declinedResult.error) {
@@ -65,6 +66,7 @@ export default async function AdminApprovalsPage() {
             .from("profiles")
             .select("id, full_name, email, role")
             .eq("status", "declined")
+            .neq("role", "admin")
             .order("created_at", { ascending: false })) as typeof declinedResult;
     }
 

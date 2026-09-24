@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
+import { isFullAdmin } from "@/lib/auth/roles";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 
@@ -83,7 +84,7 @@ export async function uploadTaskPhoto(
         return { success: false, error: "Photos must be marked before or after." };
     }
 
-    if (profile.role !== "employee" && profile.role !== "admin") {
+    if (profile.role !== "employee" && !isFullAdmin(profile)) {
         return { success: false, error: "Only staff can upload task photos." };
     }
 
@@ -113,7 +114,7 @@ export async function uploadTaskPhoto(
     }
 
     // Staff can only add photos to the jobs assigned to them.
-    if (profile.role !== "admin" && task.employee_id !== profile.id) {
+    if (!isFullAdmin(profile) && task.employee_id !== profile.id) {
         return { success: false, error: "This task isn't assigned to you." };
     }
 
@@ -196,7 +197,7 @@ export async function deleteTaskPhoto(uploadId: string) {
 
     if (fetchError || !upload) return;
 
-    if (upload.employee_id !== profile.id && profile.role !== "admin") return;
+    if (upload.employee_id !== profile.id && !isFullAdmin(profile)) return;
 
     const storagePath = upload.image_url.split("/task-photos/")[1];
 

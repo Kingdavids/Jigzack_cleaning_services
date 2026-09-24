@@ -15,6 +15,8 @@ import {
     UserPlus,
     CalendarDays,
     Receipt,
+    ShieldCheck,
+    History,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -32,6 +34,8 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Messages", href: "/admin/messages", icon: MessageSquare },
         { label: "Payments", href: "/admin/payments", icon: CreditCard },
         { label: "Expenses", href: "/admin/expenses", icon: Receipt },
+        { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
+        { label: "Activity", href: "/admin/activity", icon: History },
     ],
     customer: [
         { label: "Dashboard", href: "/customer", icon: LayoutDashboard },

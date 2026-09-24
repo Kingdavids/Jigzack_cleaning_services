@@ -4,6 +4,8 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
+import { isFullAdmin } from "@/lib/auth/roles";
+import { logActivity } from "@/lib/activity";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
@@ -21,7 +23,8 @@ import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 async function requireAdmin() {
     const profile = await getUserProfile();
 
-    if (profile.role !== "admin") {
+    // View-only admins can look but not change anything.
+    if (!isFullAdmin(profile)) {
         throw new Error("Not authorized");
     }
 
@@ -40,7 +43,7 @@ export async function createTask(
     _prevState: TaskActionState,
     formData: FormData
 ): Promise<TaskActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const title = String(formData.get("title") || "").trim();
@@ -80,6 +83,7 @@ export async function createTask(
         return { success: false, error: "Could not create task. Please try again." };
     }
 
+    await logActivity(supabase, actor, "task_created", "Created a pickup task");
     revalidatePath("/admin/tasks");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
@@ -95,7 +99,7 @@ export async function createInvoice(
     _prevState: InvoiceActionState,
     formData: FormData
 ): Promise<InvoiceActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const customerId = String(formData.get("customerId") || "");
@@ -131,6 +135,7 @@ export async function createInvoice(
         return { success: false, error: "Could not create invoice. Please try again." };
     }
 
+    await logActivity(supabase, actor, "invoice_created", "Created a one-off invoice");
     revalidatePath("/admin/payments");
     revalidatePath("/customer");
     revalidatePath("/customer/payments");
@@ -141,7 +146,7 @@ export async function createInvoice(
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Paystack", "Other"];
 
 export async function markInvoicePaid(paymentId: string, method: string, reference: string) {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!paymentId) return;
@@ -162,6 +167,7 @@ export async function markInvoicePaid(paymentId: string, method: string, referen
         return;
     }
 
+    await logActivity(supabase, actor, "invoice_paid", `Marked an invoice paid (${method || "no method"})`, { type: "payment", id: paymentId });
     revalidatePath("/admin/payments");
     revalidatePath("/customer");
     revalidatePath("/customer/payments");
@@ -287,6 +293,7 @@ export async function sendBroadcast(
         return { success: false, error: "Could not send broadcast. Please try again." };
     }
 
+    await logActivity(supabase, profile, "broadcast_sent", "Sent a broadcast announcement");
     revalidatePath("/admin/messages");
     revalidatePath("/employee/messages");
     revalidatePath("/customer/messages");
@@ -300,7 +307,7 @@ export async function promoteToEstate(
     _prevState: EstateActionState,
     formData: FormData
 ): Promise<EstateActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const profileId = String(formData.get("profileId") || "");
@@ -319,6 +326,7 @@ export async function promoteToEstate(
         return { success: false, error: "Could not mark this customer as an estate." };
     }
 
+    await logActivity(supabase, actor, "estate_created", "Made a customer an estate account");
     revalidatePath("/admin/estates");
     revalidatePath("/admin/customers");
 
@@ -329,7 +337,7 @@ export async function createUnit(
     _prevState: EstateActionState,
     formData: FormData
 ): Promise<EstateActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const estateProfileId = String(formData.get("estateProfileId") || "");
@@ -349,13 +357,14 @@ export async function createUnit(
         return { success: false, error: "Could not add this unit." };
     }
 
+    await logActivity(supabase, actor, "unit_created", "Added an estate unit");
     revalidatePath("/admin/estates");
 
     return { success: true };
 }
 
 export async function linkTenantToUnit(tenantProfileId: string, unitId: string | null) {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!tenantProfileId) return;
@@ -370,6 +379,7 @@ export async function linkTenantToUnit(tenantProfileId: string, unitId: string |
         return;
     }
 
+    await logActivity(supabase, actor, "tenant_linked", unitId ? "Linked a tenant to an estate unit" : "Unlinked a tenant from an estate unit", { type: "profile", id: tenantProfileId });
     revalidatePath("/admin/approvals");
     revalidatePath("/admin/estates");
 }
@@ -425,13 +435,14 @@ export async function createEmployeeInvite(
         });
     }
 
+    await logActivity(supabase, admin, "employee_invited", email ? `Invited an employee (${email})` : "Created an employee invite link");
     revalidatePath("/admin/employees");
 
     return { success: true, link, emailed };
 }
 
 export async function revokeEmployeeInvite(inviteId: string) {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!inviteId) return;
@@ -447,6 +458,7 @@ export async function revokeEmployeeInvite(inviteId: string) {
         return;
     }
 
+    await logActivity(supabase, actor, "employee_invite_revoked", "Revoked an employee invite");
     revalidatePath("/admin/employees");
 }
 
@@ -460,7 +472,7 @@ export type ApprovalResult = { success: boolean; error?: string; notes?: string[
 // pending list, where the normal approve and decline controls apply. Their
 // earlier reason is kept so the history isn't lost.
 export async function reopenApplication(userId: string): Promise<ApprovalResult> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!userId) return { success: false, error: "Invalid request." };
@@ -477,6 +489,7 @@ export async function reopenApplication(userId: string): Promise<ApprovalResult>
         return { success: false, error: "Could not reopen this application. Please try again." };
     }
 
+    await logActivity(supabase, actor, "application_reopened", "Moved a declined application back to pending", { type: "profile", id: userId });
     revalidatePath("/admin/approvals");
     revalidatePath("/admin");
 
@@ -489,7 +502,7 @@ export async function setUserApproval(
     unitId: string | null,
     reason?: string | null
 ): Promise<ApprovalResult> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!userId || (status !== "approved" && status !== "declined")) {
@@ -583,6 +596,7 @@ export async function setUserApproval(
         notes.push(emailed ? `Emailed ${target.email}.` : "Approval email not sent (email isn't configured).");
     }
 
+    await logActivity(supabase, actor, status === "approved" ? "account_approved" : "account_declined", `${status === "approved" ? "Approved" : "Declined"} ${target.full_name ?? target.email ?? "an account"} (${target.role})`, { type: "profile", id: userId });
     revalidatePath("/admin/approvals");
     revalidatePath("/admin/customers");
     revalidatePath("/admin/tasks");
@@ -595,11 +609,12 @@ export async function setUserApproval(
 export type GenerateResult = { success: boolean; message: string };
 
 export async function generateAllSchedules(): Promise<GenerateResult> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const { customers, created, unrecognised } = await runScheduleGeneration(supabase);
 
+    await logActivity(supabase, actor, "schedules_generated", `Generated schedules: ${created} pickups added`);
     revalidatePath("/admin/tasks");
 
     return {
@@ -611,11 +626,12 @@ export async function generateAllSchedules(): Promise<GenerateResult> {
 }
 
 export async function generateAllInvoices(): Promise<GenerateResult> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const tally = await runInvoiceGeneration(supabase);
 
+    await logActivity(supabase, actor, "invoices_generated", `Generated ${monthLabel()} invoices: ${tally.created} created`);
     revalidatePath("/admin/payments");
     revalidatePath("/customer/payments");
 
@@ -676,7 +692,7 @@ export async function updateCustomerDetails(
     _prevState: CustomerActionState,
     formData: FormData
 ): Promise<CustomerActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const profileId = String(formData.get("profileId") || "");
@@ -714,6 +730,7 @@ export async function updateCustomerDetails(
         return { success: false, error: "Could not save these details." };
     }
 
+    await logActivity(supabase, actor, "customer_edited", "Edited a customer record", { type: "profile", id: profileId });
     revalidatePath(`/admin/customers/${profileId}`);
     revalidatePath("/admin/customers");
     revalidatePath("/customer");
@@ -727,7 +744,7 @@ export async function saveVacancies(
     _prevState: CustomerActionState,
     formData: FormData
 ): Promise<CustomerActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const profileId = String(formData.get("profileId") || "");
@@ -765,6 +782,7 @@ export async function saveVacancies(
 
     const recalculated = await recalculateOpenInvoice(supabase, { ...billable, vacancies });
 
+    await logActivity(supabase, actor, "vacancies_saved", "Updated vacant units", { type: "profile", id: profileId });
     revalidatePath(`/admin/customers/${profileId}`);
     revalidatePath("/admin/payments");
     revalidatePath("/customer/payments");
@@ -786,7 +804,7 @@ export async function updateInvoice(
     _prevState: InvoiceActionState,
     formData: FormData
 ): Promise<InvoiceActionState> {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const paymentId = String(formData.get("paymentId") || "");
@@ -831,6 +849,7 @@ export async function updateInvoice(
         return { success: false, error: "This invoice is already paid and can't be edited." };
     }
 
+    await logActivity(supabase, actor, "invoice_edited", "Edited an invoice");
     revalidatePath("/admin/payments");
     revalidatePath("/customer/payments");
     revalidatePath("/customer");
@@ -843,7 +862,7 @@ export async function updateInvoice(
 // ---------------------------------------------------------------------------
 
 export async function updateTask(taskId: string, employeeId: string | null, scheduledDate: string | null, zone: string) {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!taskId) return;
@@ -862,13 +881,14 @@ export async function updateTask(taskId: string, employeeId: string | null, sche
         return;
     }
 
+    await logActivity(supabase, actor, "task_edited", "Edited a pickup task", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer/schedule");
 }
 
 export async function deleteTask(taskId: string) {
-    await requireAdmin();
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     if (!taskId) return;
@@ -880,6 +900,7 @@ export async function deleteTask(taskId: string) {
         return;
     }
 
+    await logActivity(supabase, actor, "task_deleted", "Deleted a pickup task", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer/schedule");
@@ -916,6 +937,7 @@ export async function reviewExpense(
         return { success: false, error: "Could not update this expense. Please try again." };
     }
 
+    await logActivity(supabase, admin, "expense_" + status, `Marked a staff expense ${status}`, { type: "expense", id: expenseId });
     revalidatePath("/admin/expenses");
     revalidatePath("/admin");
     revalidatePath("/employee/expenses");
