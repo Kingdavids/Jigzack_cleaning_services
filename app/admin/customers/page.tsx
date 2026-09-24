@@ -5,6 +5,7 @@ import { formatDate, naira } from "@/lib/customer/billing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import OrphanCustomerActions from "@/components/dashboard/OrphanCustomerActions";
 
 type CustomerRow = {
     id: string;
@@ -107,11 +108,12 @@ export default async function AdminCustomersPage({
                             const outstanding = customer.profile_id ? owed.get(customer.profile_id) ?? 0 : 0;
 
                             return (
-                                <Link
-                                    key={customer.id}
-                                    href={customer.profile_id ? `/admin/customers/${customer.profile_id}` : "#"}
-                                    className="block rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/25 hover:bg-white/[0.05]"
-                                >
+                                (customer.profile_id ? (
+                                    <Link
+                                        key={customer.id}
+                                        href={`/admin/customers/${customer.profile_id}`}
+                                        className="block rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/25 hover:bg-white/[0.05]"
+                                    >
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
@@ -154,7 +156,59 @@ export default async function AdminCustomersPage({
                                             <ChevronRight className="h-4 w-4 text-white/30" />
                                         </div>
                                     </div>
-                                </Link>
+                                    </Link>
+                                ) : (
+                                    <div key={customer.id} className="rounded-2xl border border-amber-300/25 bg-white/[0.03] p-4">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <p className="font-bold">{customer.full_name}</p>
+                                                {customer.is_estate && (
+                                                    <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300">
+                                                        Estate
+                                                    </span>
+                                                )}
+                                                {customer.unit_id && (
+                                                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/60">
+                                                        Tenant
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="mt-1 truncate text-sm text-white/55">
+                                                {[customer.address, customer.lga].filter(Boolean).join(", ") || "No address"}
+                                            </p>
+                                            <p className="mt-1 text-xs text-white/40">
+                                                {[customer.phone, customer.email].filter(Boolean).join(" · ")}
+                                            </p>
+                                            <p className="mt-2 text-xs text-white/40">
+                                                <span className="capitalize">{customer.property_type ?? "property"}</span>
+                                                {customer.preferred_pickup_frequency ? ` · ${customer.preferred_pickup_frequency}` : ""}
+                                                {customer.account_code ? ` · ${customer.account_code}` : ""}
+                                                {` · last serviced ${formatDate(customer.last_serviced, "never")}`}
+                                            </p>
+                                        </div>
+
+                                        <div className="flex shrink-0 items-center gap-3">
+                                            <div className="text-right">
+                                                <p className={`font-bold ${outstanding > 0 ? "text-amber-300" : "text-white/40"}`}>
+                                                    {naira(outstanding)}
+                                                </p>
+                                                <p className="text-[11px] text-white/35">outstanding</p>
+                                                <div className="mt-2">
+                                                    <StatusBadge status={customer.status} />
+                                                </div>
+                                            </div>
+                                            <ChevronRight className="h-4 w-4 text-white/30" />
+                                        </div>
+                                    </div>
+                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-3">
+                                            <p className="text-xs text-amber-200/80">
+                                                No login is attached to this record, so it cannot be opened. You can remove it.
+                                            </p>
+                                            <OrphanCustomerActions customerId={customer.id} fullName={customer.full_name} />
+                                        </div>
+                                    </div>
+                                ))
                             );
                         })}
                     </div>

@@ -119,7 +119,12 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
             return { success: false, error: "Deleting is not switched on yet. Run supabase/customer-delete-2026-09.sql first." };
         }
 
-        return { success: false, error: error.message.startsWith("This estate") ? error.message : "Could not delete this customer." };
+        return {
+            success: false,
+            error: error.message.startsWith("This estate")
+                ? error.message
+                : `Could not delete this customer. (${error.code || "unknown"}: ${error.message.slice(0, 120)})`,
+        };
     }
 
     const paths = (photos ?? [])
@@ -242,4 +247,37 @@ export async function clearInvoiceTransferReport(paymentId: string): Promise<Cus
     revalidatePath("/admin");
 
     return { success: true, message: "Cleared." };
+}
+
+// A customer record with no login attached (for example after the login was
+// deleted in the Supabase dashboard). It cannot be opened, so it is removed
+// from the list. Records that still have a login use the full delete instead.
+export async function deleteCustomerRecord(customerId: string): Promise<CustomerAccountResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!customerId) return { success: false, error: "Invalid request." };
+
+    const { data: customer } = await supabase
+        .from("customers")
+        .select("id, full_name, profile_id")
+        .eq("id", customerId)
+        .maybeSingle();
+
+    if (!customer) return { success: false, error: "Could not find that record." };
+    if (customer.profile_id) return { success: false, error: "This customer still has a login. Open them and use Delete customer." };
+
+    const { error } = await supabase.from("customers").delete().eq("id", customerId).is("profile_id", null);
+
+    if (error) {
+        console.error("deleteCustomerRecord error:", error.code, error.message);
+        return { success: false, error: `Could not remove this record. (${error.code || "unknown"})` };
+    }
+
+    await logActivity(supabase, actor, "customer_record_removed", `Removed the customer record ${customer.full_name} (no login)`);
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin");
+
+    return { success: true, message: "Removed." };
 }
