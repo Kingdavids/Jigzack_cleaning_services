@@ -102,7 +102,7 @@ export default function InvoiceList({
                             </p>
 
                             <div className="flex shrink-0 flex-wrap gap-2">
-                                {canReport && status === "pending" && !reported && <InvoiceTransferForm paymentId={invoice.id} />}
+                                {canReport && status === "pending" && <InvoiceTransferForm paymentId={invoice.id} reported={reported} />}
                                 <Link
                                     href={`/customer/invoices/${invoice.id}`}
                                     className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"

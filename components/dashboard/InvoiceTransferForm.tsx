@@ -7,7 +7,7 @@ import { reportInvoiceTransfer } from "@/lib/payment-actions";
 
 // "I paid by transfer" for one unpaid invoice: an optional note and receipt,
 // then the admin is told to check and confirm.
-export default function InvoiceTransferForm({ paymentId }: { paymentId: string }) {
+export default function InvoiceTransferForm({ paymentId, reported = false }: { paymentId: string; reported?: boolean }) {
     const router = useRouter();
     const [open, setOpen] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -46,7 +46,7 @@ export default function InvoiceTransferForm({ paymentId }: { paymentId: string }
                 return;
             }
 
-            toast.success("Thank you. We will confirm your payment shortly.");
+            toast.success(reported ? "Thank you. We have added it to your payment report." : "Thank you. We will confirm your payment shortly.");
             setOpen(false);
             router.refresh();
         } finally {
@@ -61,7 +61,7 @@ export default function InvoiceTransferForm({ paymentId }: { paymentId: string }
                 onClick={() => setOpen(true)}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-amber-300"
             >
-                I paid by transfer
+                {reported ? "Add proof of payment" : "I paid by transfer"}
             </button>
         );
     }
@@ -70,7 +70,7 @@ export default function InvoiceTransferForm({ paymentId }: { paymentId: string }
         <form onSubmit={handleSubmit} className="w-full space-y-3 rounded-xl border border-white/10 bg-black/25 p-4 sm:min-w-[320px]">
             <div>
                 <label htmlFor={`note-${paymentId}`} className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                    Name on the transfer or reference (optional)
+                    {reported ? "Add a note (optional)" : "Name on the transfer or reference (optional)"}
                 </label>
                 <input
                     id={`note-${paymentId}`}
@@ -82,7 +82,7 @@ export default function InvoiceTransferForm({ paymentId }: { paymentId: string }
 
             <div>
                 <label htmlFor={`receipt-${paymentId}`} className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                    Receipt photo or PDF (optional)
+                    {reported ? "Receipt photo or PDF" : "Receipt photo or PDF (optional)"}
                 </label>
                 <input
                     id={`receipt-${paymentId}`}
@@ -99,7 +99,7 @@ export default function InvoiceTransferForm({ paymentId }: { paymentId: string }
                     disabled={busy}
                     className="rounded-lg bg-amber-400 px-4 py-2 text-xs font-bold text-black hover:bg-amber-300 disabled:opacity-60"
                 >
-                    {busy ? "Sending..." : "Send"}
+                    {busy ? "Sending..." : reported ? "Send proof" : "Send"}
                 </button>
                 <button
                     type="button"

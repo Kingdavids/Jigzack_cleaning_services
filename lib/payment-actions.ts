@@ -25,16 +25,21 @@ export async function reportRegistrationFee(formData: FormData): Promise<Payment
 
     const { data: customer } = await supabase
         .from("customers")
-        .select("full_name, registration_fee_paid")
+        .select("*")
         .eq("profile_id", profile.id)
         .maybeSingle();
 
     if (!customer) return { success: false, error: "Finish your account setup first." };
     if (customer.registration_fee_paid) return { success: true };
 
-    const note = String(formData.get("note") ?? "").trim().slice(0, 300);
+    // Sending again (to add a receipt that was forgotten) keeps whatever was sent
+    // before unless it is replaced.
+    const previous = customer as { registration_fee_note?: string | null; registration_fee_receipt_path?: string | null; registration_fee_submitted_at?: string | null };
+    const alreadyReported = Boolean(previous.registration_fee_submitted_at);
+    const note = String(formData.get("note") ?? "").trim().slice(0, 300) || previous.registration_fee_note || "";
     const receipt = formData.get("receipt");
-    let receiptPath: string | null = null;
+    let receiptPath: string | null = previous.registration_fee_receipt_path ?? null;
+    let uploadedNew = false;
 
     if (receipt instanceof File && receipt.size > 0) {
         const extension = RECEIPT_EXTENSIONS[receipt.type];
@@ -43,21 +48,27 @@ export async function reportRegistrationFee(formData: FormData): Promise<Payment
             return { success: false, error: "The receipt must be a photo or PDF under 10MB." };
         }
 
-        receiptPath = `${profile.id}/registration-${randomUUID()}.${extension}`;
+        const newPath = `${profile.id}/registration-${randomUUID()}.${extension}`;
 
-        const { error: uploadError } = await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).upload(receiptPath, receipt, { upsert: false });
+        const { error: uploadError } = await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).upload(newPath, receipt, { upsert: false });
 
         if (uploadError) {
             console.error("Payment receipt upload failed:", uploadError.message);
             return { success: false, error: "Could not upload the receipt. Please try again." };
         }
+
+        const replaced = receiptPath;
+        receiptPath = newPath;
+        uploadedNew = true;
+        // The receipt it replaces is removed once the new one is saved, below.
+        previous.registration_fee_receipt_path = replaced;
     }
 
     const { error } = await supabase.rpc("report_registration_fee", { p_note: note, p_receipt_path: receiptPath });
 
     if (error) {
         console.error("report_registration_fee error:", error.message);
-        if (receiptPath) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([receiptPath]);
+        if (uploadedNew && receiptPath) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([receiptPath]);
 
         return {
             success: false,
@@ -65,6 +76,11 @@ export async function reportRegistrationFee(formData: FormData): Promise<Payment
                 ? "This is not switched on yet. Please tell us and we will fix it."
                 : "Could not send this. Please try again.",
         };
+    }
+
+    // The receipt that was replaced is no longer needed.
+    if (uploadedNew && previous.registration_fee_receipt_path) {
+        await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([previous.registration_fee_receipt_path]);
     }
 
     // Tell the admins there is something to confirm. Best effort.
@@ -75,9 +91,9 @@ export async function reportRegistrationFee(formData: FormData): Promise<Payment
 
         await sendEmail({
             to: recipients,
-            subject: `Registration fee reported by ${customer.full_name}`,
+            subject: alreadyReported ? `Proof of payment added by ${customer.full_name}` : `Registration fee reported by ${customer.full_name}`,
             html: `
-                <p><strong>${escapeHtml(customer.full_name)}</strong> says they have paid the registration fee${receiptPath ? " and attached a receipt" : ""}.</p>
+                <p><strong>${escapeHtml(customer.full_name)}</strong> ${alreadyReported ? "added a receipt for" : "says they have paid"} the registration fee${alreadyReported ? "" : receiptPath ? " and attached a receipt" : ""}.</p>
                 ${note ? `<p>Their note: ${escapeHtml(note)}</p>` : ""}
                 <p><a href="${escapeHtml(`${origin}/admin/payments#registration-fees`)}">Check and confirm it</a></p>
             `,
@@ -110,7 +126,7 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
     // Only the customer the invoice belongs to (not a tenant viewing an estate bill).
     const { data: invoice } = await supabase
         .from("payments")
-        .select("id, status, invoice_month, amount, arrears, customer_id")
+        .select("*")
         .eq("id", paymentId)
         .eq("customer_id", profile.id)
         .maybeSingle();
@@ -118,7 +134,13 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
     if (!invoice) return { success: false, error: "Could not find that invoice." };
     if (invoice.status === "paid") return { success: true };
 
-    let receiptPath: string | null = null;
+    // Sending again (to add a receipt that was forgotten) keeps whatever was sent
+    // before unless it is replaced.
+    const previousProof = invoice as { transfer_reported_at?: string | null; transfer_note?: string | null; transfer_receipt_path?: string | null };
+    const alreadyReported = Boolean(previousProof.transfer_reported_at);
+    const keptNote = note || previousProof.transfer_note || "";
+    let receiptPath: string | null = previousProof.transfer_receipt_path ?? null;
+    let uploadedNew = false;
 
     if (receipt instanceof File && receipt.size > 0) {
         const extension = RECEIPT_EXTENSIONS[receipt.type];
@@ -127,25 +149,29 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
             return { success: false, error: "The receipt must be a photo or PDF under 10MB." };
         }
 
-        receiptPath = `${profile.id}/invoice-${paymentId}-${randomUUID()}.${extension}`;
+        const newPath = `${profile.id}/invoice-${paymentId}-${randomUUID()}.${extension}`;
 
-        const { error: uploadError } = await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).upload(receiptPath, receipt, { upsert: false });
+        const { error: uploadError } = await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).upload(newPath, receipt, { upsert: false });
 
         if (uploadError) {
             console.error("Invoice receipt upload failed:", uploadError.message);
             return { success: false, error: "Could not upload the receipt. Please try again." };
         }
+
+        previousProof.transfer_receipt_path = receiptPath;
+        receiptPath = newPath;
+        uploadedNew = true;
     }
 
     const { error } = await supabase.rpc("report_invoice_transfer", {
         p_payment_id: paymentId,
-        p_note: note,
+        p_note: keptNote,
         p_receipt_path: receiptPath,
     });
 
     if (error) {
         console.error("report_invoice_transfer error:", error.message);
-        if (receiptPath) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([receiptPath]);
+        if (uploadedNew && receiptPath) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([receiptPath]);
 
         return {
             success: false,
@@ -153,6 +179,11 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
                 ? "This is not switched on yet. Please tell us and we will fix it."
                 : "Could not send this. Please try again.",
         };
+    }
+
+    // The receipt that was replaced is no longer needed.
+    if (uploadedNew && previousProof.transfer_receipt_path) {
+        await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([previousProof.transfer_receipt_path]);
     }
 
     const { data: recipients } = await supabase.rpc("approved_admin_emails");
@@ -163,10 +194,12 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
 
         await sendEmail({
             to: recipients,
-            subject: `Payment reported by ${profile.full_name ?? "a customer"}`,
+            subject: alreadyReported
+                ? `Proof of payment added by ${profile.full_name ?? "a customer"}`
+                : `Payment reported by ${profile.full_name ?? "a customer"}`,
             html: `
-                <p><strong>${escapeHtml(profile.full_name ?? "A customer")}</strong> says they paid their ${escapeHtml(invoice.invoice_month ?? "latest")} invoice (₦${total.toLocaleString()}) by bank transfer${receiptPath ? " and attached a receipt" : ""}.</p>
-                ${note ? `<p>Their note: ${escapeHtml(note)}</p>` : ""}
+                <p><strong>${escapeHtml(profile.full_name ?? "A customer")}</strong> ${alreadyReported ? "added proof of payment for" : "says they paid"} their ${escapeHtml(invoice.invoice_month ?? "latest")} invoice (₦${total.toLocaleString()})${alreadyReported ? "" : " by bank transfer"}${alreadyReported ? "" : receiptPath ? " and attached a receipt" : ""}.</p>
+                ${keptNote ? `<p>Their note: ${escapeHtml(keptNote)}</p>` : ""}
                 <p><a href="${escapeHtml(`${origin}/admin/payments`)}">Check and confirm it</a></p>
             `,
         });

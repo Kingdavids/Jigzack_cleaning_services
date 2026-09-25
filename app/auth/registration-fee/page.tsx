@@ -85,6 +85,15 @@ export default async function RegistrationFeePage() {
                     </>
                 )}
 
+                {reported && (
+                    <details className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-left">
+                        <summary className="cursor-pointer text-sm font-semibold text-amber-300">
+                            Forgot to attach your receipt? Add it here
+                        </summary>
+                        <RegistrationFeeForm reported />
+                    </details>
+                )}
+
                 <p className="mt-6 text-xs text-white/40">
                     Questions? Call us on 0703 433 9721 or email info@jigzack.com.
                 </p>

@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { reportRegistrationFee } from "@/lib/payment-actions";
 
 // "I have paid": an optional note and receipt, then the admin is told.
-export default function RegistrationFeeForm() {
+export default function RegistrationFeeForm({ reported = false }: { reported?: boolean }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
 
@@ -43,7 +43,7 @@ export default function RegistrationFeeForm() {
                 return;
             }
 
-            toast.success("Thank you. We will confirm your payment shortly.");
+            toast.success(reported ? "Thank you. We have added it to your payment report." : "Thank you. We will confirm your payment shortly.");
             router.refresh();
         } finally {
             setBusy(false);
@@ -54,7 +54,7 @@ export default function RegistrationFeeForm() {
         <form onSubmit={handleSubmit} className="mt-6 space-y-4 text-left">
             <div>
                 <label htmlFor="fee-note" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                    Name on the transfer or reference (optional)
+                    {reported ? "Add a note (optional)" : "Name on the transfer or reference (optional)"}
                 </label>
                 <input
                     id="fee-note"
@@ -67,7 +67,7 @@ export default function RegistrationFeeForm() {
 
             <div>
                 <label htmlFor="fee-receipt" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                    Receipt photo or PDF (optional)
+                    {reported ? "Receipt photo or PDF" : "Receipt photo or PDF (optional)"}
                 </label>
                 <input
                     id="fee-receipt"
@@ -83,7 +83,7 @@ export default function RegistrationFeeForm() {
                 disabled={busy}
                 className="h-12 w-full rounded-xl bg-amber-400 font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-                {busy ? "Sending..." : "I have paid"}
+                {busy ? "Sending..." : reported ? "Send receipt" : "I have paid"}
             </button>
         </form>
     );
