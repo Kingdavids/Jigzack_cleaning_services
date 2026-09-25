@@ -162,10 +162,12 @@ export default async function AdminTasksPage() {
                     scheduledDate={task.scheduled_date}
                     zone={task.zone}
                     employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
+                    title={task.title}
                 />
             )}
 
-            {["pending", "in progress"].includes(task.status ?? "pending") && isFullAdmin(profile) && (
+            {/* A pickup that has not started keeps this inside its edit controls, so an assigned one needs unlocking first. */}
+            {(task.status ?? "pending") === "in progress" && isFullAdmin(profile) && (
                 <MarkServicedButton taskId={task.id} title={task.title} scheduledDate={task.scheduled_date} />
             )}
 

@@ -6,6 +6,7 @@ import { Lock } from "lucide-react";
 import { toast } from "sonner";
 import { deleteTask, updateTask } from "@/app/admin/actions";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
+import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
 
 const inputClass =
     "h-11 rounded-lg border border-white/10 bg-white/8 px-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-amber-300/50 sm:h-9 sm:text-xs";
@@ -21,6 +22,7 @@ export default function TaskAdminControls({
                                                scheduledDate,
                                                zone,
                                                employees,
+                                               title,
                                                canUnlock = true,
                                            }: {
     taskId: string;
@@ -32,6 +34,7 @@ export default function TaskAdminControls({
     scheduledDate: string | null;
     zone: string | null;
     employees: { id: string; full_name: string | null }[];
+    title: string;
     canUnlock?: boolean;
 }) {
     const router = useRouter();
@@ -183,6 +186,9 @@ export default function TaskAdminControls({
                     </div>
                 </div>
             )}
+
+            {/* Marking a pickup serviced by hand sits with the editing controls, so an assigned pickup has to be unlocked first. */}
+            {editing && <MarkServicedButton taskId={taskId} title={title} scheduledDate={scheduledDate} />}
 
             <ConfirmDialog
                 open={asking === "unlock"}
