@@ -12,11 +12,13 @@ import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, round2 } from "@/lib/billing/balance";
+import { isPastDate } from "@/lib/tasks";
 import { naira } from "@/lib/customer/billing";
 import {
     generateInvoiceFor,
     generateScheduleFor,
     loadBillable,
+    planSchedule,
     recalculateOpenInvoice,
     type BillableCustomer,
 } from "@/lib/billing/generate";
@@ -42,6 +44,34 @@ const duplicateSince = () => new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOStr
 
 export type TaskActionState = { success: boolean; error?: string } | null;
 
+// Everyone else on the job besides the lead, with repeats and the lead removed.
+const crewFrom = (values: unknown[], leadId: string | null) =>
+    [...new Set(values.map((v) => String(v)).filter((v) => v && v !== leadId))];
+
+// A pickup dated before today has already happened, so it is saved as serviced.
+const servicedTimes = (date: string) => ({
+    status: "completed",
+    started_at: `${date}T08:00:00+01:00`,
+    completed_at: `${date}T17:00:00+01:00`,
+});
+
+async function setCrew(supabase: Awaited<ReturnType<typeof createClient>>, taskId: string, crewIds: string[]) {
+    const removed = await supabase.from("task_crew").delete().eq("task_id", taskId);
+
+    // The table does not exist until supabase/tasks-crew-2026-09.sql has been run.
+    if (removed.error) return crewIds.length === 0 ? null : "Extra crew members are not switched on yet. Run supabase/tasks-crew-2026-09.sql in Supabase first.";
+
+    if (crewIds.length > 0) {
+        const { error } = await supabase.from("task_crew").insert(crewIds.map((employee_id) => ({ task_id: taskId, employee_id })));
+        if (error) {
+            console.error("setCrew insert error:", error.message);
+            return "Could not add the other crew members. Please try again.";
+        }
+    }
+
+    return null;
+}
+
 export async function createTask(
     _prevState: TaskActionState,
     formData: FormData
@@ -55,6 +85,7 @@ export async function createTask(
     const scheduledDate = String(formData.get("scheduledDate") || "") || null;
     const zone = String(formData.get("zone") || "").trim() || null;
     const priority = String(formData.get("priority") || "low");
+    const crewIds = crewFrom(formData.getAll("crewIds"), employeeId);
 
     if (!title || !employeeId) {
         return { success: false, error: "Title and employee are required." };
@@ -72,26 +103,49 @@ export async function createTask(
         return { success: true };
     }
 
-    const { error } = await supabase.from("tasks").insert({
-        title,
-        customer_id: customerId,
-        employee_id: employeeId,
-        scheduled_date: scheduledDate,
-        zone,
-        priority,
-    });
+    const past = isPastDate(scheduledDate);
 
-    if (error) {
-        console.error("createTask insert error:", error.message);
+    const { data: created, error } = await supabase
+        .from("tasks")
+        .insert({
+            title,
+            customer_id: customerId,
+            employee_id: employeeId,
+            scheduled_date: scheduledDate,
+            zone,
+            priority,
+            ...(past && scheduledDate ? servicedTimes(scheduledDate) : {}),
+        })
+        .select("id")
+        .single();
+
+    if (error || !created) {
+        console.error("createTask insert error:", error?.message);
         return { success: false, error: "Could not create task. Please try again." };
     }
 
-    await logActivity(supabase, actor, "task_created", "Created a pickup task");
+    if (crewIds.length > 0) {
+        const crewError = await setCrew(supabase, created.id as string, crewIds);
+
+        if (crewError) {
+            await supabase.from("tasks").delete().eq("id", created.id);
+            return { success: false, error: crewError };
+        }
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "task_created",
+        past ? "Recorded a past pickup as serviced" : crewIds.length > 0 ? "Created a pickup task for a crew" : "Created a pickup task",
+        { type: "task", id: created.id as string }
+    );
     revalidatePath("/admin/tasks");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
+    revalidatePath("/customer/schedule");
 
     return { success: true };
 }
@@ -813,8 +867,53 @@ export async function generateAllInvoices(): Promise<GenerateResult> {
     };
 }
 
-export async function generateCustomerBilling(profileId: string, what: "schedule" | "invoice"): Promise<GenerateResult> {
-    await requireAdmin();
+export type SchedulePreview = {
+    success: boolean;
+    error?: string;
+    name?: string;
+    // What the property details say, and how the app read it.
+    source?: string;
+    label?: string;
+    recognised?: boolean;
+    // The pickups that would be created (YYYY-MM-DD), and how many already exist.
+    dates?: string[];
+    alreadyScheduled?: number;
+};
+
+// Shows what "Generate schedule" would create for a customer, without creating
+// anything. Read from the frequency in their property details, or from a
+// frequency the admin picks instead.
+export async function previewCustomerSchedule(profileId: string, frequencyText?: string | null): Promise<SchedulePreview> {
+    const profile = await getUserProfile();
+
+    if (profile.role !== "admin" || profile.status !== "approved") {
+        return { success: false, error: "Not authorized" };
+    }
+
+    const supabase = await createClient();
+    const billable = await loadBillable(supabase, profileId);
+
+    if (!billable) return { success: false, error: "Customer not found." };
+
+    const plan = await planSchedule(supabase, billable, 28, frequencyText);
+
+    return {
+        success: true,
+        name: billable.full_name ?? undefined,
+        source: plan.source,
+        label: plan.label,
+        recognised: plan.recognised,
+        dates: plan.fresh,
+        alreadyScheduled: plan.alreadyScheduled,
+    };
+}
+
+export async function generateCustomerBilling(
+    profileId: string,
+    what: "schedule" | "invoice",
+    frequencyText?: string | null
+): Promise<GenerateResult> {
+    const actor = await requireAdmin();
     const supabase = await createClient();
 
     const billable = await loadBillable(supabase, profileId);
@@ -825,7 +924,13 @@ export async function generateCustomerBilling(profileId: string, what: "schedule
     revalidatePath(`/admin/customers/${profileId}`);
 
     if (what === "schedule") {
-        const result = await generateScheduleFor(supabase, billable);
+        const result = await generateScheduleFor(supabase, billable, 28, frequencyText);
+
+        if (result.created > 0) {
+            await logActivity(supabase, actor, "schedule_generated", `Generated ${result.created} pickups for ${billable.full_name ?? "a customer"} (${result.frequency})`, { type: "profile", id: profileId });
+            revalidatePath("/admin/tasks");
+        }
+
         return {
             success: true,
             message: result.created > 0 ? `Added ${result.created} pickups (${result.frequency}).` : "Their schedule is already up to date.",
@@ -1039,49 +1144,106 @@ export async function updateInvoice(
 // Schedule management
 // ---------------------------------------------------------------------------
 
-export async function updateTask(taskId: string, employeeId: string | null, scheduledDate: string | null, zone: string) {
+export type TaskChangeResult = { success: boolean; error?: string; message?: string };
+
+// Once a pickup has someone on it, it is locked: the date, area and people
+// cannot be changed by accident. An admin can unlock it on purpose, and a
+// pickup that has started or been serviced can never be changed.
+export async function updateTask(
+    taskId: string,
+    employeeId: string | null,
+    scheduledDate: string | null,
+    zone: string,
+    crewIds: string[] = [],
+    unlock = false
+): Promise<TaskChangeResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
-    if (!taskId) return;
+    if (!taskId) return { success: false, error: "Missing task." };
+
+    const { data: task } = await supabase.from("tasks").select("id, status, employee_id").eq("id", taskId).maybeSingle();
+
+    if (!task) return { success: false, error: "Could not find that task." };
+
+    if (task.status !== "pending") {
+        return { success: false, error: "This pickup has already started or been serviced, so it can't be changed." };
+    }
+
+    if (task.employee_id && !unlock) {
+        return { success: false, error: "This pickup is assigned and locked. Unlock it first if you need to change it." };
+    }
+
+    const lead = employeeId || null;
+    const date = scheduledDate || null;
+    const past = isPastDate(date);
 
     const { error } = await supabase
         .from("tasks")
         .update({
-            employee_id: employeeId || null,
-            scheduled_date: scheduledDate || null,
+            employee_id: lead,
+            scheduled_date: date,
             zone: zone.trim() || null,
+            ...(past && date ? servicedTimes(date) : {}),
         })
         .eq("id", taskId);
 
     if (error) {
         console.error("updateTask error:", error.message);
-        return;
+        return { success: false, error: "Could not save this pickup. Please try again." };
     }
 
-    await logActivity(supabase, actor, "task_edited", "Edited a pickup task", { type: "task", id: taskId });
+    const crewError = await setCrew(supabase, taskId, lead ? crewFrom(crewIds, lead) : []);
+    if (crewError) return { success: false, error: crewError };
+
+    await logActivity(
+        supabase,
+        actor,
+        task.employee_id ? "task_reassigned" : "task_assigned",
+        task.employee_id ? "Changed an assigned pickup" : lead ? "Assigned a pickup" : "Edited a pickup task",
+        { type: "task", id: taskId }
+    );
     revalidatePath("/admin/tasks");
+    revalidatePath("/employee");
     revalidatePath("/employee/tasks");
+    revalidatePath("/customer");
     revalidatePath("/customer/schedule");
+
+    return {
+        success: true,
+        message: past ? "Saved. The date has passed, so it is marked serviced." : lead ? "Assigned. The pickup is now locked." : "Pickup updated",
+    };
 }
 
-export async function deleteTask(taskId: string) {
+export async function deleteTask(taskId: string, unlock = false): Promise<TaskChangeResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
-    if (!taskId) return;
+    if (!taskId) return { success: false, error: "Missing task." };
 
-    const { error } = await supabase.from("tasks").delete().eq("id", taskId).eq("status", "pending");
+    const { data: task } = await supabase.from("tasks").select("employee_id").eq("id", taskId).maybeSingle();
+
+    if (task?.employee_id && !unlock) {
+        return { success: false, error: "This pickup is assigned and locked. Unlock it first if you need to remove it." };
+    }
+
+    const { data, error } = await supabase.from("tasks").delete().eq("id", taskId).eq("status", "pending").select("id");
 
     if (error) {
         console.error("deleteTask error:", error.message);
-        return;
+        return { success: false, error: "Could not remove this pickup. Please try again." };
+    }
+
+    if (!data || data.length === 0) {
+        return { success: false, error: "Only a pickup that has not started can be removed." };
     }
 
     await logActivity(supabase, actor, "task_deleted", "Deleted a pickup task", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer/schedule");
+
+    return { success: true, message: "Pickup removed" };
 }
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,7 @@ import { CalendarCheck, CalendarClock, CreditCard, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
+import { taskDisplayStatus } from "@/lib/tasks";
 import { describeFacilities } from "@/lib/customer/facilities";
 import { describeFrequency, parseFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -16,6 +17,7 @@ type TaskRow = {
     status: string | null;
     scheduled_date: string | null;
     zone: string | null;
+    employee_id?: string | null;
     completed_at: string | null;
 };
 
@@ -43,7 +45,7 @@ export default async function CustomerPage() {
             ? Promise.resolve([] as TaskRow[])
             : supabase
                 .from("tasks")
-                .select("id, title, status, scheduled_date, zone, completed_at")
+                .select("id, title, status, scheduled_date, zone, employee_id, completed_at")
                 .eq("customer_id", profile.id)
                 .order("scheduled_date", { ascending: true })
                 .limit(200)
@@ -256,7 +258,7 @@ export default async function CustomerPage() {
                                                 {task.zone ? ` · ${task.zone}` : ""}
                                             </p>
                                         </div>
-                                        <StatusBadge status={(task.status ?? "pending").replace(" ", "_")} />
+                                        <StatusBadge status={taskDisplayStatus(task.status, Boolean(task.employee_id))} />
                                     </div>
                                 ))}
                             </div>

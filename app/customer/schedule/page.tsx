@@ -6,6 +6,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ServicePhotos, { type ServicePhoto } from "@/components/dashboard/ServicePhotos";
+import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 
 type TaskRow = {
     id: string;
@@ -13,6 +14,7 @@ type TaskRow = {
     status: string | null;
     scheduled_date: string | null;
     zone: string | null;
+    employee_id?: string | null;
     started_at: string | null;
     completed_at: string | null;
     created_at: string;
@@ -55,7 +57,7 @@ export default async function CustomerSchedulePage() {
             ? Promise.resolve([] as TaskRow[])
             : supabase
                 .from("tasks")
-                .select("id, title, status, scheduled_date, zone, started_at, completed_at, created_at")
+                .select("id, title, status, scheduled_date, zone, employee_id, started_at, completed_at, created_at")
                 .eq("customer_id", profile.id)
                 .order("scheduled_date", { ascending: true })
                 .limit(300)
@@ -97,6 +99,9 @@ export default async function CustomerSchedulePage() {
     }
 
     const history = completed.slice(0, HISTORY_LIMIT);
+
+    // Who is coming, for pickups that have someone assigned.
+    const teams = await loadTaskTeams(supabase, upcoming.filter((t) => t.employee_id).slice(0, 60).map((t) => t.id));
 
     return (
         <DashboardShell
@@ -184,6 +189,9 @@ export default async function CustomerSchedulePage() {
                                                                 </p>
                                                                 <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-white/55">
                                                                     <span>{task.title ?? "Scheduled pickup"}</span>
+                                                                    {teams.get(task.id) && (
+                                                                        <span>Crew: {teamNames(teams.get(task.id))}</span>
+                                                                    )}
                                                                     {task.zone && (
                                                                         <span className="inline-flex items-center gap-1.5">
                                                                             <MapPin className="h-3.5 w-3.5" />
@@ -192,7 +200,7 @@ export default async function CustomerSchedulePage() {
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                            <StatusBadge status={badgeStatus(task.status)} />
+                                                            <StatusBadge status={taskDisplayStatus(task.status, Boolean(task.employee_id))} />
                                                         </div>
                                                     );
                                                 })}

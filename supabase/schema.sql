@@ -1752,3 +1752,759 @@ $$;
 
 revoke execute on function public.void_installment(uuid) from public, anon;
 grant execute on function public.void_installment(uuid) to authenticated;
+
+-- ============================================================
+-- Notification bell
+-- (also in supabase/notifications-2026-09.sql for the live project)
+-- ============================================================
+-- notify too. If you run this one first, run it again afterwards.
+
+-- ---------------------------------------------------------------
+-- 1. The notifications themselves
+-- ---------------------------------------------------------------
+create table if not exists public.notifications (
+    id uuid primary key default gen_random_uuid(),
+    recipient_id uuid not null references public.profiles (id) on delete cascade,
+    kind text not null,
+    title text not null,
+    body text,
+    -- Where the bell takes you when you tap it.
+    href text,
+    -- The thing it is about, for example the message thread it belongs to.
+    ref_id uuid,
+    -- Stops a burst (ten photos, a week of pickups) from ringing ten times.
+    dedupe_key text,
+    created_at timestamptz not null default now(),
+    read_at timestamptz
+);
+
+create index if not exists notifications_recipient_idx on public.notifications (recipient_id, created_at desc);
+create index if not exists notifications_unread_idx on public.notifications (recipient_id) where read_at is null;
+
+alter table public.notifications enable row level security;
+
+drop policy if exists "notifications_select_own" on public.notifications;
+create policy "notifications_select_own" on public.notifications
+    for select to authenticated using (recipient_id = auth.uid());
+
+drop policy if exists "notifications_update_own" on public.notifications;
+create policy "notifications_update_own" on public.notifications
+    for update to authenticated using (recipient_id = auth.uid()) with check (recipient_id = auth.uid());
+
+drop policy if exists "notifications_delete_own" on public.notifications;
+create policy "notifications_delete_own" on public.notifications
+    for delete to authenticated using (recipient_id = auth.uid());
+
+-- Live updates to the bell.
+do $$
+begin
+    alter publication supabase_realtime add table public.notifications;
+exception
+    when duplicate_object then null;
+end
+$$;
+
+-- ---------------------------------------------------------------
+-- 2. Helpers the triggers use. Nobody calls these from the app.
+-- ---------------------------------------------------------------
+create or replace function public.notify(
+    p_recipient uuid,
+    p_kind text,
+    p_title text,
+    p_body text,
+    p_href text,
+    p_ref uuid default null,
+    p_dedupe text default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    if p_recipient is null then
+        return;
+    end if;
+
+    if p_dedupe is not null and exists (
+        select 1 from public.notifications
+        where recipient_id = p_recipient
+          and dedupe_key = p_dedupe
+          and created_at > now() - interval '10 minutes'
+    ) then
+        return;
+    end if;
+
+    insert into public.notifications (recipient_id, kind, title, body, href, ref_id, dedupe_key)
+    values (p_recipient, p_kind, left(p_title, 200), left(p_body, 300), p_href, p_ref, p_dedupe);
+end;
+$$;
+
+create or replace function public.notify_admins(
+    p_kind text,
+    p_title text,
+    p_body text,
+    p_href text,
+    p_ref uuid default null,
+    p_dedupe text default null,
+    p_owners_only boolean default false,
+    p_except uuid default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_admin uuid;
+begin
+    for v_admin in
+        select id from public.profiles
+        where role = 'admin'
+          and status = 'approved'
+          and (not p_owners_only or coalesce(is_owner, false))
+          and (p_except is null or id <> p_except)
+    loop
+        perform public.notify(v_admin, p_kind, p_title, p_body, p_href, p_ref, p_dedupe);
+    end loop;
+end;
+$$;
+
+revoke execute on function public.notify(uuid, text, text, text, text, uuid, text) from public, anon, authenticated;
+revoke execute on function public.notify_admins(text, text, text, text, uuid, text, boolean, uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------
+-- 3. Triggers. Every one swallows its own errors, so a problem here can
+--    never stop a message, invoice or task from being saved.
+-- ---------------------------------------------------------------
+
+-- Messages (and announcements)
+create or replace function public.trg_notify_message()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_from text;
+    v_role text;
+begin
+    begin
+        if new.to_profile_id is null or new.to_profile_id = new.from_profile_id then
+            return new;
+        end if;
+
+        select full_name into v_from from public.profiles where id = new.from_profile_id;
+        select role into v_role from public.profiles where id = new.to_profile_id;
+
+        perform public.notify(
+            new.to_profile_id,
+            'message',
+            case when coalesce(new.is_broadcast, false)
+                 then 'Announcement: ' || coalesce(new.subject, '')
+                 else 'New message from ' || coalesce(v_from, 'someone') end,
+            coalesce(new.subject, ''),
+            '/' || coalesce(v_role, 'customer') || '/messages',
+            coalesce(new.parent_message_id, new.id)
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_message on public.messages;
+create trigger notify_on_message after insert on public.messages
+    for each row execute function public.trg_notify_message();
+
+-- Invoices
+create or replace function public.trg_notify_invoice()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_name text;
+begin
+    begin
+        select full_name into v_name from public.profiles where id = new.customer_id;
+
+        perform public.notify(
+            new.customer_id, 'invoice',
+            'New invoice: ₦' || to_char(new.amount + new.arrears, 'FM999,999,999'),
+            coalesce(new.invoice_month, ''),
+            '/customer/invoices/' || new.id, new.id
+        );
+
+        perform public.notify_admins(
+            'invoice', 'New invoice generated',
+            coalesce(v_name, 'A customer') || ' · ₦' || to_char(new.amount + new.arrears, 'FM999,999,999'),
+            '/admin/payments', new.id, 'invoice-batch'
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_invoice on public.payments;
+create trigger notify_on_invoice after insert on public.payments
+    for each row execute function public.trg_notify_invoice();
+
+-- A customer says they paid by transfer
+create or replace function public.trg_notify_transfer_reported()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_name text;
+begin
+    begin
+        if new.transfer_reported_at is not null and new.transfer_reported_at is distinct from old.transfer_reported_at then
+            select full_name into v_name from public.profiles where id = new.customer_id;
+
+            perform public.notify_admins(
+                'payment', 'Payment reported by ' || coalesce(v_name, 'a customer'),
+                coalesce(new.invoice_month, 'Invoice') || ' · check and confirm',
+                '/admin/payments', new.id
+            );
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_transfer_reported on public.payments;
+create trigger notify_on_transfer_reported after update of transfer_reported_at on public.payments
+    for each row execute function public.trg_notify_transfer_reported();
+
+-- Tasks
+create or replace function public.trg_notify_task_insert()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    begin
+        if new.employee_id is not null then
+            perform public.notify(
+                new.employee_id, 'task', 'New task assigned',
+                new.title || coalesce(' · ' || to_char(new.scheduled_date, 'DD Mon'), ''),
+                '/employee/tasks', new.id
+            );
+        end if;
+
+        if new.customer_id is not null then
+            if new.auto_generated then
+                perform public.notify(
+                    new.customer_id, 'task', 'Your pickup schedule was updated',
+                    'New pickups have been scheduled for you',
+                    '/customer/schedule', null, 'schedule:' || new.customer_id
+                );
+            else
+                perform public.notify(
+                    new.customer_id, 'task', 'Pickup scheduled',
+                    new.title || coalesce(' · ' || to_char(new.scheduled_date, 'DD Mon'), ''),
+                    '/customer/schedule', new.id
+                );
+            end if;
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_task_insert on public.tasks;
+create trigger notify_on_task_insert after insert on public.tasks
+    for each row execute function public.trg_notify_task_insert();
+
+create or replace function public.trg_notify_task_update()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    begin
+        if new.employee_id is not null and new.employee_id is distinct from old.employee_id then
+            perform public.notify(
+                new.employee_id, 'task', 'Task assigned to you',
+                new.title || coalesce(' · ' || to_char(new.scheduled_date, 'DD Mon'), ''),
+                '/employee/tasks', new.id
+            );
+            perform public.notify(
+                new.customer_id, 'task', 'Your pickup has been assigned',
+                new.title || coalesce(' · ' || to_char(new.scheduled_date, 'DD Mon'), ''),
+                '/customer/schedule', new.id
+            );
+        end if;
+
+        if new.scheduled_date is distinct from old.scheduled_date and new.scheduled_date is not null then
+            perform public.notify(
+                new.customer_id, 'task', 'Pickup date changed',
+                new.title || ' · now ' || to_char(new.scheduled_date, 'DD Mon'),
+                '/customer/schedule', new.id
+            );
+            perform public.notify(
+                new.employee_id, 'task', 'Task date changed',
+                new.title || ' · now ' || to_char(new.scheduled_date, 'DD Mon'),
+                '/employee/tasks', new.id
+            );
+        end if;
+
+        -- Pickups marked serviced because their date passed do not ring anyone.
+        if new.status is distinct from old.status
+           and not (new.status = 'completed' and new.scheduled_date is not null
+                    and new.scheduled_date < (now() at time zone 'Africa/Lagos')::date) then
+            perform public.notify(
+                new.customer_id, 'task',
+                case new.status when 'in progress' then 'Your pickup is under way'
+                                when 'completed' then 'Your pickup is done'
+                                else 'Pickup ' || new.status end,
+                new.title, '/customer/schedule', new.id
+            );
+            perform public.notify_admins(
+                'task', 'Task ' || new.status, new.title, '/admin/tasks', new.id
+            );
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_task_update on public.tasks;
+create trigger notify_on_task_update after update on public.tasks
+    for each row execute function public.trg_notify_task_update();
+
+-- Photos uploaded
+create or replace function public.trg_notify_upload()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_key text := 'photos:' || coalesce(new.customer_id::text, '') || ':' || coalesce(new.task_title, '') || ':' || coalesce(new.photo_type, '');
+begin
+    begin
+        perform public.notify(
+            new.customer_id, 'photos', 'New ' || coalesce(new.photo_type, '') || ' photos uploaded',
+            coalesce(new.task_title, ''), '/customer/schedule', null, v_key
+        );
+        perform public.notify_admins(
+            'photos', 'New ' || coalesce(new.photo_type, '') || ' photos uploaded',
+            coalesce(new.task_title, ''), '/admin/uploads', null, v_key
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_upload on public.uploads;
+create trigger notify_on_upload after insert on public.uploads
+    for each row execute function public.trg_notify_upload();
+
+-- New signups waiting for approval
+create or replace function public.trg_notify_signup()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    begin
+        if new.role in ('customer', 'employee') and new.status = 'pending' then
+            perform public.notify_admins(
+                'signup', 'New signup awaiting approval',
+                coalesce(new.full_name, new.email, 'Someone') || ' (' || new.role || ')',
+                '/admin/approvals', new.id
+            );
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_signup on public.profiles;
+create trigger notify_on_signup after insert on public.profiles
+    for each row execute function public.trg_notify_signup();
+
+-- Registration fee: reported by the customer, confirmed by an admin
+create or replace function public.trg_notify_registration_fee()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_name text;
+begin
+    begin
+        if new.registration_fee_submitted_at is not null
+           and new.registration_fee_submitted_at is distinct from old.registration_fee_submitted_at
+           and not new.registration_fee_paid then
+            select full_name into v_name from public.profiles where id = new.profile_id;
+
+            perform public.notify_admins(
+                'payment', 'Registration fee reported by ' || coalesce(v_name, 'a customer'),
+                'Check and confirm it', '/admin/payments#registration-fees', new.profile_id
+            );
+        end if;
+
+        if new.registration_fee_paid and not old.registration_fee_paid then
+            perform public.notify(new.profile_id, 'payment', 'Registration fee confirmed', 'Your dashboard is open', '/customer', new.profile_id);
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_registration_fee on public.customers;
+create trigger notify_on_registration_fee after update of registration_fee_submitted_at, registration_fee_paid on public.customers
+    for each row execute function public.trg_notify_registration_fee();
+
+-- ---------------------------------------------------------------
+-- 4. Triggers on tables that may not exist yet
+-- ---------------------------------------------------------------
+
+-- Receipts: a payment recorded against an invoice
+create or replace function public.trg_notify_receipt()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_customer uuid;
+begin
+    begin
+        select customer_id into v_customer from public.payments where id = new.payment_id;
+
+        perform public.notify(
+            v_customer, 'receipt',
+            'Receipt ready: ₦' || to_char(new.amount, 'FM999,999,999') || ' received',
+            case when new.balance_after = 0 then 'Your invoice is paid in full'
+                 else '₦' || to_char(new.balance_after, 'FM999,999,999') || ' is still owed' end,
+            '/customer/receipts/' || new.id, new.id
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+create or replace function public.trg_notify_expense()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_name text;
+begin
+    begin
+        if tg_op = 'INSERT' then
+            select full_name into v_name from public.profiles where id = new.employee_id;
+
+            perform public.notify_admins(
+                'expense', 'New expense from ' || coalesce(v_name, 'staff'),
+                '₦' || to_char(new.amount, 'FM999,999,999') || ' · ' || new.category, '/admin/expenses', new.id
+            );
+        elsif new.status is distinct from old.status then
+            perform public.notify(
+                new.employee_id, 'expense', 'Expense ' || new.status,
+                '₦' || to_char(new.amount, 'FM999,999,999') || ' · ' || new.category, '/employee/expenses', new.id
+            );
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+-- What admins change, for owners to follow along
+create or replace function public.trg_notify_activity()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    begin
+        perform public.notify_admins(
+            'activity', coalesce(new.actor_name, 'An admin'), new.summary,
+            '/admin/activity', null, null, true, new.actor_id
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+do $$
+begin
+    if to_regclass('public.payment_installments') is not null then
+        drop trigger if exists notify_on_receipt on public.payment_installments;
+        create trigger notify_on_receipt after insert on public.payment_installments
+            for each row execute function public.trg_notify_receipt();
+    end if;
+
+    if to_regclass('public.expenses') is not null then
+        drop trigger if exists notify_on_expense on public.expenses;
+        create trigger notify_on_expense after insert or update of status on public.expenses
+            for each row execute function public.trg_notify_expense();
+    end if;
+
+    if to_regclass('public.activity_log') is not null then
+        drop trigger if exists notify_on_activity on public.activity_log;
+        create trigger notify_on_activity after insert on public.activity_log
+            for each row execute function public.trg_notify_activity();
+    end if;
+end
+$$;
+
+select 'done' as result;
+
+-- ============================================================
+-- Task crews and past pickups marked serviced
+-- (also in supabase/tasks-crew-2026-09.sql for the live project)
+-- ============================================================
+
+-- ---------------------------------------------------------------
+-- 1. The rest of the crew. tasks.employee_id stays the lead; anyone else on the
+--    job is listed here.
+-- ---------------------------------------------------------------
+create table if not exists public.task_crew (
+    task_id uuid not null references public.tasks (id) on delete cascade,
+    employee_id uuid not null references public.profiles (id) on delete cascade,
+    created_at timestamptz not null default now(),
+    primary key (task_id, employee_id)
+);
+
+create index if not exists task_crew_employee_idx on public.task_crew (employee_id);
+
+alter table public.task_crew enable row level security;
+
+drop policy if exists "task_crew_select_own" on public.task_crew;
+create policy "task_crew_select_own" on public.task_crew
+    for select to authenticated using (employee_id = auth.uid());
+
+drop policy if exists "task_crew_select_reader" on public.task_crew;
+create policy "task_crew_select_reader" on public.task_crew
+    for select to authenticated using (public.is_staff_reader());
+
+drop policy if exists "task_crew_write_admin" on public.task_crew;
+create policy "task_crew_write_admin" on public.task_crew
+    for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+-- ---------------------------------------------------------------
+-- 2. Crew members see and work on the task, like the lead does
+-- ---------------------------------------------------------------
+drop policy if exists "tasks_select_crew" on public.tasks;
+create policy "tasks_select_crew" on public.tasks
+    for select to authenticated using (
+        exists (select 1 from public.task_crew c where c.task_id = tasks.id and c.employee_id = auth.uid())
+    );
+
+drop policy if exists "tasks_update_crew" on public.tasks;
+create policy "tasks_update_crew" on public.tasks
+    for update to authenticated
+    using (exists (select 1 from public.task_crew c where c.task_id = tasks.id and c.employee_id = auth.uid()))
+    with check (exists (select 1 from public.task_crew c where c.task_id = tasks.id and c.employee_id = auth.uid()));
+
+-- Photos taken by anyone on the job are visible to everyone on the job.
+drop policy if exists "uploads_select_task_team" on public.uploads;
+create policy "uploads_select_task_team" on public.uploads
+    for select to authenticated using (
+        exists (
+            select 1 from public.tasks t
+            where t.id = uploads.task_id
+              and (
+                  t.employee_id = auth.uid()
+                  or exists (select 1 from public.task_crew c where c.task_id = t.id and c.employee_id = auth.uid())
+              )
+        )
+    );
+
+-- ---------------------------------------------------------------
+-- 3. Messaging: a crew member can write to the customer of a shared task
+-- ---------------------------------------------------------------
+create or replace function public.my_customer_contacts()
+returns table (id uuid, full_name text)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    select distinct p.id, p.full_name
+    from public.tasks t
+    join public.profiles p on p.id = t.customer_id
+    where (
+            t.employee_id = auth.uid()
+            or exists (select 1 from public.task_crew c where c.task_id = t.id and c.employee_id = auth.uid())
+          )
+      and p.role = 'customer'
+      and p.status = 'approved'
+    order by p.full_name;
+$$;
+
+revoke execute on function public.my_customer_contacts() from public, anon;
+grant execute on function public.my_customer_contacts() to authenticated;
+
+drop policy if exists "messages_insert_employee_customer" on public.messages;
+create policy "messages_insert_employee_customer" on public.messages
+    for insert to authenticated
+    with check (
+        auth.uid() = from_profile_id
+        and exists (
+            select 1 from public.tasks t
+            where (
+                    (
+                        (t.employee_id = from_profile_id
+                         or exists (select 1 from public.task_crew c where c.task_id = t.id and c.employee_id = from_profile_id))
+                        and t.customer_id = to_profile_id
+                    )
+                    or (
+                        t.customer_id = from_profile_id
+                        and (t.employee_id = to_profile_id
+                             or exists (select 1 from public.task_crew c where c.task_id = t.id and c.employee_id = to_profile_id))
+                    )
+                  )
+        )
+        and (
+            parent_message_id is null
+            or not exists (
+                select 1 from public.messages root
+                where root.id = parent_message_id and root.is_broadcast
+            )
+        )
+    );
+
+-- ---------------------------------------------------------------
+-- 4. Who is on each task, by name. Employees and customers cannot read other
+--    people's profiles, so this hands back only the names for tasks the caller
+--    is on (or the customer of), and everything to admins.
+-- ---------------------------------------------------------------
+create or replace function public.task_team(p_task_ids uuid[])
+returns table (task_id uuid, employee_id uuid, full_name text, is_lead boolean)
+language sql
+security definer
+set search_path = public
+stable
+as $$
+    with allowed as (
+        select t.id, t.employee_id as lead_id
+        from public.tasks t
+        where t.id = any (p_task_ids)
+          and (
+              public.is_staff_reader()
+              or t.customer_id = auth.uid()
+              or t.employee_id = auth.uid()
+              or exists (select 1 from public.task_crew c where c.task_id = t.id and c.employee_id = auth.uid())
+          )
+    ),
+    everyone as (
+        select a.id as task_id, a.lead_id as employee_id, true as is_lead
+        from allowed a
+        where a.lead_id is not null
+        union
+        select c.task_id, c.employee_id, false
+        from public.task_crew c
+        join allowed a on a.id = c.task_id
+    )
+    select e.task_id, e.employee_id, p.full_name, e.is_lead
+    from everyone e
+    join public.profiles p on p.id = e.employee_id
+    order by e.task_id, e.is_lead desc, p.full_name;
+$$;
+
+revoke execute on function public.task_team(uuid[]) from public, anon;
+grant execute on function public.task_team(uuid[]) to authenticated;
+
+-- ---------------------------------------------------------------
+-- 5. Pickups whose date has passed are marked serviced. Called by the daily job
+--    and whenever an admin opens the Tasks page. Returns how many it changed.
+-- ---------------------------------------------------------------
+create or replace function public.mark_past_tasks_serviced()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_count integer;
+begin
+    if not (public.is_admin() or auth.role() = 'service_role') then
+        raise exception 'Only an admin can do this';
+    end if;
+
+    update public.tasks
+    set status = 'completed',
+        started_at = coalesce(started_at, (scheduled_date::timestamp + time '08:00') at time zone 'Africa/Lagos'),
+        completed_at = coalesce(completed_at, (scheduled_date::timestamp + time '17:00') at time zone 'Africa/Lagos')
+    where status in ('pending', 'in progress')
+      and scheduled_date is not null
+      and scheduled_date < (now() at time zone 'Africa/Lagos')::date;
+
+    get diagnostics v_count = row_count;
+    return v_count;
+end;
+$$;
+
+revoke execute on function public.mark_past_tasks_serviced() from public, anon;
+grant execute on function public.mark_past_tasks_serviced() to authenticated, service_role;
+
+-- ---------------------------------------------------------------
+-- 6. Tell a crew member when they are put on a task
+-- ---------------------------------------------------------------
+create or replace function public.trg_notify_crew()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_title text;
+    v_date date;
+begin
+    begin
+        select title, scheduled_date into v_title, v_date from public.tasks where id = new.task_id;
+
+        perform public.notify(
+            new.employee_id, 'task', 'You have been added to a task',
+            coalesce(v_title, 'Task') || coalesce(' · ' || to_char(v_date, 'DD Mon'), ''),
+            '/employee/tasks', new.task_id
+        );
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_crew on public.task_crew;
+create trigger notify_on_crew after insert on public.task_crew
+    for each row execute function public.trg_notify_crew();
+
+select 'done' as result;

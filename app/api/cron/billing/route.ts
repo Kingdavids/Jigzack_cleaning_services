@@ -113,5 +113,14 @@ export async function POST(request: NextRequest) {
         await sendEmail({ to, subject: "Jigzack billing job summary", html: lines.join("") });
     }
 
+    // Pickups whose date has passed are marked serviced. Quietly does nothing before the crew SQL has run.
+    await supabase.rpc("mark_past_tasks_serviced");
+
+    // Old notifications are not kept forever. Quietly does nothing before the table exists.
+    await supabase
+        .from("notifications")
+        .delete()
+        .lt("created_at", new Date(Date.now() - 60 * 86_400_000).toISOString());
+
     return NextResponse.json({ ok: true, day: lagosDay, schedules, invoices, emails, purged });
 }

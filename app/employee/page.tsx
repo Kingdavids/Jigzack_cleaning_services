@@ -11,10 +11,8 @@ type TaskRow = {
 export default async function EmployeePage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");
 
-    const { data: taskData } = await supabase
-        .from("tasks")
-        .select("status, priority")
-        .eq("employee_id", profile.id);
+    // The database returns only the tasks this person is on, as lead or as crew.
+    const { data: taskData } = await supabase.from("tasks").select("status, priority");
 
     const tasks: TaskRow[] = taskData ?? [];
 

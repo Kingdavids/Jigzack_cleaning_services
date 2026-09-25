@@ -6,6 +6,8 @@ export default function StatusBadge({ status }: { status: string }) {
         declined: "border-red-400/20 bg-red-400/10 text-red-300",
         paid: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         part_paid: "border-amber-400/20 bg-amber-400/10 text-amber-300",
+        assigned: "border-sky-400/20 bg-sky-400/10 text-sky-300",
+        serviced: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         failed: "border-red-400/20 bg-red-400/10 text-red-300",
         active: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         inactive: "border-zinc-400/20 bg-zinc-400/10 text-zinc-300",

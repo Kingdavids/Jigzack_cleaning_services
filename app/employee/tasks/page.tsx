@@ -6,6 +6,7 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import TaskPhotoManager from "@/components/dashboard/TaskPhotoManager";
 import TaskTimer from "@/components/dashboard/TaskTimer";
 import { endTask, startTask } from "@/app/employee/actions";
+import { loadTaskTeams, taskDisplayStatus } from "@/lib/tasks";
 
 type TaskRow = {
     id: string;
@@ -39,10 +40,11 @@ function formatDate(value: string | null) {
 export default async function EmployeeTasksPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");
 
+    // The database returns only the tasks this person is on, as the lead or as
+    // crew, so a job shared with a colleague shows up for both of them.
     const { data: taskData, error: taskError } = await supabase
         .from("tasks")
         .select("*")
-        .eq("employee_id", profile.id)
         .order("created_at", { ascending: false });
 
     if (taskError) {
@@ -51,6 +53,7 @@ export default async function EmployeeTasksPage() {
 
     const tasks: TaskRow[] = taskData ?? [];
     const taskIds = tasks.map((t) => t.id);
+    const teams = await loadTaskTeams(supabase, taskIds);
 
     const { data: uploadsData } = taskIds.length
         ? await supabase
@@ -87,12 +90,17 @@ export default async function EmployeeTasksPage() {
                                     <div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <p className="text-lg font-bold">{task.title}</p>
-                                            <StatusBadge status={(task.status ?? "pending").toLowerCase()} />
+                                            <StatusBadge status={taskDisplayStatus(task.status, true)} />
                                         </div>
 
                                         <p className="mt-2 text-sm text-white/60">
                                             Customer: {task.customer_name ?? "Assigned client"}
                                         </p>
+                                        {(teams.get(task.id) ?? []).length > 1 && (
+                                            <p className="mt-1 text-sm text-sky-300">
+                                                With {(teams.get(task.id) ?? []).filter((m) => m.employee_id !== profile.id).map((m) => m.full_name ?? "a colleague").join(" and ")}
+                                            </p>
+                                        )}
 
                                         <div className="mt-3 flex flex-wrap gap-4 text-sm text-white/50">
                                             <span className="inline-flex items-center gap-2">
@@ -112,7 +120,7 @@ export default async function EmployeeTasksPage() {
                                                 <input type="hidden" name="taskId" value={task.id} />
                                                 <button
                                                     type="submit"
-                                                    disabled={(task.status ?? "").toLowerCase() === "in progress"}
+                                                    disabled={["in progress", "completed"].includes((task.status ?? "").toLowerCase())}
                                                     className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     Start Task
@@ -123,7 +131,8 @@ export default async function EmployeeTasksPage() {
                                                 <input type="hidden" name="taskId" value={task.id} />
                                                 <button
                                                     type="submit"
-                                                    className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-black transition hover:bg-amber-300"
+                                                    disabled={(task.status ?? "").toLowerCase() === "completed"}
+                                                    className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                                                 >
                                                     End Task
                                                 </button>

@@ -16,6 +16,8 @@ export async function startTask(formData: FormData) {
 
     if (!taskId) return;
 
+    // Which tasks this person may change is decided by the database: the ones they
+    // lead and, once the crew SQL has run, the ones they are a crew member on.
     await supabase
         .from("tasks")
         .update({
@@ -23,7 +25,7 @@ export async function startTask(formData: FormData) {
             started_at: new Date().toISOString(),
         })
         .eq("id", taskId)
-        .eq("employee_id", profile.id);
+        .eq("status", "pending");
 
     revalidatePath("/employee/tasks");
     revalidatePath("/admin/tasks");
@@ -44,7 +46,7 @@ export async function endTask(formData: FormData) {
             completed_at: new Date().toISOString(),
         })
         .eq("id", taskId)
-        .eq("employee_id", profile.id);
+        .in("status", ["pending", "in progress"]);
 
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
@@ -113,9 +115,16 @@ export async function uploadTaskPhoto(
         return { success: false, error: "Could not load this task. Please try again." };
     }
 
-    // Staff can only add photos to the jobs assigned to them.
+    // Staff can only add photos to the jobs they are on, as the lead or as crew.
     if (!isFullAdmin(profile) && task.employee_id !== profile.id) {
-        return { success: false, error: "This task isn't assigned to you." };
+        const { data: onCrew } = await supabase
+            .from("task_crew")
+            .select("task_id")
+            .eq("task_id", taskId)
+            .eq("employee_id", profile.id)
+            .maybeSingle();
+
+        if (!onCrew) return { success: false, error: "This task isn't assigned to you." };
     }
 
     let uploaded = 0;

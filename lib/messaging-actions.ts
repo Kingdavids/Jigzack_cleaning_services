@@ -251,6 +251,16 @@ export async function markThreadRead(rootMessageId: string) {
     if (error) {
         console.error("markThreadRead error:", error.message);
     }
+
+    // The bell entry for this thread is read too. Quietly does nothing before the
+    // notifications table exists.
+    await supabase
+        .from("notifications")
+        .update({ read_at: new Date().toISOString() })
+        .eq("recipient_id", profile.id)
+        .eq("kind", "message")
+        .is("read_at", null)
+        .eq("ref_id", rootMessageId);
 }
 
 export async function deleteMessage(formData: FormData) {

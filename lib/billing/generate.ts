@@ -53,21 +53,46 @@ export function chargeItems(customer: BillableCustomer): LineItem[] {
 // Creates pending pickups from the customer's stated frequency, skipping any
 // date that already has a task. Unassigned (no employee) until an admin
 // assigns them; everything about them stays editable.
-export async function generateScheduleFor(supabase: SupabaseServerClient, customer: BillableCustomer, horizonDays = 28) {
-    if (!customer.profile_id) return { created: 0, frequency: "", recognised: false };
-
-    const frequency = parseFrequency(customer.preferred_pickup_frequency);
+// Works out which pickups would be created, without creating them. The
+// frequency comes from the customer's property details unless an admin passes
+// their own wording (for example "3 times a week").
+export async function planSchedule(
+    supabase: SupabaseServerClient,
+    customer: BillableCustomer,
+    horizonDays = 28,
+    frequencyText?: string | null
+) {
+    const source = frequencyText?.trim() ? frequencyText : customer.preferred_pickup_frequency;
+    const frequency = parseFrequency(source);
     const today = todayKey();
     const dates = generateDates(frequency, addDays(today, 2), horizonDays);
 
-    const { data: existing } = await supabase
-        .from("tasks")
-        .select("scheduled_date")
-        .eq("customer_id", customer.profile_id)
-        .gte("scheduled_date", today);
+    const { data: existing } = customer.profile_id
+        ? await supabase.from("tasks").select("scheduled_date").eq("customer_id", customer.profile_id).gte("scheduled_date", today)
+        : { data: [] as { scheduled_date: string }[] };
 
     const taken = new Set((existing ?? []).map((t) => t.scheduled_date as string));
     const fresh = dates.filter((date) => !taken.has(date));
+
+    return {
+        frequency,
+        source: (source ?? "").trim(),
+        label: describeFrequency(frequency),
+        recognised: frequency.kind !== "unknown",
+        fresh,
+        alreadyScheduled: dates.length - fresh.length,
+    };
+}
+
+export async function generateScheduleFor(
+    supabase: SupabaseServerClient,
+    customer: BillableCustomer,
+    horizonDays = 28,
+    frequencyText?: string | null
+) {
+    if (!customer.profile_id) return { created: 0, frequency: "", recognised: false };
+
+    const { frequency, fresh } = await planSchedule(supabase, customer, horizonDays, frequencyText);
 
     if (fresh.length > 0) {
         const { error } = await supabase.from("tasks").insert(

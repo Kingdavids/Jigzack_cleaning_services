@@ -1,7 +1,7 @@
 'use client';
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu } from "lucide-react";
 import { toast } from "sonner";
@@ -9,6 +9,7 @@ import { createClient } from "@/utils/supabase/client";
 import { playNotificationSound } from "@/lib/notification-sound";
 import type { UserRole } from "@/lib/dashboard-types";
 import { LEVEL_LABEL, useViewer } from "@/components/dashboard/ViewerContext";
+import NotificationBell from "@/components/dashboard/NotificationBell";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export default function Topbar({
@@ -28,6 +29,10 @@ export default function Topbar({
 }) {
     const router = useRouter();
     const viewer = useViewer();
+    // The bell reads the notifications table. Until that SQL has been run it is
+    // not there, and the older message-only alerts below keep working instead.
+    const [legacy, setLegacy] = useState(false);
+    const useLegacy = useCallback(() => setLegacy(true), []);
     const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
     const [justArrived, setJustArrived] = useState(false);
     const arrivedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -40,6 +45,8 @@ export default function Topbar({
     // messages page itself, and surfaces a toast + a brief bell-ring + a
     // sound cue -- a quiet number changing in the corner is too easy to miss.
     useEffect(() => {
+        if (!legacy) return;
+
         const supabase = createClient();
         const channels: RealtimeChannel[] = [];
 
@@ -188,7 +195,7 @@ export default function Topbar({
             channels.forEach((c) => supabase.removeChannel(c));
             if (arrivedTimeout.current) clearTimeout(arrivedTimeout.current);
         };
-    }, [profileId, role, router]);
+    }, [profileId, role, router, legacy]);
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -240,6 +247,9 @@ export default function Topbar({
                             </div>
                         )}
 
+                        {!legacy && <NotificationBell profileId={profileId} onUnavailable={useLegacy} />}
+
+                        {legacy && (
                         <Link
                             href={`/${role}/messages`}
                             aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}
@@ -256,6 +266,7 @@ export default function Topbar({
                                 </span>
                             )}
                         </Link>
+                        )}
 
                         <button
                             onClick={handleLogout}

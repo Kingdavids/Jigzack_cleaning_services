@@ -10,6 +10,7 @@ import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSel
 import { deleteTasks } from "../cleanup-actions";
 import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
+import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -57,6 +58,12 @@ export default async function AdminTasksPage() {
     const ownSchedule = new Set((ownScheduleData ?? []).map((c) => c.profile_id as string));
     const scheduleCustomers = customerOptions.filter((c) => ownSchedule.has(c.id));
 
+    // Pickups whose date has passed are marked serviced. Quietly does nothing for
+    // view-only admins, or before the crew SQL has been run.
+    if (isFullAdmin(profile)) {
+        await supabase.rpc("mark_past_tasks_serviced");
+    }
+
     const { data: tasksData } = await supabase
         .from("tasks")
         .select(
@@ -72,6 +79,7 @@ export default async function AdminTasksPage() {
     const tasks = [...allTasks.filter(isOpen), ...allTasks.filter((t) => !isOpen(t)).reverse().slice(0, 15)];
     const canBulk = isFullAdmin(profile);
     const unassigned = allTasks.filter((t) => isOpen(t) && !t.employee_id).length;
+    const teams = await loadTaskTeams(supabase, tasks.map((t) => t.id));
 
     return (
         <DashboardShell
@@ -124,20 +132,22 @@ export default async function AdminTasksPage() {
                                         <p className="font-bold text-lg">{task.title}</p>
                                         <p className="text-sm text-white/60">
                                             {task.customer?.full_name ?? "Unassigned customer"} •{" "}
-                                            {task.employee?.full_name ?? "Unassigned employee"}
+                                            {teamNames(teams.get(task.id)) || task.employee?.full_name || "Unassigned employee"}
                                         </p>
                                         <p className="text-xs text-white/40 mt-2">
                                             {formatDate(task.scheduled_date)}
                                         </p>
                                     </div>
 
-                                    <StatusBadge status={(task.status ?? "pending").replace(" ", "_")} />
+                                    <StatusBadge status={taskDisplayStatus(task.status, Boolean(task.employee_id))} />
                                 </div>
 
-                                {(task.status ?? "pending") === "pending" && (
+                                {(task.status ?? "pending") === "pending" && isFullAdmin(profile) && (
                                     <TaskAdminControls
                                         taskId={task.id}
                                         employeeId={task.employee_id}
+                                        crewIds={(teams.get(task.id) ?? []).filter((m) => !m.is_lead).map((m) => m.employee_id)}
+                                        teamText={teamNames(teams.get(task.id)) || task.employee?.full_name || ""}
                                         scheduledDate={task.scheduled_date}
                                         zone={task.zone}
                                         employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
@@ -186,6 +196,23 @@ export default async function AdminTasksPage() {
                                 ))}
                             </select>
                         </div>
+
+                        {employeeOptions.length > 1 && (
+                            <fieldset>
+                                <legend className="text-xs text-white/50">Also on this task (optional, when two or more go together)</legend>
+                                <div className="mt-1.5 flex flex-wrap gap-2">
+                                    {employeeOptions.map((e) => (
+                                        <label
+                                            key={e.id}
+                                            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white/75 sm:min-h-9 sm:text-xs"
+                                        >
+                                            <input type="checkbox" name="crewIds" value={e.id} className="h-4 w-4 accent-amber-400" />
+                                            {e.full_name}
+                                        </label>
+                                    ))}
+                                </div>
+                            </fieldset>
+                        )}
 
                         <div className="grid gap-3 sm:grid-cols-3">
                             <input
