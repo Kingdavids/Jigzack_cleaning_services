@@ -123,7 +123,7 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
     // Remember where their photo files are before the records disappear.
     const { data: photos } = await supabase.from("uploads").select("image_url").eq("customer_id", profileId);
 
-    const { error } = await supabase.rpc("admin_delete_customer", { p_profile_id: profileId });
+    const { data: result, error } = await supabase.rpc("admin_delete_customer", { p_profile_id: profileId });
 
     if (error) {
         console.error("admin_delete_customer error:", error.message);
@@ -149,7 +149,15 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
         await supabase.storage.from("task-photos").remove(paths);
     }
 
-    await logActivity(supabase, actor, "customer_deleted", `Deleted the customer ${customer.full_name}`);
+    // A person who is also an employee or an admin keeps their login: only the customer side was erased.
+    const loginKept = Boolean((result as { login_kept?: boolean } | null)?.login_kept);
+
+    await logActivity(
+        supabase,
+        actor,
+        "customer_deleted",
+        loginKept ? `Deleted the customer record of ${customer.full_name} (their staff login was kept)` : `Deleted the customer ${customer.full_name}`
+    );
 
     revalidatePath("/admin/customers");
     revalidatePath("/admin/tasks");
@@ -158,7 +166,12 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
     revalidatePath("/admin/messages");
     revalidatePath("/admin");
 
-    return { success: true, message: "Deleted." };
+    return {
+        success: true,
+        message: loginKept
+            ? "Deleted their customer record. They are also staff, so their login was kept."
+            : "Deleted.",
+    };
 }
 
 // The registration fee is paid by bank transfer. "confirm" covers both a

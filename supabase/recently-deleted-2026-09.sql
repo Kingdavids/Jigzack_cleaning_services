@@ -51,15 +51,27 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+    v_role text;
 begin
-    delete from public.messages where from_profile_id = p_profile_id or to_profile_id = p_profile_id;
+    select role into v_role from public.profiles where id = p_profile_id;
+
+    -- Everything they had as a customer.
     delete from public.uploads where customer_id = p_profile_id;
     delete from public.tasks where customer_id = p_profile_id;
     delete from public.payments where customer_id = p_profile_id;
     delete from public.customers where profile_id = p_profile_id;
 
-    -- Removing the login also removes the profile row and frees the email address.
-    delete from auth.users where id = p_profile_id;
+    -- Their login is only removed when they are just a customer. A person who is
+    -- also an employee or an admin (they signed up as a customer first, or
+    -- tried the customer side) keeps their login and their messages, so erasing
+    -- the customer record can never remove a staff account.
+    if v_role is null or v_role = 'customer' then
+        delete from public.messages where from_profile_id = p_profile_id or to_profile_id = p_profile_id;
+
+        -- Removing the login also removes the profile row and frees the email address.
+        delete from auth.users where id = p_profile_id;
+    end if;
 end;
 $$;
 
@@ -90,10 +102,6 @@ begin
         raise exception 'Customer not found';
     end if;
 
-    if v_role <> 'customer' then
-        raise exception 'Only customer accounts can be deleted here';
-    end if;
-
     if v_status is distinct from 'deleted' then
         raise exception 'Move this customer to Recently deleted first';
     end if;
@@ -104,7 +112,9 @@ begin
 
     perform public.delete_customer_data(p_profile_id);
 
-    return jsonb_build_object('deleted', true);
+    -- login_kept is true when the person is also an employee or an admin, so only
+    -- their customer record was erased.
+    return jsonb_build_object('deleted', true, 'login_kept', v_role <> 'customer');
 end;
 $$;
 
