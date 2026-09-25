@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Megaphone } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { sendBroadcast, sendMessage } from "../actions";
@@ -183,6 +184,15 @@ export default async function AdminMessagesPage() {
                     description="What staff and customers are saying to each other. This is a read-only view and nobody is notified."
                 >
                     <StaffCustomerConversations messages={watched} />
+                    {isOwner(profile) && (
+                        <p className="mt-4 text-sm text-white/55">
+                            As an owner you can see every conversation in the app, including admins with customers and staff, on the{" "}
+                            <Link href="/admin/oversight" className="font-semibold text-amber-300 underline underline-offset-2">
+                                Oversight page
+                            </Link>
+                            .
+                        </p>
+                    )}
                 </SectionCard>
             </div>
 

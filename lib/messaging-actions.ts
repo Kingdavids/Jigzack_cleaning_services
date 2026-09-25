@@ -96,7 +96,7 @@ export async function sendMessageToAdmin(
     return { success: true };
 }
 
-// Employees can message the customers they have a job for. The list of who is
+// Employees can message any active customer. The list of who is
 // allowed comes from the database (my_customer_contacts), and the same rule is
 // enforced again by the messages_insert_employee_customer policy. Admins can
 // read every message, so they see these conversations without any extra step.
@@ -128,7 +128,7 @@ export async function sendMessageToCustomer(
     }
 
     if (!(contacts ?? []).some((c: { id: string }) => c.id === customerId)) {
-        return { success: false, error: "You can only message customers you have a job for." };
+        return { success: false, error: "Choose a customer from the list." };
     }
 
     if (await isRecentDuplicate(supabase, { from_profile_id: profile.id, subject, body, parent_message_id: null })) {
@@ -148,6 +148,69 @@ export async function sendMessageToCustomer(
 
     if (error) {
         console.error("sendMessageToCustomer insert error:", error.code, error.message);
+        if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
+        return { success: false, error: "Could not send the message. Please try again." };
+    }
+
+    revalidatePath("/employee/messages");
+    revalidatePath("/customer/messages");
+    revalidatePath("/admin/messages");
+
+    return { success: true };
+}
+
+// A customer can write to the employees coming to service them: the lead and
+// the crew of a job that has not been serviced yet. The list comes from the
+// database (my_assigned_employees), and the same rule is enforced again by the
+// messages_insert_employee_customer policy. Admins can read these conversations.
+export async function sendMessageToEmployee(
+    _prevState: MessageActionState,
+    formData: FormData
+): Promise<MessageActionState> {
+    const profile = await getUserProfile();
+
+    if (profile.role !== "customer" || profile.status !== "approved") {
+        return { success: false, error: "Only approved customers can message their team." };
+    }
+
+    const supabase = await createClient();
+
+    const employeeId = String(formData.get("employeeId") || "");
+    const subject = String(formData.get("subject") || "").trim().slice(0, 200);
+    const body = String(formData.get("body") || "").trim().slice(0, 4000);
+
+    if (!employeeId || !subject || !body) {
+        return { success: false, error: "Choose who to write to, then add a subject and a message." };
+    }
+
+    const { data: team, error: teamError } = await supabase.rpc("my_assigned_employees");
+
+    if (teamError) {
+        console.error("my_assigned_employees error:", teamError.message);
+        return { success: false, error: "Messaging your team is not switched on yet. Please contact us." };
+    }
+
+    if (!(team ?? []).some((e: { id: string }) => e.id === employeeId)) {
+        return { success: false, error: "You can only message the team member assigned to your pickup." };
+    }
+
+    if (await isRecentDuplicate(supabase, { from_profile_id: profile.id, subject, body, parent_message_id: null })) {
+        return { success: true };
+    }
+
+    const attachment = await saveMessageAttachment(supabase, profile.id, formData);
+    if (attachment && "error" in attachment) return { success: false, error: attachment.error };
+
+    const { error } = await supabase.from("messages").insert({
+        from_profile_id: profile.id,
+        to_profile_id: employeeId,
+        subject,
+        body,
+        ...attachmentFields(attachment),
+    });
+
+    if (error) {
+        console.error("sendMessageToEmployee insert error:", error.code, error.message);
         if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
         return { success: false, error: "Could not send the message. Please try again." };
     }

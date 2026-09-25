@@ -20,7 +20,7 @@ export default async function EmployeeMessagesPage() {
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
 
-    // The customers this person has a job for. Before the database update has
+    // The customers this person can write to. Before the database update has
     // been run this call fails, and the form simply explains that.
     const { data: contactData, error: contactsError } = await supabase.rpc("my_customer_contacts");
     const contacts = (contactData ?? []) as { id: string; full_name: string | null }[];
@@ -33,7 +33,7 @@ export default async function EmployeeMessagesPage() {
             subtitle="Message the admin or the customers you serve."
             unreadCount={unreadCount}
         >
-            <SectionCard title="Messages" description="Message the admin or a customer you have a job for">
+            <SectionCard title="Messages" description="Message the admin or any customer">
                 <div className="space-y-4">
                     <MessageThreadList
                         messages={messages}
@@ -60,7 +60,7 @@ export default async function EmployeeMessagesPage() {
 
                     {contactsError ? null : contacts.length === 0 ? (
                         <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/50">
-                            You can message a customer once you have a job assigned for them.
+                            There are no active customers to message yet.
                         </p>
                     ) : (
                         <SendMessageForm action={sendMessageToCustomer} label="Send a message to a customer">
