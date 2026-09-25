@@ -2,7 +2,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
 import { buildLineItems, itemsTotal, monthLabel, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid } from "@/lib/billing/balance";
-import { addDays, describeFrequency, generateDates, parseFrequency, todayKey } from "@/lib/billing/schedule";
+import {
+    addDays,
+    customerFrequency,
+    describeFrequency,
+    generateDates,
+    monthWindow,
+    parseFrequency,
+    todayKey,
+    type Frequency,
+    type SchedulePeriod,
+} from "@/lib/billing/schedule";
 
 type SupabaseServerClient = SupabaseClient;
 
@@ -17,18 +27,25 @@ export type BillableCustomer = {
     // A charge the admin set for this customer. Empty means work it out from
     // their property details.
     monthly_rate?: number | string | null;
+    // The weekdays an admin chose for this customer (Monday = 1). Empty means use the text.
+    pickup_days?: number[] | null;
 };
 
 const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id";
 
-// monthly_rate comes from supabase/billing-installments-2026-09.sql.
-export const BILLABLE_SELECT = `${BILLABLE_BASE}, monthly_rate`;
+// monthly_rate comes from supabase/billing-installments-2026-09.sql and pickup_days
+// from supabase/schedule-days-2026-09.sql.
+export const BILLABLE_SELECT = `${BILLABLE_BASE}, monthly_rate, pickup_days`;
+const BILLABLE_WITH_RATE = `${BILLABLE_BASE}, monthly_rate`;
 
 // Runs a customers query with monthly_rate, or without it if that SQL has not
 // been run yet, so approvals and the daily job keep working in between.
 export async function queryBillable(run: (select: string) => PromiseLike<{ data: unknown; error: unknown }>) {
     const first = await run(BILLABLE_SELECT);
     if (!first.error) return first.data;
+
+    const second = await run(BILLABLE_WITH_RATE);
+    if (!second.error) return second.data;
 
     return (await run(BILLABLE_BASE)).data;
 }
@@ -50,22 +67,48 @@ export function chargeItems(customer: BillableCustomer): LineItem[] {
     return buildLineItems(customer.facility_details, customer.vacancies);
 }
 
-// Creates pending pickups from the customer's stated frequency, skipping any
-// date that already has a task. Unassigned (no employee) until an admin
-// assigns them; everything about them stays editable.
+export type PlanOptions = {
+    // How far ahead to look when no month is chosen. Four weeks by default.
+    horizonDays?: number;
+    // The admin's own wording for how often, for example "3 times a week".
+    frequencyText?: string | null;
+    // Weekdays picked by hand (Monday = 1 ... Saturday = 6). These win over any wording.
+    days?: number[] | null;
+    // Plan a whole calendar month instead of the next four weeks.
+    period?: SchedulePeriod | null;
+};
+
+// Which frequency to plan for, and where it came from: days picked by hand, the
+// admin's own wording, days saved for this customer, or what they wrote.
+function resolveFrequency(customer: BillableCustomer, options: PlanOptions): { frequency: Frequency; source: string } {
+    const picked = [...new Set((options.days ?? []).filter((d) => d >= 1 && d <= 6))].sort();
+
+    if (picked.length > 0) return { frequency: { kind: "weekdays", days: picked }, source: "days chosen" };
+
+    if (options.frequencyText?.trim()) {
+        return { frequency: parseFrequency(options.frequencyText), source: options.frequencyText.trim() };
+    }
+
+    const hasSaved = (customer.pickup_days ?? []).length > 0;
+
+    return {
+        frequency: customerFrequency(customer),
+        source: hasSaved ? "days saved for this customer" : (customer.preferred_pickup_frequency ?? "").trim(),
+    };
+}
+
 // Works out which pickups would be created, without creating them. The
-// frequency comes from the customer's property details unless an admin passes
-// their own wording (for example "3 times a week").
-export async function planSchedule(
-    supabase: SupabaseServerClient,
-    customer: BillableCustomer,
-    horizonDays = 28,
-    frequencyText?: string | null
-) {
-    const source = frequencyText?.trim() ? frequencyText : customer.preferred_pickup_frequency;
-    const frequency = parseFrequency(source);
+// frequency comes from the customer's saved days or their property details
+// unless an admin passes their own, and it covers either the next four weeks or
+// a whole month.
+export async function planSchedule(supabase: SupabaseServerClient, customer: BillableCustomer, options: PlanOptions = {}) {
+    const { frequency, source } = resolveFrequency(customer, options);
     const today = todayKey();
-    const dates = generateDates(frequency, addDays(today, 2), horizonDays);
+    const window = options.period
+        ? monthWindow(options.period, today)
+        : { startKey: addDays(today, 2), horizonDays: options.horizonDays ?? 28, label: "the next 4 weeks" };
+
+    const dates = window.horizonDays < 0 ? [] : generateDates(frequency, window.startKey, window.horizonDays);
 
     const { data: existing } = customer.profile_id
         ? await supabase.from("tasks").select("scheduled_date").eq("customer_id", customer.profile_id).gte("scheduled_date", today)
@@ -76,23 +119,22 @@ export async function planSchedule(
 
     return {
         frequency,
-        source: (source ?? "").trim(),
+        source,
         label: describeFrequency(frequency),
         recognised: frequency.kind !== "unknown",
         fresh,
         alreadyScheduled: dates.length - fresh.length,
+        windowLabel: window.label,
     };
 }
 
-export async function generateScheduleFor(
-    supabase: SupabaseServerClient,
-    customer: BillableCustomer,
-    horizonDays = 28,
-    frequencyText?: string | null
-) {
+// Creates pending pickups from the customer's frequency, skipping any date that
+// already has a task. Unassigned (no employee) until an admin assigns them;
+// everything about them stays editable.
+export async function generateScheduleFor(supabase: SupabaseServerClient, customer: BillableCustomer, options: PlanOptions = {}) {
     if (!customer.profile_id) return { created: 0, frequency: "", recognised: false };
 
-    const { frequency, fresh } = await planSchedule(supabase, customer, horizonDays, frequencyText);
+    const { frequency, fresh } = await planSchedule(supabase, customer, options);
 
     if (fresh.length > 0) {
         const { error } = await supabase.from("tasks").insert(

@@ -26,7 +26,7 @@ const WORD_NUMBERS: Record<string, number> = {
 const toNumber = (value: string) => WORD_NUMBERS[value] ?? parseInt(value, 10);
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+export const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const DAY_WORDS: [RegExp, number][] = [
     [/\bmon(?:day)?s?\b/, 1],
@@ -80,6 +80,67 @@ export function parseFrequency(input: string | null | undefined): Frequency {
     if (/\bweekly\b|once\s+(a|per)\s+week|every\s+week/.test(text)) return { kind: "perWeek", times: 1 };
 
     return { kind: "unknown" };
+}
+
+// Days an admin has chosen for a customer win over what they wrote.
+export function customerFrequency(
+    customer: { preferred_pickup_frequency?: string | null; pickup_days?: number[] | null } | null | undefined
+): Frequency {
+    const days = [...new Set((customer?.pickup_days ?? []).filter((d) => d >= 1 && d <= 6))].sort();
+
+    if (days.length > 0) return { kind: "weekdays", days };
+
+    return parseFrequency(customer?.preferred_pickup_frequency);
+}
+
+// The usual days for "N times a week", Monday = 1. Three times is Monday,
+// Wednesday and Friday.
+export const DAYS_FOR_TIMES: Record<number, number[]> = {
+    1: [1],
+    2: [1, 4],
+    3: [1, 3, 5],
+    4: [1, 2, 4, 5],
+    5: [1, 2, 3, 4, 5],
+    6: [1, 2, 3, 4, 5, 6],
+};
+
+// The weekdays a frequency comes to, for pre-filling the day picker. Empty when
+// it is not a weekly pattern (every 2 weeks, monthly) or was not understood.
+export function frequencyToDays(frequency: Frequency): number[] {
+    switch (frequency.kind) {
+        case "daily":
+            return [1, 2, 3, 4, 5, 6];
+        case "perWeek":
+            return DAYS_FOR_TIMES[frequency.times] ?? [];
+        case "weekdays":
+            return frequency.days.filter((d) => d !== 0);
+        default:
+            return [];
+    }
+}
+
+export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+export type SchedulePeriod = "thisMonth" | "nextMonth";
+
+// The stretch of days a "generate for the month" run covers: the rest of this
+// month (from tomorrow), or the whole of next month.
+export function monthWindow(period: SchedulePeriod, today: string = todayKey()) {
+    const [y, m] = today.split("-").map(Number);
+    const lastOf = (year: number, monthIndex: number) => Date.UTC(year, monthIndex + 1, 0);
+
+    if (period === "thisMonth") {
+        const startKey = addDays(today, 1);
+        const horizonDays = Math.round((lastOf(y, m - 1) - fromKey(startKey)) / DAY_MS);
+        return { startKey, horizonDays, label: `the rest of ${MONTH_NAMES[m - 1]}` };
+    }
+
+    const first = Date.UTC(y, m, 1);
+    const startKey = toKey(first);
+    const horizonDays = Math.round((lastOf(y, m) - first) / DAY_MS);
+    const target = new Date(first);
+
+    return { startKey, horizonDays, label: `${MONTH_NAMES[target.getUTCMonth()]} ${target.getUTCFullYear()}` };
 }
 
 export function describeFrequency(frequency: Frequency) {

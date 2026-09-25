@@ -14,7 +14,7 @@ import {
 } from "../../actions";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { describeFacilities, facilityCount } from "@/lib/customer/facilities";
-import { describeFrequency, parseFrequency } from "@/lib/billing/schedule";
+import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
@@ -88,7 +88,7 @@ export default async function AdminCustomerDetailPage({
 
     const { counted, notes } = describeFacilities(customer.facility_details);
     const vacancyList = describeFacilities(customer.vacancies).counted;
-    const frequency = parseFrequency(customer.preferred_pickup_frequency);
+    const frequency = customerFrequency(customer);
     const tenantUnit = unit as unknown as { label: string; estate: { full_name: string | null } | null } | null;
 
     // What monthly invoices use: the amount an admin set, or else the per-unit prices.

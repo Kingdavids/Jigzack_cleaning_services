@@ -5,54 +5,102 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { isFullAdmin } from "@/lib/auth/roles";
+import { todayLagos } from "@/lib/tasks";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 
-export async function startTask(formData: FormData) {
-    const profile = await getUserProfile();
+export type TaskServiceResult = { success: boolean; error?: string; needsConfirm?: boolean };
+
+// A pickup dated in the future is not due yet. Starting or finishing it early
+// needs a deliberate "yes", so a tap on the wrong day cannot mark tomorrow's
+// pickup as done. The screen asks; the server checks again.
+async function futureCheck(supabase: Awaited<ReturnType<typeof createClient>>, taskId: string, confirmed: boolean): Promise<TaskServiceResult | null> {
+    const { data: task } = await supabase.from("tasks").select("scheduled_date").eq("id", taskId).maybeSingle();
+
+    if (task?.scheduled_date && task.scheduled_date > todayLagos() && !confirmed) {
+        return {
+            success: false,
+            needsConfirm: true,
+            error: `This pickup is scheduled for ${task.scheduled_date}, which has not come yet. Confirm to service it early.`,
+        };
+    }
+
+    return null;
+}
+
+export async function startTask(formData: FormData): Promise<TaskServiceResult> {
+    await getUserProfile();
     const supabase = await createClient();
 
     const taskId = String(formData.get("taskId") || "");
 
-    if (!taskId) return;
+    if (!taskId) return { success: false, error: "Missing task." };
+
+    const early = await futureCheck(supabase, taskId, formData.get("confirmEarly") === "yes");
+    if (early) return early;
 
     // Which tasks this person may change is decided by the database: the ones they
     // lead and, once the crew SQL has run, the ones they are a crew member on.
-    await supabase
+    const { data, error } = await supabase
         .from("tasks")
         .update({
             status: "in progress",
             started_at: new Date().toISOString(),
         })
         .eq("id", taskId)
-        .eq("status", "pending");
+        .eq("status", "pending")
+        .select("id");
+
+    if (error) {
+        console.error("startTask error:", error.message);
+        return { success: false, error: "Could not start this task. Please try again." };
+    }
+
+    if (!data || data.length === 0) return { success: false, error: "This task can't be started. It may already be under way or serviced." };
 
     revalidatePath("/employee/tasks");
     revalidatePath("/admin/tasks");
+    revalidatePath("/customer/schedule");
+
+    return { success: true };
 }
 
-export async function endTask(formData: FormData) {
-    const profile = await getUserProfile();
+export async function endTask(formData: FormData): Promise<TaskServiceResult> {
+    await getUserProfile();
     const supabase = await createClient();
 
     const taskId = String(formData.get("taskId") || "");
 
-    if (!taskId) return;
+    if (!taskId) return { success: false, error: "Missing task." };
 
-    await supabase
+    const early = await futureCheck(supabase, taskId, formData.get("confirmEarly") === "yes");
+    if (early) return early;
+
+    const { data, error } = await supabase
         .from("tasks")
         .update({
             status: "completed",
             completed_at: new Date().toISOString(),
         })
         .eq("id", taskId)
-        .in("status", ["pending", "in progress"]);
+        .in("status", ["pending", "in progress"])
+        .select("id");
+
+    if (error) {
+        console.error("endTask error:", error.message);
+        return { success: false, error: "Could not finish this task. Please try again." };
+    }
+
+    if (!data || data.length === 0) return { success: false, error: "This task can't be finished. It may already be serviced." };
 
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/admin/tasks");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
+    revalidatePath("/customer/schedule");
+
+    return { success: true };
 }
 
 const IMAGE_EXTENSIONS: Record<string, string> = {

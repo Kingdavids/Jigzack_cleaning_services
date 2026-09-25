@@ -13,6 +13,7 @@ import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/custom
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, round2 } from "@/lib/billing/balance";
 import { isPastDate } from "@/lib/tasks";
+import { frequencyToDays } from "@/lib/billing/schedule";
 import { naira } from "@/lib/customer/billing";
 import {
     generateInvoiceFor,
@@ -878,12 +879,26 @@ export type SchedulePreview = {
     // The pickups that would be created (YYYY-MM-DD), and how many already exist.
     dates?: string[];
     alreadyScheduled?: number;
+    // "the rest of September", "October 2026" or "the next 4 weeks".
+    windowLabel?: string;
+    // The weekdays the detected frequency comes to (Monday = 1), to fill the day picker.
+    suggestedDays?: number[];
+    // True when the customer already has days saved by an admin.
+    savedDays?: boolean;
+};
+
+export type ScheduleRequest = {
+    frequencyText?: string | null;
+    days?: number[] | null;
+    period?: "thisMonth" | "nextMonth" | null;
+    // Keep the chosen days for this customer, so later schedules use them too.
+    remember?: boolean;
 };
 
 // Shows what "Generate schedule" would create for a customer, without creating
 // anything. Read from the frequency in their property details, or from a
 // frequency the admin picks instead.
-export async function previewCustomerSchedule(profileId: string, frequencyText?: string | null): Promise<SchedulePreview> {
+export async function previewCustomerSchedule(profileId: string, request: ScheduleRequest = {}): Promise<SchedulePreview> {
     const profile = await getUserProfile();
 
     if (profile.role !== "admin" || profile.status !== "approved") {
@@ -895,7 +910,9 @@ export async function previewCustomerSchedule(profileId: string, frequencyText?:
 
     if (!billable) return { success: false, error: "Customer not found." };
 
-    const plan = await planSchedule(supabase, billable, 28, frequencyText);
+    const plan = await planSchedule(supabase, billable, request);
+    // What the customer's own record comes to, ignoring anything picked in this request.
+    const own = await planSchedule(supabase, billable, { period: null });
 
     return {
         success: true,
@@ -905,13 +922,16 @@ export async function previewCustomerSchedule(profileId: string, frequencyText?:
         recognised: plan.recognised,
         dates: plan.fresh,
         alreadyScheduled: plan.alreadyScheduled,
+        windowLabel: plan.windowLabel,
+        suggestedDays: frequencyToDays(own.frequency),
+        savedDays: (billable.pickup_days ?? []).length > 0,
     };
 }
 
 export async function generateCustomerBilling(
     profileId: string,
     what: "schedule" | "invoice",
-    frequencyText?: string | null
+    request: ScheduleRequest = {}
 ): Promise<GenerateResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -924,7 +944,19 @@ export async function generateCustomerBilling(
     revalidatePath(`/admin/customers/${profileId}`);
 
     if (what === "schedule") {
-        const result = await generateScheduleFor(supabase, billable, 28, frequencyText);
+        const result = await generateScheduleFor(supabase, billable, request);
+
+        // Remember the days chosen for this customer, so the daily top-up and any
+        // later schedule use the same pattern instead of guessing again.
+        let remembered = "";
+        const chosen = [...new Set((request.days ?? []).filter((d) => d >= 1 && d <= 6))].sort();
+
+        if (request.remember && chosen.length > 0) {
+            const { error: saveError } = await supabase.from("customers").update({ pickup_days: chosen }).eq("profile_id", profileId);
+            remembered = saveError
+                ? " The days could not be saved for next time. Run supabase/schedule-days-2026-09.sql in Supabase."
+                : " These days are saved for this customer.";
+        }
 
         if (result.created > 0) {
             await logActivity(supabase, actor, "schedule_generated", `Generated ${result.created} pickups for ${billable.full_name ?? "a customer"} (${result.frequency})`, { type: "profile", id: profileId });
@@ -933,7 +965,7 @@ export async function generateCustomerBilling(
 
         return {
             success: true,
-            message: result.created > 0 ? `Added ${result.created} pickups (${result.frequency}).` : "Their schedule is already up to date.",
+            message: (result.created > 0 ? `Added ${result.created} pickups (${result.frequency}).` : "Their schedule is already up to date.") + remembered,
         };
     }
 
@@ -1162,7 +1194,7 @@ export async function updateTask(
 
     if (!taskId) return { success: false, error: "Missing task." };
 
-    const { data: task } = await supabase.from("tasks").select("id, status, employee_id").eq("id", taskId).maybeSingle();
+    const { data: task } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
 
     if (!task) return { success: false, error: "Could not find that task." };
 
@@ -1176,7 +1208,8 @@ export async function updateTask(
 
     const lead = employeeId || null;
     const date = scheduledDate || null;
-    const past = isPastDate(date);
+    // A pickup an admin reopened is not marked serviced again just because its date has passed.
+    const past = isPastDate(date) && !(task as { reopened_at?: string | null }).reopened_at;
 
     const { error } = await supabase
         .from("tasks")
@@ -1213,6 +1246,51 @@ export async function updateTask(
         success: true,
         message: past ? "Saved. The date has passed, so it is marked serviced." : lead ? "Assigned. The pickup is now locked." : "Pickup updated",
     };
+}
+
+// Puts a pickup that was marked serviced back to not done. It is flagged as
+// reopened so the automatic "date has passed, so serviced" rule leaves it alone.
+export async function reopenTask(taskId: string): Promise<TaskChangeResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!taskId) return { success: false, error: "Missing task." };
+
+    const { data, error } = await supabase
+        .from("tasks")
+        .update({
+            status: "pending",
+            started_at: null,
+            completed_at: null,
+            reopened_at: new Date().toISOString(),
+            reopened_by: actor.id,
+        })
+        .eq("id", taskId)
+        .eq("status", "completed")
+        .select("id");
+
+    if (error) {
+        console.error("reopenTask error:", error.message);
+        return {
+            success: false,
+            error: /reopened_at|reopened_by/.test(error.message)
+                ? "Not switched on yet. Run supabase/schedule-days-2026-09.sql in Supabase first."
+                : "Could not revert this pickup. Please try again.",
+        };
+    }
+
+    if (!data || data.length === 0) {
+        return { success: false, error: "Only a pickup marked serviced can be reverted." };
+    }
+
+    await logActivity(supabase, actor, "task_reopened", "Reverted a serviced pickup to not done", { type: "task", id: taskId });
+    revalidatePath("/admin/tasks");
+    revalidatePath("/employee");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/customer");
+    revalidatePath("/customer/schedule");
+
+    return { success: true, message: "Back to not done. The crew and the customer have been told." };
 }
 
 export async function deleteTask(taskId: string, unlock = false): Promise<TaskChangeResult> {

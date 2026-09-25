@@ -11,6 +11,9 @@ import { deleteTasks } from "../cleanup-actions";
 import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
+import RevertTaskButton from "@/components/dashboard/RevertTaskButton";
+import { TaskFilter, TaskGroup } from "@/components/dashboard/TaskGroups";
+import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -20,6 +23,7 @@ type TaskRow = {
     status: string | null;
     scheduled_date: string | null;
     zone: string | null;
+    customer_id: string | null;
     employee_id: string | null;
     auto_generated: boolean;
     customer: ProfileRef;
@@ -64,22 +68,107 @@ export default async function AdminTasksPage() {
         await supabase.rpc("mark_past_tasks_serviced");
     }
 
-    const { data: tasksData } = await supabase
-        .from("tasks")
-        .select(
-            "id, title, status, scheduled_date, zone, employee_id, auto_generated, customer:profiles!tasks_customer_id_fkey(full_name), employee:profiles!tasks_employee_id_fkey(full_name)"
-        )
-        // Soonest first, so what needs assigning next is at the top. Finished
-        // work drops to the bottom instead of pushing it out of view.
-        .order("scheduled_date", { ascending: true, nullsFirst: false })
-        .limit(120);
+    const columns =
+        "id, title, status, scheduled_date, zone, customer_id, employee_id, auto_generated, customer:profiles!tasks_customer_id_fkey(full_name), employee:profiles!tasks_employee_id_fkey(full_name)";
 
-    const allTasks = (tasksData ?? []) as unknown as TaskRow[];
-    const isOpen = (task: TaskRow) => !["completed", "declined"].includes((task.status ?? "pending").toLowerCase());
-    const tasks = [...allTasks.filter(isOpen), ...allTasks.filter((t) => !isOpen(t)).reverse().slice(0, 15)];
+    // Work still to do, soonest first. Serviced work is loaded separately, so a long
+    // history never pushes upcoming pickups out of the list.
+    const [{ data: openData }, { data: servicedData }] = await Promise.all([
+        supabase
+            .from("tasks")
+            .select(columns)
+            .not("status", "in", "(completed,declined)")
+            .order("scheduled_date", { ascending: true, nullsFirst: false })
+            .limit(600),
+        supabase.from("tasks").select(columns).eq("status", "completed").order("scheduled_date", { ascending: false }).limit(200),
+    ]);
+
+    const openTasks = (openData ?? []) as unknown as TaskRow[];
+    const servicedTasks = (servicedData ?? []) as unknown as TaskRow[];
+    const tasks = [...openTasks, ...servicedTasks];
     const canBulk = isFullAdmin(profile);
-    const unassigned = allTasks.filter((t) => isOpen(t) && !t.employee_id).length;
+    const unassigned = openTasks.filter((t) => !t.employee_id).length;
     const teams = await loadTaskTeams(supabase, tasks.map((t) => t.id));
+
+    // Each customer's pickup pattern, for the heading of their group.
+    const groupCustomerIds = [...new Set(tasks.map((t) => t.customer_id).filter((id): id is string => Boolean(id)))];
+    const { data: patternRows } = groupCustomerIds.length
+        ? await supabase.from("customers").select("*").in("profile_id", groupCustomerIds)
+        : { data: [] as Record<string, unknown>[] };
+    const patternByCustomer = new Map(
+        (patternRows ?? []).map((row) => [
+            row.profile_id as string,
+            describeFrequency(customerFrequency(row as { preferred_pickup_frequency?: string | null; pickup_days?: number[] | null })),
+        ])
+    );
+
+    type Group = { key: string; name: string; pattern: string | null; open: TaskRow[]; serviced: TaskRow[] };
+    const groupMap = new Map<string, Group>();
+
+    for (const task of tasks) {
+        const key = task.customer_id ?? "internal";
+        const group =
+            groupMap.get(key) ??
+            ({
+                key,
+                name: task.customer?.full_name ?? "Internal tasks (no customer)",
+                pattern: task.customer_id ? patternByCustomer.get(task.customer_id) ?? null : null,
+                open: [],
+                serviced: [],
+            } as Group);
+
+        if ((task.status ?? "pending") === "completed") group.serviced.push(task);
+        else group.open.push(task);
+
+        groupMap.set(key, group);
+    }
+
+    // Customers with pickups still to assign first, then by name.
+    const needsOf = (group: Group) => group.open.filter((t) => !t.employee_id).length;
+    const groups = [...groupMap.values()].sort((a, b) => Number(needsOf(b) > 0) - Number(needsOf(a) > 0) || a.name.localeCompare(b.name));
+
+    const renderTask = (task: TaskRow) => (
+        <div
+            key={task.id}
+            className={`relative rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/20 ${canBulk ? "pl-11" : ""}`}
+        >
+            <div className="absolute left-4 top-5">
+                <BulkCheckbox id={task.id} label="Select task" />
+            </div>
+            <div className="flex flex-col gap-2 md:flex-row md:justify-between">
+                <div>
+                    <p className="font-bold">
+                        {formatDate(task.scheduled_date)}
+                        <span className="ml-2 text-sm font-normal text-white/50">{task.title}</span>
+                    </p>
+                    <p className="text-sm text-white/60">
+                        {teamNames(teams.get(task.id)) || task.employee?.full_name || "Unassigned employee"}
+                        {task.zone ? ` • ${task.zone}` : ""}
+                    </p>
+                </div>
+
+                <div className="self-start">
+                    <StatusBadge status={taskDisplayStatus(task.status, Boolean(task.employee_id))} />
+                </div>
+            </div>
+
+            {(task.status ?? "pending") === "pending" && isFullAdmin(profile) && (
+                <TaskAdminControls
+                    taskId={task.id}
+                    employeeId={task.employee_id}
+                    crewIds={(teams.get(task.id) ?? []).filter((m) => !m.is_lead).map((m) => m.employee_id)}
+                    teamText={teamNames(teams.get(task.id)) || task.employee?.full_name || ""}
+                    scheduledDate={task.scheduled_date}
+                    zone={task.zone}
+                    employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
+                />
+            )}
+
+            {(task.status ?? "pending") === "completed" && isFullAdmin(profile) && (
+                <RevertTaskButton taskId={task.id} title={task.title} dateText={formatDate(task.scheduled_date)} />
+            )}
+        </div>
+    );
 
     return (
         <DashboardShell
@@ -106,7 +195,10 @@ export default async function AdminTasksPage() {
                 </div>
             </SectionCard>
 
-            <SectionCard title="Task progress" description="Upcoming and in-progress work first, then the latest finished.">
+            <SectionCard
+                title="Schedule by customer"
+                description="Each customer's pickups together, upcoming first. Open a customer to assign, change or revert their pickups."
+            >
                 <div className="space-y-4">
                     <BulkSelectProvider
                         enabled={canBulk && tasks.length > 0}
@@ -114,48 +206,49 @@ export default async function AdminTasksPage() {
                         action={deleteTasks}
                         noun="task"
                     >
-                    {tasks.length === 0 ? (
-                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-                            No tasks yet.
-                        </div>
-                    ) : (
-                        tasks.map((task) => (
-                            <div
-                                key={task.id}
-                                className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
-                            >
-                                <div className="absolute left-4 top-6">
-                                    <BulkCheckbox id={task.id} label="Select task" />
-                                </div>
-                                <div className="flex flex-col gap-3 md:flex-row md:justify-between">
-                                    <div>
-                                        <p className="font-bold text-lg">{task.title}</p>
-                                        <p className="text-sm text-white/60">
-                                            {task.customer?.full_name ?? "Unassigned customer"} •{" "}
-                                            {teamNames(teams.get(task.id)) || task.employee?.full_name || "Unassigned employee"}
-                                        </p>
-                                        <p className="text-xs text-white/40 mt-2">
-                                            {formatDate(task.scheduled_date)}
-                                        </p>
-                                    </div>
+                        {groups.length === 0 ? (
+                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">No tasks yet.</div>
+                        ) : (
+                            <TaskFilter>
+                                {groups.map((group) => {
+                                    const needs = needsOf(group);
+                                    const assigned = group.open.length - needs;
 
-                                    <StatusBadge status={taskDisplayStatus(task.status, Boolean(task.employee_id))} />
-                                </div>
-
-                                {(task.status ?? "pending") === "pending" && isFullAdmin(profile) && (
-                                    <TaskAdminControls
-                                        taskId={task.id}
-                                        employeeId={task.employee_id}
-                                        crewIds={(teams.get(task.id) ?? []).filter((m) => !m.is_lead).map((m) => m.employee_id)}
-                                        teamText={teamNames(teams.get(task.id)) || task.employee?.full_name || ""}
-                                        scheduledDate={task.scheduled_date}
-                                        zone={task.zone}
-                                        employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
-                                    />
-                                )}
-                            </div>
-                        ))
-                    )}
+                                    return (
+                                        <TaskGroup
+                                            key={group.key}
+                                            name={group.name}
+                                            needs={needs}
+                                            defaultOpen={needs > 0 && groups.length <= 6}
+                                            header={
+                                                <div>
+                                                    <p className="truncate text-lg font-bold">{group.name}</p>
+                                                    <p className="mt-0.5 text-sm text-white/55">
+                                                        {group.pattern ? `${group.pattern} · ` : ""}
+                                                        {group.open.length} upcoming
+                                                        {needs > 0 && <span className="font-semibold text-amber-300"> · {needs} to assign</span>}
+                                                        {assigned > 0 && <span> · {assigned} assigned</span>}
+                                                        {group.serviced.length > 0 && <span> · {group.serviced.length} serviced</span>}
+                                                    </p>
+                                                </div>
+                                            }
+                                        >
+                                            {group.open.length === 0 ? (
+                                                <p className="text-sm text-white/45">Nothing upcoming for this customer.</p>
+                                            ) : (
+                                                group.open.map(renderTask)
+                                            )}
+                                            {group.serviced.length > 0 && (
+                                                <div className="space-y-3 pt-2">
+                                                    <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/40">Recently serviced</p>
+                                                    {group.serviced.slice(0, 5).map(renderTask)}
+                                                </div>
+                                            )}
+                                        </TaskGroup>
+                                    );
+                                })}
+                            </TaskFilter>
+                        )}
                     </BulkSelectProvider>
 
                     <AssignTaskForm action={createTask}>

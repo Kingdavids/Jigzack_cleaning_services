@@ -5,7 +5,7 @@ import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { taskDisplayStatus } from "@/lib/tasks";
 import { describeFacilities } from "@/lib/customer/facilities";
-import { describeFrequency, parseFrequency, todayKey } from "@/lib/billing/schedule";
+import { customerFrequency, describeFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import StatCard from "@/components/dashboard/StatCard";
 import SectionCard from "@/components/dashboard/SectionCard";
@@ -74,7 +74,7 @@ export default async function CustomerPage() {
 
     const { counted, notes } = describeFacilities(customer?.facility_details);
     const vacancies = describeFacilities(customer?.vacancies).counted;
-    const frequency = parseFrequency(customer?.preferred_pickup_frequency);
+    const frequency = customerFrequency(customer);
 
     return (
         <DashboardShell

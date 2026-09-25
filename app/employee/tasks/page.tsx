@@ -5,7 +5,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import TaskPhotoManager from "@/components/dashboard/TaskPhotoManager";
 import TaskTimer from "@/components/dashboard/TaskTimer";
-import { endTask, startTask } from "@/app/employee/actions";
+import TaskServiceButtons from "@/components/dashboard/TaskServiceButtons";
 import { loadTaskTeams, taskDisplayStatus } from "@/lib/tasks";
 
 type TaskRow = {
@@ -115,28 +115,8 @@ export default async function EmployeeTasksPage() {
                                     </div>
 
                                     <div className="flex flex-col gap-3 lg:min-w-[280px]">
-                                        <div className="flex items-center gap-3">
-                                            <form action={startTask}>
-                                                <input type="hidden" name="taskId" value={task.id} />
-                                                <button
-                                                    type="submit"
-                                                    disabled={["in progress", "completed"].includes((task.status ?? "").toLowerCase())}
-                                                    className="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    Start Task
-                                                </button>
-                                            </form>
-
-                                            <form action={endTask}>
-                                                <input type="hidden" name="taskId" value={task.id} />
-                                                <button
-                                                    type="submit"
-                                                    disabled={(task.status ?? "").toLowerCase() === "completed"}
-                                                    className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
-                                                >
-                                                    End Task
-                                                </button>
-                                            </form>
+                                        <div className="flex flex-wrap items-center gap-3">
+                                            <TaskServiceButtons taskId={task.id} status={task.status} scheduledDate={task.scheduled_date} />
 
                                             {(task.status ?? "").toLowerCase() === "in progress" && task.started_at && (
                                                 <TaskTimer startedAt={task.started_at} />

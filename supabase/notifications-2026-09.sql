@@ -310,9 +310,11 @@ begin
         end if;
 
         -- Pickups marked serviced because their date passed do not ring anyone.
+        -- A reopened pickup has its own notification, so it is left out here.
         if new.status is distinct from old.status
            and not (new.status = 'completed' and new.scheduled_date is not null
-                    and new.scheduled_date < (now() at time zone 'Africa/Lagos')::date) then
+                    and new.scheduled_date < (now() at time zone 'Africa/Lagos')::date)
+           and not (old.status = 'completed' and new.status = 'pending') then
             perform public.notify(
                 new.customer_id, 'task',
                 case new.status when 'in progress' then 'Your pickup is under way'

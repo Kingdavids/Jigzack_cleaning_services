@@ -1,7 +1,7 @@
 import { CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock3, MapPin, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, resolveBilling } from "@/lib/customer/billing";
-import { describeFrequency, parseFrequency, todayKey } from "@/lib/billing/schedule";
+import { customerFrequency, describeFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
@@ -74,7 +74,7 @@ export default async function CustomerSchedulePage() {
     ]);
 
     const today = todayKey();
-    const frequency = parseFrequency(customer?.preferred_pickup_frequency);
+    const frequency = customerFrequency(customer);
 
     const completed = tasks
         .filter((t) => (t.status ?? "").toLowerCase() === "completed")
