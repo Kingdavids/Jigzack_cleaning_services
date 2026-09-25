@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import { ChevronDown, Megaphone, Paperclip, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Copy, Megaphone, Paperclip, Trash2 } from "lucide-react";
 import { createClient } from "@/utils/supabase/client";
 import { markThreadRead, type MessageActionState } from "@/lib/messaging-actions";
 import { MESSAGE_SELECT, MESSAGE_SELECT_BASE } from "@/lib/message-select";
@@ -138,6 +138,52 @@ function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: R
     );
 }
 
+// Long-pressing text to select it is unreliable on phones, especially inside a
+// scrolling card, so every message also has a Copy button.
+function CopyButton({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const copy = async (event: React.MouseEvent) => {
+        event.stopPropagation();
+
+        try {
+            await navigator.clipboard.writeText(text);
+        } catch {
+            // Older browsers and non-secure pages: fall back to a temporary field.
+            const field = document.createElement("textarea");
+            field.value = text;
+            field.style.position = "fixed";
+            field.style.opacity = "0";
+            document.body.appendChild(field);
+            field.select();
+            try {
+                document.execCommand("copy");
+            } catch {
+                toast.error("Could not copy. Press and hold the message to select it.");
+                field.remove();
+                return;
+            }
+            field.remove();
+        }
+
+        setCopied(true);
+        toast.success("Message copied");
+        setTimeout(() => setCopied(false), 1500);
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={copy}
+            aria-label="Copy message"
+            className="flex items-center gap-1 text-[11px] font-semibold text-white/40 transition hover:text-white"
+        >
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+        </button>
+    );
+}
+
 function DeleteForm({
                          messageId,
                          groupId,
@@ -195,7 +241,7 @@ function MessageBubble({
                 )}
 
                 <div
-                    className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words shadow-sm ${
+                    className={`select-text whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm leading-relaxed break-words shadow-sm [-webkit-touch-callout:default] [-webkit-user-select:text] ${
                         isMine
                             ? "rounded-br-sm bg-amber-400 text-black"
                             : "rounded-bl-sm border border-white/10 bg-white/[0.06] text-white/85"
@@ -213,6 +259,7 @@ function MessageBubble({
 
                 <div className="mt-1 flex items-center gap-2 px-1">
                     <span className="text-[11px] text-white/40">{formatWhen(message.created_at)}</span>
+                    <CopyButton text={message.body} />
                     {isMine && <DeleteForm messageId={message.id} groupId={deleteGroupId} deleteAction={deleteAction} />}
                 </div>
             </div>

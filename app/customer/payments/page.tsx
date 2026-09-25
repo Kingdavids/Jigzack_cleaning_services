@@ -3,39 +3,31 @@ import { naira, resolveBilling } from "@/lib/customer/billing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import InvoiceList, { type InvoiceRow } from "@/components/dashboard/InvoiceList";
+import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
 
 export default async function CustomerPaymentsPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
     const { billingProfileId, isTenant } = await resolveBilling(supabase, profile.id, customer);
 
-    // transfer_reported_at arrives with supabase/manual-payments-2026-09.sql;
-    // until then load the invoices without it so the page never breaks.
-    const baseColumns = "id, amount, arrears, description, invoice_month, status, paid_at, payment_method, payment_reference, created_at";
-
-    let invoicesResult = await supabase
+    // "*" includes the transfer and part payment columns once they exist, so the
+    // page works before and after those SQL files have been run.
+    const { data: invoicesData } = await supabase
         .from("payments")
-        .select(`${baseColumns}, transfer_reported_at`)
+        .select("*")
         .eq("customer_id", billingProfileId)
         .order("created_at", { ascending: false });
 
-    if (invoicesResult.error) {
-        invoicesResult = (await supabase
-            .from("payments")
-            .select(baseColumns)
-            .eq("customer_id", billingProfileId)
-            .order("created_at", { ascending: false })) as unknown as typeof invoicesResult;
-    }
-
-    const invoicesData = invoicesResult.data;
-
     const invoices = (invoicesData ?? []) as InvoiceRow[];
 
+    const installments = await loadInstallments(supabase, invoices.map((invoice) => invoice.id));
+    const byInvoice = groupInstallments(installments);
+
+    // Money still owed is what is left on each invoice after the payments made.
     const totals = invoices.reduce(
         (acc, invoice) => {
-            const amount = Number(invoice.amount ?? 0);
-            acc.billed += amount;
-            if (invoice.status === "paid") acc.paid += amount;
-            else acc.outstanding += amount;
+            acc.billed += invoiceTotal(invoice);
+            acc.paid += amountPaid(invoice);
+            acc.outstanding += balanceOf(invoice);
             return acc;
         },
         { billed: 0, paid: 0, outstanding: 0 }
@@ -46,7 +38,7 @@ export default async function CustomerPaymentsPage() {
             role="customer"
             profileId={profile.id}
             title="Payments"
-            subtitle="Every invoice, its status, and a receipt once it's paid."
+            subtitle="Every invoice, its status, and a receipt for each payment you've made."
             unreadCount={unreadCount}
         >
             <SectionCard
@@ -54,7 +46,7 @@ export default async function CustomerPaymentsPage() {
                 description={
                     isTenant
                         ? "Your estate's shared utility bill. View or print any invoice or receipt."
-                        : "View or print any invoice, and a receipt for anything you've paid."
+                        : "View or print any invoice, and a receipt for every payment you've made."
                 }
             >
                 {isTenant && (
@@ -76,7 +68,11 @@ export default async function CustomerPaymentsPage() {
                     ))}
                 </div>
 
-                <InvoiceList invoices={invoices} canReport={!isTenant} />
+                <InvoiceList
+                    invoices={invoices}
+                    canReport={!isTenant}
+                    installments={Object.fromEntries(byInvoice)}
+                />
             </SectionCard>
         </DashboardShell>
     );

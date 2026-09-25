@@ -54,7 +54,7 @@ export default function Signup({
             const origin =
                 typeof window !== "undefined" ? window.location.origin : "";
 
-            const { error: signUpError } = await supabase.auth.signUp({
+            const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
@@ -68,6 +68,17 @@ export default function Signup({
 
             if (signUpError) {
                 toast.error(signUpError.message || "Unable to create account");
+                return;
+            }
+
+            // With email confirmation on, Supabase does not say when the address
+            // already has an account: it "succeeds" with no identities and sends
+            // nothing, which would leave the person waiting for an email that is
+            // never coming. One email is one account, whatever its role.
+            if (signUpData.user && (signUpData.user.identities?.length ?? 0) === 0) {
+                toast.error("This email already has an account. Log in instead, or use Forgot password if you can't remember it.", {
+                    duration: 9000,
+                });
                 return;
             }
 

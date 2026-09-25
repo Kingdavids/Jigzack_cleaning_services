@@ -11,10 +11,12 @@ import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
+import { amountPaid, balanceOf, round2 } from "@/lib/billing/balance";
+import { naira } from "@/lib/customer/billing";
 import {
-    BILLABLE_SELECT,
     generateInvoiceFor,
     generateScheduleFor,
+    loadBillable,
     recalculateOpenInvoice,
     type BillableCustomer,
 } from "@/lib/billing/generate";
@@ -146,32 +148,109 @@ export async function createInvoice(
 
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];
 
-export async function markInvoicePaid(paymentId: string, method: string, reference: string) {
+export type PaymentResult = { success: boolean; error?: string; message?: string };
+
+// Records money received against an invoice. It can be the whole balance or
+// part of it: every payment gets its own receipt, and the invoice becomes paid
+// once nothing is left. The database refuses to take more than is owed.
+export async function recordPayment(
+    paymentId: string,
+    amount: number,
+    method: string,
+    reference: string,
+    note: string
+): Promise<PaymentResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
-    if (!paymentId) return;
+    const value = round2(Number(amount));
 
-    const { error } = await supabase
-        .from("payments")
-        .update({
-            status: "paid",
-            paid_at: new Date().toISOString(),
-            payment_method: PAYMENT_METHODS.includes(method) ? method : "Other",
-            payment_reference: reference.trim().slice(0, 120) || null,
-        })
-        .eq("id", paymentId)
-        .neq("status", "paid");
+    if (!paymentId) return { success: false, error: "Missing invoice." };
+    if (!Number.isFinite(value) || value <= 0) return { success: false, error: "Enter an amount greater than zero." };
+
+    const cleanMethod = PAYMENT_METHODS.includes(method) ? method : "Other";
+    const cleanReference = reference.trim().slice(0, 120);
+
+    const { data, error } = await supabase.rpc("record_installment", {
+        p_payment_id: paymentId,
+        p_amount: value,
+        p_method: cleanMethod,
+        p_reference: cleanReference,
+        p_note: note.trim().slice(0, 300),
+    });
 
     if (error) {
-        console.error("markInvoicePaid error:", error.message);
-        return;
+        // Before the part payments SQL has been run, only a full payment works.
+        if (/could not find the function|schema cache/i.test(error.message)) {
+            const { data: invoice } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
+
+            if (!invoice || invoice.status === "paid") return { success: false, error: "This invoice is already paid." };
+            if (value < balanceOf(invoice)) {
+                return { success: false, error: "Part payments are not switched on yet. Run supabase/billing-installments-2026-09.sql in Supabase first." };
+            }
+
+            const { error: legacyError } = await supabase
+                .from("payments")
+                .update({ status: "paid", paid_at: new Date().toISOString(), payment_method: cleanMethod, payment_reference: cleanReference || null })
+                .eq("id", paymentId)
+                .neq("status", "paid");
+
+            if (legacyError) {
+                console.error("recordPayment legacy error:", legacyError.message);
+                return { success: false, error: "Could not record the payment. Please try again." };
+            }
+        } else {
+            console.error("recordPayment error:", error.message);
+            return {
+                success: false,
+                error: error.code === "P0001" ? error.message : "Could not record the payment. Please try again.",
+            };
+        }
     }
 
-    await logActivity(supabase, actor, "invoice_paid", `Marked an invoice paid (${method || "no method"})`, { type: "payment", id: paymentId });
+    const result = (data ?? {}) as { balance?: number; paid?: boolean };
+    const settled = result.paid ?? true;
+
+    await logActivity(
+        supabase,
+        actor,
+        settled ? "invoice_paid" : "invoice_part_paid",
+        `Recorded a ${naira(value)} payment (${cleanMethod})${settled ? ", invoice paid in full" : `, ${naira(result.balance ?? 0)} still owed`}`,
+        { type: "payment", id: paymentId }
+    );
     revalidatePath("/admin/payments");
+    revalidatePath("/admin");
     revalidatePath("/customer");
     revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message: settled ? "Invoice paid in full. The customer can now see the receipt." : `Payment recorded. ${naira(result.balance ?? 0)} is still owed.`,
+    };
+}
+
+// Takes back a payment that was entered by mistake. The invoice goes back to
+// what it was before that payment.
+export async function voidPayment(installmentId: string): Promise<PaymentResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!installmentId) return { success: false, error: "Missing payment." };
+
+    const { error } = await supabase.rpc("void_installment", { p_installment_id: installmentId });
+
+    if (error) {
+        console.error("voidPayment error:", error.message);
+        return { success: false, error: error.code === "P0001" ? error.message : "Could not remove that payment. Please try again." };
+    }
+
+    await logActivity(supabase, actor, "payment_voided", "Removed a recorded payment", { type: "installment", id: installmentId });
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return { success: true, message: "Payment removed." };
 }
 
 export type MessageActionState = { success: boolean; error?: string } | null;
@@ -587,14 +666,9 @@ export async function setUserApproval(
                 }
             }
 
-            const { data: customer } = await supabase
-                .from("customers")
-                .select(BILLABLE_SELECT)
-                .eq("profile_id", userId)
-                .maybeSingle();
+            const billable = await loadBillable(supabase, userId);
 
-            if (customer) {
-                const billable = customer as unknown as BillableCustomer;
+            if (billable) {
                 const schedule = await generateScheduleFor(supabase, billable);
                 const invoice = await generateInvoiceFor(supabase, billable);
 
@@ -646,6 +720,62 @@ export async function setUserApproval(
 
 export type GenerateResult = { success: boolean; message: string };
 
+export type MonthlyRateResult = { success: boolean; error?: string; message?: string };
+
+// The amount used for this customer's monthly invoices. Empty goes back to
+// working it out from their property details.
+export async function setMonthlyRate(profileId: string, amount: number | null): Promise<MonthlyRateResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!profileId) return { success: false, error: "Missing customer." };
+
+    const value = amount === null ? null : round2(Number(amount));
+
+    if (value !== null && (!Number.isFinite(value) || value <= 0 || value > 100_000_000)) {
+        return { success: false, error: "Enter an amount greater than zero." };
+    }
+
+    const { data: before } = await supabase.from("customers").select("full_name").eq("profile_id", profileId).maybeSingle();
+    if (!before) return { success: false, error: "Customer not found." };
+
+    const { error } = await supabase.from("customers").update({ monthly_rate: value }).eq("profile_id", profileId);
+
+    if (error) {
+        console.error("setMonthlyRate error:", error.message);
+        return {
+            success: false,
+            error: /monthly_rate/.test(error.message)
+                ? "Not switched on yet. Run supabase/billing-installments-2026-09.sql in Supabase first."
+                : "Could not save the monthly charge. Please try again.",
+        };
+    }
+
+    // This month's invoice follows the new charge if it is still untouched.
+    const billable = await loadBillable(supabase, profileId);
+    const repriced = billable ? await recalculateOpenInvoice(supabase, billable) : false;
+
+    await logActivity(
+        supabase,
+        actor,
+        "monthly_rate_changed",
+        value === null
+            ? `Set ${before.full_name ?? "a customer"} back to the calculated monthly charge`
+            : `Set the monthly charge for ${before.full_name ?? "a customer"} to ${naira(value)}`,
+        { type: "profile", id: profileId }
+    );
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message:
+            (value === null ? "Back to the calculated monthly charge." : `Monthly charge set to ${naira(value)}.`) +
+            (repriced ? " This month's open invoice was updated." : ""),
+    };
+}
+
 export async function generateAllSchedules(): Promise<GenerateResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -687,10 +817,8 @@ export async function generateCustomerBilling(profileId: string, what: "schedule
     await requireAdmin();
     const supabase = await createClient();
 
-    const { data: customer } = await supabase.from("customers").select(BILLABLE_SELECT).eq("profile_id", profileId).single();
-    if (!customer) return { success: false, message: "Customer not found." };
-
-    const billable = customer as unknown as BillableCustomer;
+    const billable = await loadBillable(supabase, profileId);
+    if (!billable) return { success: false, message: "Customer not found." };
 
     revalidatePath("/admin/tasks");
     revalidatePath("/admin/payments");
@@ -788,10 +916,9 @@ export async function saveVacancies(
     const profileId = String(formData.get("profileId") || "");
     if (!profileId) return { success: false, error: "Missing customer." };
 
-    const { data: customer } = await supabase.from("customers").select(BILLABLE_SELECT).eq("profile_id", profileId).single();
-    if (!customer) return { success: false, error: "Customer not found." };
+    const billable = await loadBillable(supabase, profileId);
+    if (!billable) return { success: false, error: "Customer not found." };
 
-    const billable = customer as unknown as BillableCustomer;
     const vacancies: Record<string, string> = {};
 
     for (const facility of DOMESTIC_FACILITIES) {
@@ -861,12 +988,25 @@ export async function updateInvoice(
     }
 
     const arrears = Number(formData.get("arrears") || 0);
+    const cleanArrears = Number.isFinite(arrears) && arrears > 0 ? arrears : 0;
+    const newTotal = round2(itemsTotal(items) + cleanArrears);
+
+    // Money may already have been received on this invoice, with receipts
+    // issued for it, so the total can never drop below what was paid.
+    const { data: current } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
+    const alreadyPaid = current ? amountPaid(current) : 0;
+
+    if (current?.status !== "paid" && newTotal < alreadyPaid) {
+        return { success: false, error: `${naira(alreadyPaid)} has already been paid on this invoice, so the total can't be lower than that.` };
+    }
 
     const { data, error } = await supabase
         .from("payments")
         .update({
             amount: itemsTotal(items),
-            arrears: Number.isFinite(arrears) && arrears > 0 ? arrears : 0,
+            arrears: cleanArrears,
+            // The new total exactly matches what was paid, so nothing is owed.
+            ...(alreadyPaid > 0 && newTotal === alreadyPaid ? { status: "paid", paid_at: new Date().toISOString() } : {}),
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             description: String(formData.get("description") || "").trim() || null,
             invoice_month: String(formData.get("invoiceMonth") || "").trim() || null,

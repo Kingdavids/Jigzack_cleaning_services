@@ -1,15 +1,18 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { createInvoice, generateAllInvoices, updateInvoice } from "../actions";
-import { formatDate, invoiceNumber, naira } from "@/lib/customer/billing";
+import { formatDate, invoiceNumber, naira, receiptNumber } from "@/lib/customer/billing";
+import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
 import { monthLabel, normalizeLineItems } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
-import MarkPaidControl from "@/components/dashboard/MarkPaidControl";
+import RecordPaymentControl from "@/components/dashboard/RecordPaymentControl";
+import VoidPaymentButton from "@/components/dashboard/VoidPaymentButton";
 import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
+import Link from "next/link";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
@@ -29,6 +32,8 @@ type PaymentRow = {
     created_at: string;
     paid_at: string | null;
     payment_method: string | null;
+    payment_reference: string | null;
+    amount_paid?: number | string | null;
     line_items: unknown;
     auto_generated: boolean;
     customer: ProfileRef;
@@ -51,28 +56,18 @@ export default async function AdminPaymentsPage() {
     const hidden = await deletedProfileIds(supabase);
     const customerOptions = (directoryData ?? []).filter((c) => !hidden.has(c.id));
 
-    // The transfer_* columns arrive with supabase/manual-payments-2026-09.sql;
-    // until then load the invoices without them so the page never breaks.
-    const baseColumns =
-        "id, amount, arrears, status, description, invoice_month, created_at, paid_at, payment_method, line_items, auto_generated, customer:profiles!payments_customer_id_fkey(full_name)";
-
-    let paymentsResult = await supabase
+    // "*" picks up the transfer and part payment columns once they exist, so the
+    // page works before and after the SQL files have been run.
+    const paymentsResult = await supabase
         .from("payments")
-        .select(`${baseColumns}, transfer_reported_at, transfer_note, transfer_receipt_path`)
+        .select("*, customer:profiles!payments_customer_id_fkey(full_name)")
         .order("created_at", { ascending: false })
         .limit(40);
-
-    if (paymentsResult.error) {
-        paymentsResult = (await supabase
-            .from("payments")
-            .select(baseColumns)
-            .order("created_at", { ascending: false })
-            .limit(40)) as unknown as typeof paymentsResult;
-    }
 
     const payments = (paymentsResult.data ?? []) as unknown as PaymentRow[];
     const canBulk = isOwner(profile);
     const canAct = isFullAdmin(profile);
+    const installmentsByInvoice = groupInstallments(await loadInstallments(supabase, payments.map((p) => p.id)));
 
     // One-off registration fees still to be settled: approved customers who are
     // not tenants (tenants are waived) and have not been marked as paid.
@@ -209,64 +204,124 @@ export default async function AdminPaymentsPage() {
                                 No invoices yet.
                             </div>
                         ) : (
-                            payments.map((payment) => (
-                                <div
-                                    key={payment.id}
-                                    className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
-                                >
-                                    <div className="absolute left-4 top-6">
-                                        <BulkCheckbox id={payment.id} label="Select invoice" />
-                                    </div>
-                                    <div className="flex items-center justify-between gap-4">
-                                        <div>
-                                            <p className="font-bold">{payment.customer?.full_name ?? "Unknown customer"}</p>
-                                            <p className="text-xs text-white/50">
-                                                {payment.invoice_month ?? formatDate(payment.created_at)} ·{" "}
-                                                {invoiceNumber(payment.id)}
-                                                {payment.auto_generated ? " · auto-generated" : ""}
-                                            </p>
+                            payments.map((payment) => {
+                                const total = invoiceTotal(payment);
+                                const paid = amountPaid(payment);
+                                const balance = balanceOf(payment);
+                                const partPaid = payment.status !== "paid" && paid > 0;
+                                const installments = installmentsByInvoice.get(payment.id) ?? [];
+
+                                return (
+                                    <div
+                                        key={payment.id}
+                                        className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
+                                    >
+                                        <div className="absolute left-4 top-6">
+                                            <BulkCheckbox id={payment.id} label="Select invoice" />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-4">
+                                            <div>
+                                                <p className="font-bold">{payment.customer?.full_name ?? "Unknown customer"}</p>
+                                                <p className="text-xs text-white/50">
+                                                    {payment.invoice_month ?? formatDate(payment.created_at)} ·{" "}
+                                                    {invoiceNumber(payment.id)}
+                                                    {payment.auto_generated ? " · auto-generated" : ""}
+                                                </p>
+                                            </div>
+
+                                            <div className="text-right">
+                                                <p className="font-bold text-amber-300">{naira(total)}</p>
+                                                {partPaid && (
+                                                    <p className="text-xs text-white/50">
+                                                        {naira(paid)} paid, {naira(balance)} owed
+                                                    </p>
+                                                )}
+                                                <StatusBadge status={partPaid ? "part_paid" : payment.status} />
+                                            </div>
                                         </div>
 
-                                        <div className="text-right">
-                                            <p className="font-bold text-amber-300">
-                                                {naira(Number(payment.amount) + Number(payment.arrears ?? 0))}
-                                            </p>
-                                            <StatusBadge status={payment.status} />
-                                        </div>
-                                    </div>
-
-                                    {payment.status === "paid" ? (
-                                        <p className="mt-3 border-t border-white/10 pt-3 text-xs text-white/45">
-                                            Paid {formatDate(payment.paid_at ?? payment.created_at)}
-                                            {payment.payment_method ? ` via ${payment.payment_method}` : ""}
-                                        </p>
-                                    ) : (
-                                        <>
-                                            {payment.transfer_reported_at && (
-                                                <InvoiceTransferReview
-                                                    paymentId={payment.id}
-                                                    reportedAt={formatDate(payment.transfer_reported_at)}
-                                                    note={payment.transfer_note ?? null}
-                                                    receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
-                                                />
+                                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs">
+                                            <Link
+                                                href={`/admin/invoices/${payment.id}`}
+                                                className="font-semibold text-amber-300 underline underline-offset-2"
+                                            >
+                                                Preview invoice
+                                            </Link>
+                                            {payment.status === "paid" && installments.length === 0 && (
+                                                <Link
+                                                    href={`/admin/receipts/${payment.id}`}
+                                                    className="font-semibold text-amber-300 underline underline-offset-2"
+                                                >
+                                                    Preview receipt
+                                                </Link>
                                             )}
-                                            <InvoiceEditor
-                                                action={updateInvoice}
-                                                invoice={{
-                                                    id: payment.id,
-                                                    invoice_month: payment.invoice_month,
-                                                    description: payment.description,
-                                                    arrears: Number(payment.arrears ?? 0),
-                                                    amount: Number(payment.amount),
-                                                    line_items: normalizeLineItems(payment.line_items),
-                                                    auto_generated: payment.auto_generated,
-                                                }}
-                                            />
-                                            <MarkPaidControl paymentId={payment.id} />
-                                        </>
-                                    )}
-                                </div>
-                            ))
+                                            {payment.status === "paid" && installments.length === 0 && (
+                                                <span className="text-white/45">
+                                                    Paid {formatDate(payment.paid_at ?? payment.created_at)}
+                                                    {payment.payment_method ? ` via ${payment.payment_method}` : ""}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {installments.length > 0 && (
+                                            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                                                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/45">Payments received</p>
+                                                <ul className="mt-2 space-y-2">
+                                                    {installments.map((item, index) => (
+                                                        <li key={item.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                                                            <span className="font-semibold text-white">{naira(Number(item.amount))}</span>
+                                                            <span className="text-white/55">
+                                                                {formatDate(item.paid_at)}
+                                                                {item.method ? ` · ${item.method}` : ""}
+                                                                {item.reference ? ` · ref ${item.reference}` : ""}
+                                                            </span>
+                                                            <span className="text-white/45">{naira(Number(item.balance_after))} owed after</span>
+                                                            <Link
+                                                                href={`/admin/receipts/${item.id}`}
+                                                                className="font-semibold text-amber-300 underline underline-offset-2"
+                                                            >
+                                                                Preview receipt {receiptNumber(item.id)}
+                                                            </Link>
+                                                            {canAct && (
+                                                                <VoidPaymentButton
+                                                                    installmentId={item.id}
+                                                                    label={`payment ${index + 1} (${naira(Number(item.amount))})`}
+                                                                />
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        {payment.status !== "paid" && (
+                                            <>
+                                                {payment.transfer_reported_at && (
+                                                    <InvoiceTransferReview
+                                                        paymentId={payment.id}
+                                                        reportedAt={formatDate(payment.transfer_reported_at)}
+                                                        note={payment.transfer_note ?? null}
+                                                        receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
+                                                    />
+                                                )}
+                                                <InvoiceEditor
+                                                    action={updateInvoice}
+                                                    invoice={{
+                                                        id: payment.id,
+                                                        invoice_month: payment.invoice_month,
+                                                        description: payment.description,
+                                                        arrears: Number(payment.arrears ?? 0),
+                                                        amount: Number(payment.amount),
+                                                        line_items: normalizeLineItems(payment.line_items),
+                                                        auto_generated: payment.auto_generated,
+                                                    }}
+                                                />
+                                                {canAct && <RecordPaymentControl key={`${payment.id}-${balance}`} paymentId={payment.id} balance={balance} />}
+                                            </>
+                                        )}
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                     </BulkSelectProvider>

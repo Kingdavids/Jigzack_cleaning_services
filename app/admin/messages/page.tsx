@@ -1,7 +1,7 @@
 import { Megaphone } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { sendBroadcast, sendMessage } from "../actions";
-import { deleteMessage, replyToMessage } from "@/lib/messaging-actions";
+import { deleteMessage, replyToMessage, sendMessageToAdmin } from "@/lib/messaging-actions";
 import { loadMessages } from "@/lib/message-attachments";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
@@ -10,7 +10,7 @@ import MessageThreadList, { type MessageRow } from "@/components/dashboard/Messa
 import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConversations";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import ClearMessagesCard from "@/components/dashboard/ClearMessagesCard";
-import { isOwner } from "@/lib/auth/roles";
+import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -40,6 +40,8 @@ export default async function AdminMessagesPage() {
     );
 
     const messages = (messagesData ?? []) as unknown as MessageRow[];
+    // Supervisors can look at everything but may only write to the admins.
+    const supervisor = isViewOnlyAdmin(profile);
 
     // Conversations between staff and customers. Admins can read every message,
     // and reading them here changes nothing for the people involved.
@@ -70,6 +72,26 @@ export default async function AdminMessagesPage() {
                         deleteAction={deleteMessage}
                     />
 
+                    {supervisor ? (
+                        <SendMessageForm action={sendMessageToAdmin} label="Send a message to the admins">
+                            <p className="text-xs text-white/50">
+                                As a supervisor you can message the admins. Everyone else can only be reached by an admin.
+                            </p>
+                            <input
+                                name="subject"
+                                placeholder="Subject"
+                                required
+                                className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
+                            />
+                            <textarea
+                                name="body"
+                                placeholder="Message"
+                                required
+                                className="min-h-[90px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30"
+                            />
+                        </SendMessageForm>
+                    ) : (
+                    <>
                     <SendMessageForm action={sendMessage} label="Send message">
                         <select
                             name="toProfileId"
@@ -150,6 +172,8 @@ export default async function AdminMessagesPage() {
                             Recipients can&apos;t reply to a broadcast. Use &quot;Send message&quot; above for a two-way conversation.
                         </p>
                     </SendMessageForm>
+                    </>
+                    )}
                 </div>
             </SectionCard>
 

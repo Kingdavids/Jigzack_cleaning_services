@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
-import { buildLineItems, itemsTotal, monthLabel } from "@/lib/billing/pricing";
+import { buildLineItems, itemsTotal, monthLabel, type LineItem } from "@/lib/billing/pricing";
+import { amountPaid } from "@/lib/billing/balance";
 import { addDays, describeFrequency, generateDates, parseFrequency, todayKey } from "@/lib/billing/schedule";
 
 type SupabaseServerClient = SupabaseClient;
@@ -13,10 +14,41 @@ export type BillableCustomer = {
     facility_details: FacilityDetails;
     vacancies: FacilityDetails;
     unit_id?: string | null;
+    // A charge the admin set for this customer. Empty means work it out from
+    // their property details.
+    monthly_rate?: number | string | null;
 };
 
-export const BILLABLE_SELECT =
-    "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id";
+const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id";
+
+// monthly_rate comes from supabase/billing-installments-2026-09.sql.
+export const BILLABLE_SELECT = `${BILLABLE_BASE}, monthly_rate`;
+
+// Runs a customers query with monthly_rate, or without it if that SQL has not
+// been run yet, so approvals and the daily job keep working in between.
+export async function queryBillable(run: (select: string) => PromiseLike<{ data: unknown; error: unknown }>) {
+    const first = await run(BILLABLE_SELECT);
+    if (!first.error) return first.data;
+
+    return (await run(BILLABLE_BASE)).data;
+}
+
+export async function loadBillable(supabase: SupabaseServerClient, profileId: string) {
+    const data = await queryBillable((select) => supabase.from("customers").select(select).eq("profile_id", profileId).maybeSingle());
+    return (data ?? null) as unknown as BillableCustomer | null;
+}
+
+// What a month costs this customer: their set monthly charge if there is one,
+// otherwise the per-unit prices from their property details.
+export function chargeItems(customer: BillableCustomer): LineItem[] {
+    const rate = Number(customer.monthly_rate ?? 0);
+
+    if (Number.isFinite(rate) && rate > 0) {
+        return [{ label: "Monthly waste management service", quantity: 1, unit_price: rate }];
+    }
+
+    return buildLineItems(customer.facility_details, customer.vacancies);
+}
 
 // Creates pending pickups from the customer's stated frequency, skipping any
 // date that already has a task. Unassigned (no employee) until an admin
@@ -73,7 +105,7 @@ export async function generateInvoiceFor(
 ): Promise<InvoiceOutcome> {
     if (!customer.profile_id) return "error";
 
-    const items = buildLineItems(customer.facility_details, customer.vacancies);
+    const items = chargeItems(customer);
     if (items.length === 0) return "no-pricing";
 
     const { data: existing } = await supabase
@@ -114,8 +146,26 @@ export async function recalculateOpenInvoice(
 ) {
     if (!customer.profile_id) return false;
 
-    const items = buildLineItems(customer.facility_details, customer.vacancies);
+    const items = chargeItems(customer);
     if (items.length === 0) return false;
+
+    const { data: open, error: findError } = await supabase
+        .from("payments")
+        .select("*")
+        .eq("customer_id", customer.profile_id)
+        .eq("invoice_month", month)
+        .eq("auto_generated", true)
+        .neq("status", "paid");
+
+    if (findError) {
+        console.error("recalculateOpenInvoice error:", findError.message);
+        return false;
+    }
+
+    // An invoice that already has money paid against it keeps its figures, so a
+    // receipt that was issued never stops adding up.
+    const ids = (open ?? []).filter((row) => amountPaid(row) === 0).map((row) => row.id as string);
+    if (ids.length === 0) return false;
 
     const { data, error } = await supabase
         .from("payments")
@@ -124,10 +174,7 @@ export async function recalculateOpenInvoice(
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             line_items: items,
         })
-        .eq("customer_id", customer.profile_id)
-        .eq("invoice_month", month)
-        .eq("auto_generated", true)
-        .neq("status", "paid")
+        .in("id", ids)
         .select("id");
 
     if (error) {

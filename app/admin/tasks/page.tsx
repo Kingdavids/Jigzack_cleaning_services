@@ -1,10 +1,10 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createTask, generateAllSchedules } from "../actions";
+import { createTask } from "../actions";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
-import BillingActionButton from "@/components/dashboard/BillingActionButton";
+import CustomerScheduleGenerator from "@/components/dashboard/CustomerScheduleGenerator";
 import TaskAdminControls from "@/components/dashboard/TaskAdminControls";
 import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
 import { deleteTasks } from "../cleanup-actions";
@@ -51,6 +51,12 @@ export default async function AdminTasksPage() {
     const employeeOptions = directory.filter((p) => p.role === "employee");
     const customerOptions = directory.filter((p) => p.role === "customer");
 
+    // Tenants are covered by their estate's schedule, so only customers with
+    // their own pickups can have one generated.
+    const { data: ownScheduleData } = await supabase.from("customers").select("profile_id").is("unit_id", null);
+    const ownSchedule = new Set((ownScheduleData ?? []).map((c) => c.profile_id as string));
+    const scheduleCustomers = customerOptions.filter((c) => ownSchedule.has(c.id));
+
     const { data: tasksData } = await supabase
         .from("tasks")
         .select(
@@ -78,13 +84,17 @@ export default async function AdminTasksPage() {
             <div className="space-y-6">
             <SectionCard
                 title="Schedule"
-                description="Pickups are generated from each customer's stated frequency. Assign staff, change dates, or remove any of them below."
+                description="Generate pickups for one customer at a time from their stated frequency. Assign staff, change dates, or remove any of them below."
             >
-                <div className="flex flex-wrap items-center gap-3">
-                    <BillingActionButton run={generateAllSchedules}>Generate schedules for all customers</BillingActionButton>
-                    <span className="text-sm text-white/50">
+                <div className="space-y-3">
+                    {isFullAdmin(profile) ? (
+                        <CustomerScheduleGenerator customers={scheduleCustomers.map((c) => ({ id: c.id, full_name: c.full_name }))} />
+                    ) : (
+                        <p className="text-sm text-white/50">You have view-only access, so schedules can&apos;t be generated from your account.</p>
+                    )}
+                    <p className="text-sm text-white/50">
                         {unassigned > 0 ? `${unassigned} upcoming pickups still need a driver.` : "Every upcoming pickup has someone assigned."}
-                    </span>
+                    </p>
                 </div>
             </SectionCard>
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { naira } from "@/lib/customer/billing";
+import { balanceOf } from "@/lib/billing/balance";
 import { newInvoiceEmail, reminderEmail } from "@/lib/billing-email";
 import { sendEmail } from "@/lib/send-email";
 import { SITE } from "@/lib/seo";
@@ -24,6 +25,7 @@ type InvoiceRow = {
     customer_id: string | null;
     amount: number;
     arrears: number | null;
+    amount_paid?: number | string | null;
     invoice_month: string | null;
     created_at: string;
     auto_generated: boolean;
@@ -44,13 +46,13 @@ export type BillingEmailResult = { newInvoices: number; reminders: number; faile
 export async function runBillingEmails(supabase: SupabaseClient): Promise<BillingEmailResult> {
     const result: BillingEmailResult = { newInvoices: 0, reminders: 0, failed: 0 };
 
-    const { data, error } = await supabase
-        .from("payments")
-        .select(
-            "id, customer_id, amount, arrears, invoice_month, created_at, auto_generated, invoice_emailed_at, reminders_sent, customer:profiles!payments_customer_id_fkey(full_name, email)"
-        )
-        .eq("auto_generated", true)
-        .neq("status", "paid");
+    const columns =
+        "id, customer_id, amount, arrears, invoice_month, created_at, auto_generated, invoice_emailed_at, reminders_sent, customer:profiles!payments_customer_id_fkey(full_name, email)";
+    const load = (select: string) => supabase.from("payments").select(select).eq("auto_generated", true).neq("status", "paid");
+
+    // amount_paid comes from the part payments SQL; ask without it if that has not run.
+    let { data, error } = await load(`${columns}, amount_paid`);
+    if (error) ({ data, error } = await load(columns));
 
     if (error) {
         // Most likely the tracking columns haven't been added yet.
@@ -72,7 +74,8 @@ export async function runBillingEmails(supabase: SupabaseClient): Promise<Billin
         const details = {
             name: invoice.customer?.full_name ?? null,
             month: invoice.invoice_month ?? "this month",
-            total: naira(Number(invoice.amount ?? 0) + Number(invoice.arrears ?? 0)),
+            // What is still owed, so a customer who has paid part of it is not asked for all of it.
+            total: naira(balanceOf(invoice)),
             link: `${SITE.url}/customer/invoices/${invoice.id}`,
         };
         const sent = invoice.reminders_sent ?? 0;

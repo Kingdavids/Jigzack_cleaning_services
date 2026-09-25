@@ -17,6 +17,7 @@ import {
     Receipt,
     ShieldCheck,
     History,
+    Eye,
     X,
     type LucideIcon,
 } from "lucide-react";
@@ -62,8 +63,9 @@ function SidebarNav({
     pathname: string | null;
     onNavigate?: () => void;
 }) {
-    const items = navConfig[role];
     const { level } = useViewer();
+    // Only owners get the read-only oversight page.
+    const items = role === "admin" && level === "owner" ? [...navConfig.admin, { label: "Oversight", href: "/admin/oversight", icon: Eye }] : navConfig[role];
     const panelName = role === "admin" && level ? level : role;
 
     return (

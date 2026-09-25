@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { FileText, Receipt } from "lucide-react";
 import StatusBadge from "@/components/dashboard/StatusBadge";
-import { formatDate, invoiceNumber, naira } from "@/lib/customer/billing";
+import { formatDate, invoiceNumber, naira, receiptNumber } from "@/lib/customer/billing";
 import InvoiceTransferForm from "@/components/dashboard/InvoiceTransferForm";
+import { amountPaid, balanceOf, invoiceTotal, type Installment } from "@/lib/billing/balance";
 
 export type InvoiceRow = {
     id: string;
@@ -14,6 +15,7 @@ export type InvoiceRow = {
     paid_at: string | null;
     payment_method: string | null;
     payment_reference: string | null;
+    amount_paid?: number | string | null;
     created_at: string;
     // Set when the customer said they paid by transfer and it is not yet confirmed.
     transfer_reported_at?: string | null;
@@ -24,7 +26,16 @@ const STATUS_NOTE: Record<string, string> = {
     failed: "This payment didn't go through. Contact support if you've already paid.",
 };
 
-export default function InvoiceList({ invoices, canReport = false }: { invoices: InvoiceRow[]; canReport?: boolean }) {
+export default function InvoiceList({
+                                        invoices,
+                                        canReport = false,
+                                        installments = {},
+                                    }: {
+    invoices: InvoiceRow[];
+    canReport?: boolean;
+    // Payments received, by invoice id. Each one has its own receipt.
+    installments?: Record<string, Installment[]>;
+}) {
     if (invoices.length === 0) {
         return (
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -37,9 +48,12 @@ export default function InvoiceList({ invoices, canReport = false }: { invoices:
         <div className="space-y-3">
             {invoices.map((invoice) => {
                 const status = invoice.status ?? "pending";
-                const amount = Number(invoice.amount ?? 0);
-                const arrears = Number(invoice.arrears ?? 0);
+                const total = invoiceTotal(invoice);
+                const paid = amountPaid(invoice);
+                const balance = balanceOf(invoice);
+                const payments = installments[invoice.id] ?? [];
                 const isPaid = status === "paid";
+                const partPaid = !isPaid && paid > 0;
                 const reported = !isPaid && Boolean(invoice.transfer_reported_at);
 
                 return (
@@ -57,14 +71,20 @@ export default function InvoiceList({ invoices, canReport = false }: { invoices:
 
                             <div className="flex items-center gap-4 md:flex-col md:items-end md:gap-2">
                                 <div className="text-right">
-                                    <p className="text-lg font-bold text-amber-300">{naira(amount + arrears)}</p>
-                                    {arrears > 0 && (
+                                    <p className="text-lg font-bold text-amber-300">{naira(partPaid ? balance : total)}</p>
+                                    {partPaid ? (
                                         <p className="text-xs text-white/40">
-                                            {naira(amount)} + {naira(arrears)} arrears
+                                            still owed, {naira(paid)} of {naira(total)} paid
                                         </p>
+                                    ) : (
+                                        Number(invoice.arrears ?? 0) > 0 && (
+                                            <p className="text-xs text-white/40">
+                                                {naira(Number(invoice.amount ?? 0))} + {naira(Number(invoice.arrears ?? 0))} arrears
+                                            </p>
+                                        )
                                     )}
                                 </div>
-                                <StatusBadge status={status} />
+                                <StatusBadge status={partPaid ? "part_paid" : status} />
                             </div>
                         </div>
 
@@ -74,7 +94,9 @@ export default function InvoiceList({ invoices, canReport = false }: { invoices:
                                     ? `Paid ${formatDate(invoice.paid_at ?? invoice.created_at)}${
                                         invoice.payment_method ? ` via ${invoice.payment_method}` : ""
                                     }${invoice.payment_reference ? ` · ref ${invoice.payment_reference}` : ""}`
-                                    : reported
+                                    : partPaid && !reported
+                                        ? `${naira(paid)} received so far. ${naira(balance)} is still due.`
+                                        : reported
                                         ? `You reported this payment on ${formatDate(invoice.transfer_reported_at)}. We will confirm it soon.`
                                         : STATUS_NOTE[status] ?? ""}
                             </p>
@@ -88,7 +110,18 @@ export default function InvoiceList({ invoices, canReport = false }: { invoices:
                                     <FileText className="h-3.5 w-3.5" />
                                     Invoice
                                 </Link>
-                                {isPaid && (
+                                {payments.map((item, index) => (
+                                    <Link
+                                        key={item.id}
+                                        href={`/customer/receipts/${item.id}`}
+                                        title={`Receipt ${receiptNumber(item.id)}`}
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-amber-300"
+                                    >
+                                        <Receipt className="h-3.5 w-3.5" />
+                                        {payments.length > 1 ? `Receipt ${index + 1}` : "Receipt"}
+                                    </Link>
+                                ))}
+                                {isPaid && payments.length === 0 && (
                                     <Link
                                         href={`/customer/receipts/${invoice.id}`}
                                         className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-2 text-xs font-bold text-black transition hover:bg-amber-300"

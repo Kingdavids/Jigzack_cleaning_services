@@ -21,6 +21,9 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import CustomerDetailsForm from "@/components/dashboard/CustomerDetailsForm";
 import VacancyForm from "@/components/dashboard/VacancyForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
+import MonthlyChargeControl from "@/components/dashboard/MonthlyChargeControl";
+import { buildLineItems, itemsTotal } from "@/lib/billing/pricing";
+import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
     return (
@@ -50,12 +53,8 @@ export default async function AdminCustomerDetailPage({
         await Promise.all([
             supabase.from("customers").select("*").eq("profile_id", profileId).single(),
             supabase.from("profiles").select("status, created_at").eq("id", profileId).single(),
-            supabase
-                .from("payments")
-                .select("id, amount, arrears, status, invoice_month, created_at")
-                .eq("customer_id", profileId)
-                .order("created_at", { ascending: false })
-                .limit(6),
+            // Every invoice, so the totals add up. "*" also brings the part payment column.
+            supabase.from("payments").select("*").eq("customer_id", profileId).order("created_at", { ascending: false }).limit(500),
             supabase
                 .from("tasks")
                 .select("id, title, status, scheduled_date")
@@ -91,6 +90,17 @@ export default async function AdminCustomerDetailPage({
     const vacancyList = describeFacilities(customer.vacancies).counted;
     const frequency = parseFrequency(customer.preferred_pickup_frequency);
     const tenantUnit = unit as unknown as { label: string; estate: { full_name: string | null } | null } | null;
+
+    // What monthly invoices use: the amount an admin set, or else the per-unit prices.
+    const calculatedMonthly = itemsTotal(buildLineItems(customer.facility_details, customer.vacancies));
+    const customRate = Number((customer as { monthly_rate?: number | string | null }).monthly_rate ?? 0);
+    const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
+    const monthlyCharge = hasCustomRate ? customRate : calculatedMonthly;
+
+    const allInvoices = invoices ?? [];
+    const billed = allInvoices.reduce((sum, row) => sum + invoiceTotal(row), 0);
+    const received = allInvoices.reduce((sum, row) => sum + amountPaid(row), 0);
+    const owed = allInvoices.reduce((sum, row) => sum + balanceOf(row), 0);
 
     return (
         <DashboardShell
@@ -264,6 +274,40 @@ export default async function AdminCustomerDetailPage({
                     />
                 </SectionCard>
 
+                {!tenantUnit && (
+                    <SectionCard
+                        title="Billing"
+                        description="What this customer is charged each month, and what they have paid so far."
+                    >
+                        <div className="mb-5 grid gap-3 sm:grid-cols-3">
+                            {[
+                                { label: "Total billed", value: naira(billed), tone: "text-white" },
+                                { label: "Paid", value: naira(received), tone: "text-emerald-300" },
+                                { label: "Still owed", value: naira(owed), tone: "text-amber-300" },
+                            ].map((item) => (
+                                <div key={item.label} className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                                    <p className="text-xs uppercase tracking-[0.15em] text-white/40">{item.label}</p>
+                                    <p className={`mt-1 text-xl font-bold ${item.tone}`}>{item.value}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {isFullAdmin(profile) ? (
+                            <MonthlyChargeControl
+                                profileId={profileId}
+                                customName={customer.full_name ?? "this customer"}
+                                current={monthlyCharge}
+                                calculated={calculatedMonthly}
+                                custom={hasCustomRate}
+                            />
+                        ) : (
+                            <p className="text-sm text-white/70">
+                                Monthly charge: <span className="font-semibold text-amber-300">{monthlyCharge > 0 ? naira(monthlyCharge) : "Not set"}</span>
+                            </p>
+                        )}
+                    </SectionCard>
+                )}
+
                 <SectionCard title="Schedule and invoices" description="Generated from the details above. Both stay editable.">
                     <div className="mb-5 flex flex-wrap gap-3">
                         <BillingActionButton run={generateCustomerBilling.bind(null, profileId, "schedule")}>
@@ -277,21 +321,33 @@ export default async function AdminCustomerDetailPage({
                     <div className="grid gap-6 lg:grid-cols-2">
                         <div>
                             <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/40">Recent invoices</p>
-                            {(invoices ?? []).length === 0 ? (
+                            {allInvoices.length === 0 ? (
                                 <p className="text-sm text-white/40">No invoices yet.</p>
                             ) : (
                                 <div className="space-y-2">
-                                    {(invoices ?? []).map((invoice) => (
-                                        <div key={invoice.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                                            <span>{invoice.invoice_month ?? formatDate(invoice.created_at)}</span>
-                                            <span className="flex items-center gap-3">
-                                                <span className="font-semibold text-amber-300">
-                                                    {naira(Number(invoice.amount ?? 0) + Number(invoice.arrears ?? 0))}
+                                    {allInvoices.slice(0, 6).map((invoice) => {
+                                        const partPaid = invoice.status !== "paid" && amountPaid(invoice) > 0;
+
+                                        return (
+                                            <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                                                <span>
+                                                    {invoice.invoice_month ?? formatDate(invoice.created_at)}
+                                                    <Link
+                                                        href={`/admin/invoices/${invoice.id}`}
+                                                        className="ml-3 text-xs font-semibold text-amber-300 underline underline-offset-2"
+                                                    >
+                                                        Preview
+                                                    </Link>
                                                 </span>
-                                                <StatusBadge status={invoice.status ?? "pending"} />
-                                            </span>
-                                        </div>
-                                    ))}
+                                                <span className="flex items-center gap-3">
+                                                    <span className="font-semibold text-amber-300">
+                                                        {naira(partPaid ? balanceOf(invoice) : invoiceTotal(invoice))}
+                                                    </span>
+                                                    <StatusBadge status={partPaid ? "part_paid" : invoice.status ?? "pending"} />
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                             <Link href="/admin/payments" className="mt-3 inline-block text-xs text-amber-300 hover:text-amber-200">

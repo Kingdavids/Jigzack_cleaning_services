@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarCheck, CalendarClock, CreditCard, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
+import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { describeFacilities } from "@/lib/customer/facilities";
 import { describeFrequency, parseFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -47,12 +48,10 @@ export default async function CustomerPage() {
                 .order("scheduled_date", { ascending: true })
                 .limit(200)
                 .then((r) => (r.data ?? []) as TaskRow[]),
-        supabase
-            .from("payments")
-            .select("amount, status")
-            .eq("customer_id", billingProfileId)
-            .limit(200)
-            .then((r) => (r.data ?? []) as { amount: number | string | null; status: string | null }[]),
+        loadWithPaid(
+            (select) => supabase.from("payments").select(select).eq("customer_id", billingProfileId).limit(200),
+            "amount, arrears, status"
+        ) as Promise<{ amount: number | string | null; arrears: number | string | null; status: string | null; amount_paid?: number | string | null }[]>,
     ]);
 
     const today = todayKey();
@@ -68,9 +67,8 @@ export default async function CustomerPage() {
     const nextPickups = upcoming.filter((t) => t.scheduled_date && t.scheduled_date >= today).slice(0, 3);
     const lastService = completed[0] ?? null;
 
-    const outstanding = invoices
-        .filter((i) => i.status !== "paid")
-        .reduce((sum, i) => sum + Number(i.amount ?? 0), 0);
+    // What is left to pay across all invoices, after any part payments.
+    const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
     const { counted, notes } = describeFacilities(customer?.facility_details);
     const vacancies = describeFacilities(customer?.vacancies).counted;

@@ -220,6 +220,8 @@ export async function replyToMessage(
     if (error) {
         console.error("replyToMessage insert error:", error.message);
         if (attachment) await removeUnreferencedAttachments(supabase, [attachment.path]);
+        // The database only lets a supervisor write to admins.
+        if (error.code === "42501") return { success: false, error: "You can only send messages to the admins." };
         return { success: false, error: "Could not send reply. Please try again." };
     }
 

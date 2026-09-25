@@ -8,6 +8,7 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel";
 import OwnerOverview from "@/components/dashboard/OwnerOverview";
 import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
+import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from "@/lib/billing/balance";
 import {
     AlertTriangle,
     Briefcase,
@@ -38,6 +39,8 @@ type UnpaidRow = {
     id: string;
     amount: number;
     arrears: number | null;
+    amount_paid?: number | string | null;
+    status?: string | null;
     invoice_month: string | null;
     created_at: string;
     customer: ProfileRef;
@@ -111,10 +114,10 @@ export default async function AdminPage() {
             .limit(6),
         supabase
             .from("payments")
-            .select("id, amount, arrears, invoice_month, created_at, customer:profiles!payments_customer_id_fkey(full_name)")
+            .select("*, customer:profiles!payments_customer_id_fkey(full_name)")
             .neq("status", "paid")
             .order("created_at", { ascending: true }),
-        supabase.from("payments").select("amount, arrears").eq("status", "paid").gte("paid_at", monthStart),
+        supabase.from("payments").select("id, amount, arrears").eq("status", "paid").gte("paid_at", monthStart),
         supabase.from("uploads").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
         supabase
             .from("uploads")
@@ -161,9 +164,21 @@ export default async function AdminPage() {
     const overdue = overdueRes.count ?? 0;
     const unassigned = unassignedRes.count ?? 0;
 
-    const invoiceTotal = (row: { amount: number; arrears: number | null }) => Number(row.amount ?? 0) + Number(row.arrears ?? 0);
-    const outstanding = unpaid.reduce((sum, row) => sum + invoiceTotal(row), 0);
-    const collected = (paidRes.data ?? []).reduce((sum, row) => sum + invoiceTotal(row), 0);
+    // Still owed is what is left on each open invoice after part payments. Money
+    // collected this month is every payment recorded this month, plus invoices
+    // settled in one go before part payments existed.
+    const outstanding = unpaid.reduce((sum, row) => sum + balanceOf(row), 0);
+
+    const paidThisMonth = (paidRes.data ?? []) as { id: string; amount: number; arrears: number | null }[];
+    const monthInstallments = await loadInstallmentsSince(supabase, monthStart);
+    const withPayments = new Set(
+        (await loadInstallments(supabase, paidThisMonth.map((row) => row.id))).map((item) => item.payment_id)
+    );
+    const collected =
+        monthInstallments.reduce((sum, item) => sum + Number(item.amount ?? 0), 0) +
+        paidThisMonth.filter((row) => !withPayments.has(row.id)).reduce((sum, row) => sum + invoiceTotal(row), 0);
+    const paymentsThisMonth =
+        monthInstallments.length + paidThisMonth.filter((row) => !withPayments.has(row.id)).length;
 
     const owner = isOwner(profile);
     const supervisor = isViewOnlyAdmin(profile);
@@ -248,7 +263,7 @@ export default async function AdminPage() {
                         icon={TrendingUp}
                         label="Collected this month"
                         value={naira(collected)}
-                        helper={`${(paidRes.data ?? []).length} payment${(paidRes.data ?? []).length === 1 ? "" : "s"} received`}
+                        helper={`${paymentsThisMonth} payment${paymentsThisMonth === 1 ? "" : "s"} received`}
                         href="/admin/payments"
                     />
 
