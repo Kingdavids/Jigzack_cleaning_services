@@ -117,7 +117,7 @@ export default async function AdminPage() {
             .select("*, customer:profiles!payments_customer_id_fkey(full_name)")
             .neq("status", "paid")
             .order("created_at", { ascending: true }),
-        supabase.from("payments").select("id, amount, arrears").eq("status", "paid").gte("paid_at", monthStart),
+        supabase.from("payments").select("id, amount, arrears, payment_method").eq("status", "paid").gte("paid_at", monthStart),
         supabase.from("uploads").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
         supabase
             .from("uploads")
@@ -169,15 +169,22 @@ export default async function AdminPage() {
     // settled in one go before part payments existed.
     const outstanding = unpaid.reduce((sum, row) => sum + balanceOf(row), 0);
 
-    const paidThisMonth = (paidRes.data ?? []) as { id: string; amount: number; arrears: number | null }[];
+    // An invoice settled from an advance payment is not new money: the advance payment itself is counted below.
+    const paidThisMonth = ((paidRes.data ?? []) as { id: string; amount: number; arrears: number | null; payment_method?: string | null }[]).filter(
+        (row) => row.payment_method !== "Advance payment"
+    );
+    const { data: advanceData } = await supabase.from("prepayments").select("amount").gte("paid_at", monthStart);
+    const advanceThisMonth = (advanceData ?? []) as { amount: number | string }[];
     const monthInstallments = await loadInstallmentsSince(supabase, monthStart);
     const withPayments = new Set(
         (await loadInstallments(supabase, paidThisMonth.map((row) => row.id))).map((item) => item.payment_id)
     );
     const collected =
+        advanceThisMonth.reduce((sum, item) => sum + Number(item.amount ?? 0), 0) +
         monthInstallments.reduce((sum, item) => sum + Number(item.amount ?? 0), 0) +
         paidThisMonth.filter((row) => !withPayments.has(row.id)).reduce((sum, row) => sum + invoiceTotal(row), 0);
     const paymentsThisMonth =
+        advanceThisMonth.length +
         monthInstallments.length + paidThisMonth.filter((row) => !withPayments.has(row.id)).length;
 
     const owner = isOwner(profile);

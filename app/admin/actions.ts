@@ -11,10 +11,11 @@ import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
-import { amountPaid, balanceOf, round2 } from "@/lib/billing/balance";
+import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
+import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
 import { isPastDate, todayLagos } from "@/lib/tasks";
 import { frequencyToDays } from "@/lib/billing/schedule";
-import { naira } from "@/lib/customer/billing";
+import { naira, receiptNumber } from "@/lib/customer/billing";
 import {
     generateInvoiceFor,
     generateScheduleFor,
@@ -773,6 +774,172 @@ export async function setUserApproval(
     return { success: true, notes };
 }
 
+export type PrepaymentResult = { success: boolean; error?: string; message?: string };
+
+// A customer paid upfront for a run of months. The payment gets its own receipt,
+// and no invoice is created for the months it covers. An invoice that already
+// exists for a covered month is settled by it (unless you say otherwise), so the
+// customer is not asked to pay twice.
+export async function recordPrepayment(input: {
+    profileId: string;
+    months: number;
+    // The first month covered, as YYYY-MM.
+    firstMonth: string;
+    amount: number;
+    method: string;
+    reference: string;
+    note: string;
+    settleExisting: boolean;
+}): Promise<PrepaymentResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const months = Math.trunc(Number(input.months));
+    const amount = round2(Number(input.amount));
+
+    if (!input.profileId) return { success: false, error: "Missing customer." };
+    if (!Number.isFinite(months) || months < 1 || months > 36) return { success: false, error: "Choose between 1 and 36 months." };
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.firstMonth)) return { success: false, error: "Choose the first month it covers." };
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) return { success: false, error: "Enter the amount received." };
+
+    const { data: customer } = await supabase.from("customers").select("full_name").eq("profile_id", input.profileId).maybeSingle();
+    if (!customer) return { success: false, error: "Customer not found." };
+
+    const covered = coveredMonthsFrom(input.firstMonth, months);
+    const existing = await loadPrepayments(supabase, input.profileId);
+    const clash = covered.filter((month) => existing.some((p) => p.covered_months.includes(month)));
+
+    if (clash.length > 0) {
+        return { success: false, error: `Already paid in advance for ${clash.join(", ")}. Choose different months or remove the earlier payment.` };
+    }
+
+    const method = PAYMENT_METHODS.includes(input.method) ? input.method : "Other";
+
+    const { data: created, error } = await supabase
+        .from("prepayments")
+        .insert({
+            customer_id: input.profileId,
+            months,
+            amount,
+            covered_months: covered,
+            method,
+            reference: input.reference.trim().slice(0, 120) || null,
+            note: input.note.trim().slice(0, 300) || null,
+            recorded_by: actor.id,
+        })
+        .select("id")
+        .single();
+
+    if (error || !created) {
+        console.error("recordPrepayment error:", error?.message);
+        return {
+            success: false,
+            error: /prepayments|schema cache/.test(error?.message ?? "")
+                ? "Advance payments are not switched on yet. Run supabase/prepaid-2026-09.sql in Supabase first."
+                : "Could not record the advance payment. Please try again.",
+        };
+    }
+
+    const prepaymentId = created.id as string;
+    const settled: string[] = [];
+
+    if (input.settleExisting) {
+        const { data: open } = await supabase
+            .from("payments")
+            .select("*")
+            .eq("customer_id", input.profileId)
+            .in("invoice_month", covered)
+            .neq("status", "paid");
+
+        for (const invoice of open ?? []) {
+            const fields = {
+                status: "paid",
+                paid_at: new Date().toISOString(),
+                payment_method: "Advance payment",
+                payment_reference: `Prepaid ${receiptNumber(prepaymentId)}`,
+            };
+
+            // amount_paid and the transfer columns exist once their SQL has run.
+            let { error: settleError } = await supabase
+                .from("payments")
+                .update({ ...fields, amount_paid: invoiceTotal(invoice), transfer_reported_at: null })
+                .eq("id", invoice.id);
+
+            if (settleError) ({ error: settleError } = await supabase.from("payments").update(fields).eq("id", invoice.id));
+
+            if (!settleError) settled.push(invoice.id as string);
+        }
+
+        if (settled.length > 0) {
+            await supabase.from("prepayments").update({ settled_payment_ids: settled }).eq("id", prepaymentId);
+        }
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "prepayment_recorded",
+        `Recorded a ${naira(amount)} advance payment from ${customer.full_name ?? "a customer"} covering ${months} month${months === 1 ? "" : "s"}`,
+        { type: "profile", id: input.profileId }
+    );
+    revalidatePath(`/admin/customers/${input.profileId}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message:
+            `Recorded. ${covered[0]}${months > 1 ? ` to ${covered[months - 1]}` : ""} is covered, so no invoices are made for those months.` +
+            (settled.length > 0 ? ` ${settled.length} existing invoice${settled.length === 1 ? " was" : "s were"} settled from it.` : ""),
+    };
+}
+
+// Takes back an advance payment entered by mistake. Invoices it settled go back
+// to what they were before.
+export async function voidPrepayment(prepaymentId: string): Promise<PrepaymentResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!prepaymentId) return { success: false, error: "Missing payment." };
+
+    const { data: found } = await supabase.from("prepayments").select("*").eq("id", prepaymentId).maybeSingle();
+
+    if (!found) return { success: false, error: "Could not find that payment." };
+
+    const settledIds = ((found.settled_payment_ids ?? []) as string[]).filter(Boolean);
+
+    if (settledIds.length > 0) {
+        const paid = groupInstallments(await loadInstallments(supabase, settledIds));
+
+        for (const id of settledIds) {
+            const received = round2((paid.get(id) ?? []).reduce((sum, item) => sum + Number(item.amount), 0));
+            const base = { status: "pending", paid_at: null, payment_method: null, payment_reference: null };
+
+            let { error: revertError } = await supabase.from("payments").update({ ...base, amount_paid: received }).eq("id", id);
+            if (revertError) ({ error: revertError } = await supabase.from("payments").update(base).eq("id", id));
+            if (revertError) console.error("voidPrepayment revert error:", revertError.message);
+        }
+    }
+
+    const { error } = await supabase.from("prepayments").delete().eq("id", prepaymentId);
+
+    if (error) {
+        console.error("voidPrepayment error:", error.message);
+        return { success: false, error: "Could not remove that payment. Please try again." };
+    }
+
+    await logActivity(supabase, actor, "prepayment_removed", "Removed an advance payment", { type: "profile", id: found.customer_id as string });
+    revalidatePath(`/admin/customers/${found.customer_id}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return { success: true, message: "Advance payment removed." };
+}
+
 export type GenerateResult = { success: boolean; message: string };
 
 export type MonthlyRateResult = { success: boolean; error?: string; message?: string };
@@ -863,6 +1030,7 @@ export async function generateAllInvoices(): Promise<GenerateResult> {
         message:
             `${tally.created} invoices created for ${monthLabel()}, ${tally.exists} already existed` +
             (tally["no-pricing"] > 0 ? `, ${tally["no-pricing"]} skipped (no priced property types, add manually)` : "") +
+            (tally.prepaid > 0 ? `, ${tally.prepaid} skipped (paid in advance)` : "") +
             (tally.error > 0 ? `, ${tally.error} failed` : "") +
             ".",
     };
@@ -973,11 +1141,12 @@ export async function generateCustomerBilling(
     const messages: Record<string, string> = {
         created: `Invoice created for ${monthLabel()}.`,
         exists: `An invoice for ${monthLabel()} already exists.`,
+        prepaid: `${monthLabel()} was paid in advance, so no invoice is needed.`,
         "no-pricing": "No priced property types are recorded for this customer. Add an invoice manually.",
         error: "Could not create the invoice.",
     };
 
-    return { success: outcome === "created" || outcome === "exists", message: messages[outcome] };
+    return { success: outcome === "created" || outcome === "exists" || outcome === "prepaid", message: messages[outcome] };
 }
 
 // ---------------------------------------------------------------------------

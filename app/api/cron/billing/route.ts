@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
             lines.push(
                 `<p>Invoices for ${escapeHtml(monthLabel())}: <strong>${invoices.created}</strong> created, ${invoices.exists} already existed` +
                     (invoices["no-pricing"] > 0 ? `, ${invoices["no-pricing"]} skipped because no priced property types are recorded` : "") +
+                    (invoices.prepaid > 0 ? `, ${invoices.prepaid} skipped because they paid in advance` : "") +
                     (invoices.error > 0 ? `, <strong>${invoices.error} failed</strong>` : "") +
                     ".</p>"
             );

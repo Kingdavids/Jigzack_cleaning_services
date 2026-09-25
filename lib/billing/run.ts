@@ -48,7 +48,7 @@ export async function runScheduleGeneration(supabase: SupabaseClient) {
 
 export async function runInvoiceGeneration(supabase: SupabaseClient) {
     const customers = await approvedBillableCustomers(supabase);
-    const tally = { created: 0, exists: 0, "no-pricing": 0, error: 0 };
+    const tally = { created: 0, exists: 0, "no-pricing": 0, prepaid: 0, error: 0 };
 
     for (const customer of customers) {
         tally[await generateInvoiceFor(supabase, customer)] += 1;

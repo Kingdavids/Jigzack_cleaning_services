@@ -4,6 +4,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { taskDisplayStatus } from "@/lib/tasks";
+import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { describeFacilities } from "@/lib/customer/facilities";
 import { customerFrequency, describeFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -72,6 +73,8 @@ export default async function CustomerPage() {
     // What is left to pay across all invoices, after any part payments.
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
+    const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, profile.id));
+
     const { counted, notes } = describeFacilities(customer?.facility_details);
     const vacancies = describeFacilities(customer?.vacancies).counted;
     const frequency = customerFrequency(customer);
@@ -99,6 +102,13 @@ export default async function CustomerPage() {
                             We survey every commercial facility first, because the right price depends on your waste. Our team will contact you to
                             arrange the visit. Use Messages if you would like to suggest a time.
                         </p>
+                    </div>
+                )}
+
+                {paidUpTo && (
+                    <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-100">
+                        <p className="font-semibold">Paid in advance until {paidUpTo}</p>
+                        <p className="mt-0.5 text-emerald-100/75">No invoices are made for the months you have paid for. Your receipt is under Payments.</p>
                     </div>
                 )}
 

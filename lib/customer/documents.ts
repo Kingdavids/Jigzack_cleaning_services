@@ -1,5 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadInstallments, type Installment } from "@/lib/billing/balance";
+import type { Prepayment } from "@/lib/billing/prepaid";
+
+// An advance payment has its own receipt, found by its own id.
+export async function loadPrepayment(supabase: SupabaseClient, id: string) {
+    const { data } = await supabase.from("prepayments").select("*").eq("id", id).maybeSingle();
+
+    return (data ?? null) as Prepayment | null;
+}
 
 // Finds what a receipt link points at. The id is either one payment's id (each
 // payment against an invoice has its own receipt) or, for invoices settled

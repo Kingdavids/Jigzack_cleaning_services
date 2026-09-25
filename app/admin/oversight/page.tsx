@@ -60,6 +60,21 @@ export default async function OwnerOversightPage() {
             .limit(60),
     ]);
 
+    const { data: advanceData } = await supabase
+        .from("prepayments")
+        .select("id, amount, months, covered_months, paid_at, method, customer:profiles!prepayments_customer_id_fkey(full_name)")
+        .order("paid_at", { ascending: false })
+        .limit(60);
+    const advances = (advanceData ?? []) as unknown as {
+        id: string;
+        amount: number | string;
+        months: number;
+        covered_months: string[];
+        paid_at: string;
+        method: string | null;
+        customer: { full_name: string | null } | null;
+    }[];
+
     const invoices = (invoiceData ?? []) as unknown as InvoiceRow[];
     const receipts = (receiptResult.error ? [] : (receiptResult.data ?? [])) as unknown as ReceiptRow[];
 
@@ -125,10 +140,32 @@ export default async function OwnerOversightPage() {
                 </SectionCard>
 
                 <SectionCard title="Receipts" description="One for every payment received, most recent first.">
-                    {receipts.length === 0 && legacyReceipts.length === 0 ? (
+                    {receipts.length === 0 && legacyReceipts.length === 0 && advances.length === 0 ? (
                         <p className="text-sm text-white/50">No receipts yet.</p>
                     ) : (
                         <div className="space-y-2">
+                            {advances.map((advance) => (
+                                <div
+                                    key={advance.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="font-semibold">{advance.customer?.full_name ?? "Unknown customer"}</p>
+                                        <p className="text-xs text-white/50">
+                                            Advance payment · {advance.months} month{advance.months === 1 ? "" : "s"} ({advance.covered_months[0]}
+                                            {advance.covered_months.length > 1 ? ` to ${advance.covered_months[advance.covered_months.length - 1]}` : ""}) ·{" "}
+                                            {receiptNumber(advance.id)} · {formatDate(advance.paid_at)}
+                                            {advance.method ? ` · ${advance.method}` : ""}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-4">
+                                        <span className="font-bold text-emerald-300">{naira(Number(advance.amount))}</span>
+                                        <Link href={`/admin/receipts/${advance.id}`} className={linkClass}>
+                                            View
+                                        </Link>
+                                    </div>
+                                </div>
+                            ))}
                             {receipts.map((receipt) => (
                                 <div
                                     key={receipt.id}

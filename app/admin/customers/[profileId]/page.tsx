@@ -22,6 +22,8 @@ import CustomerDetailsForm from "@/components/dashboard/CustomerDetailsForm";
 import VacancyForm from "@/components/dashboard/VacancyForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import MonthlyChargeControl from "@/components/dashboard/MonthlyChargeControl";
+import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
+import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { buildLineItems, itemsTotal } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
 
@@ -98,6 +100,10 @@ export default async function AdminCustomerDetailPage({
     const monthlyCharge = hasCustomRate ? customRate : calculatedMonthly;
 
     const allInvoices = invoices ?? [];
+
+    // Months paid for in advance. Empty before the prepayments SQL has been run.
+    const prepayments = await loadPrepayments(supabase, profileId);
+    const paidUpTo = prepaidUntil(prepayments);
     const billed = allInvoices.reduce((sum, row) => sum + invoiceTotal(row), 0);
     const received = allInvoices.reduce((sum, row) => sum + amountPaid(row), 0);
     const owed = allInvoices.reduce((sum, row) => sum + balanceOf(row), 0);
@@ -305,6 +311,32 @@ export default async function AdminCustomerDetailPage({
                                 Monthly charge: <span className="font-semibold text-amber-300">{monthlyCharge > 0 ? naira(monthlyCharge) : "Not set"}</span>
                             </p>
                         )}
+                    </SectionCard>
+                )}
+
+                {!tenantUnit && (
+                    <SectionCard
+                        title="Advance payments"
+                        description={
+                            paidUpTo
+                                ? `Paid in advance until ${paidUpTo}. No invoices are made for the months covered.`
+                                : "For a customer who paid upfront for a number of months. No invoices are made for the months it covers."
+                        }
+                    >
+                        <PrepaymentForm
+                            profileId={profileId}
+                            customName={customer.full_name ?? "this customer"}
+                            monthlyCharge={monthlyCharge}
+                            canRecord={isFullAdmin(profile)}
+                            payments={prepayments.map((p) => ({
+                                id: p.id,
+                                months: p.months,
+                                amount: Number(p.amount),
+                                span: `${p.covered_months[0]}${p.covered_months.length > 1 ? ` to ${p.covered_months[p.covered_months.length - 1]}` : ""}`,
+                                paidOn: formatDate(p.paid_at),
+                                method: p.method,
+                            }))}
+                        />
                     </SectionCard>
                 )}
 

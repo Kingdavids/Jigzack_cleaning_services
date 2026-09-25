@@ -2,7 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { resolveBilling } from "@/lib/customer/billing";
-import { loadReceipt } from "@/lib/customer/documents";
+import { loadPrepayment, loadReceipt } from "@/lib/customer/documents";
+import PrepaymentReceiptDocument from "@/components/dashboard/PrepaymentReceiptDocument";
 import ReceiptDocument from "@/components/dashboard/ReceiptDocument";
 
 export default async function CustomerReceiptPage({
@@ -26,6 +27,22 @@ export default async function CustomerReceiptPage({
         .single();
 
     const { billingProfileId, billingCustomer } = await resolveBilling(supabase, profile.id, customer);
+
+    // An advance payment has its own receipt.
+    const prepayment = await loadPrepayment(supabase, id);
+
+    if (prepayment) {
+        if (prepayment.customer_id !== profile.id) redirect("/customer/payments");
+
+        return (
+            <PrepaymentReceiptDocument
+                prepayment={prepayment}
+                customer={billingCustomer}
+                fallbackName={profile.full_name}
+                basePath="/customer"
+            />
+        );
+    }
 
     const found = await loadReceipt(supabase, id);
 

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
 import { buildLineItems, itemsTotal, monthLabel, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid } from "@/lib/billing/balance";
+import { isMonthPrepaid } from "@/lib/billing/prepaid";
 import {
     addDays,
     customerFrequency,
@@ -160,7 +161,7 @@ export async function generateScheduleFor(supabase: SupabaseServerClient, custom
     };
 }
 
-export type InvoiceOutcome = "created" | "exists" | "no-pricing" | "error";
+export type InvoiceOutcome = "created" | "exists" | "no-pricing" | "prepaid" | "error";
 
 // One invoice per customer per month, computed from their property details
 // (minus vacant units). An existing invoice for the month, manual or not, is
@@ -171,6 +172,9 @@ export async function generateInvoiceFor(
     month: string = monthLabel()
 ): Promise<InvoiceOutcome> {
     if (!customer.profile_id) return "error";
+
+    // A month the customer paid for in advance gets no invoice.
+    if (await isMonthPrepaid(supabase, customer.profile_id, month)) return "prepaid";
 
     const items = chargeItems(customer);
     if (items.length === 0) return "no-pricing";

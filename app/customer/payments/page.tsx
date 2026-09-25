@@ -4,6 +4,10 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import InvoiceList, { type InvoiceRow } from "@/components/dashboard/InvoiceList";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
+import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
+import Link from "next/link";
+import { Receipt } from "lucide-react";
+import { formatDate } from "@/lib/customer/billing";
 
 export default async function CustomerPaymentsPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
@@ -18,6 +22,10 @@ export default async function CustomerPaymentsPage() {
         .order("created_at", { ascending: false });
 
     const invoices = (invoicesData ?? []) as InvoiceRow[];
+
+    // Months paid for in advance. Empty before the prepayments SQL has been run.
+    const prepayments = isTenant ? [] : await loadPrepayments(supabase, profile.id);
+    const paidUpTo = prepaidUntil(prepayments);
 
     const installments = await loadInstallments(supabase, invoices.map((invoice) => invoice.id));
     const byInvoice = groupInstallments(installments);
@@ -67,6 +75,34 @@ export default async function CustomerPaymentsPage() {
                         </div>
                     ))}
                 </div>
+
+                {prepayments.length > 0 && (
+                    <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-4">
+                        <p className="font-bold text-emerald-200">
+                            {paidUpTo ? `Paid in advance until ${paidUpTo}` : "Paid in advance"}
+                        </p>
+                        <p className="mt-1 text-sm text-white/60">No invoices are made for the months you have paid for.</p>
+                        <ul className="mt-3 space-y-2">
+                            {prepayments.map((p) => (
+                                <li key={p.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                                    <span className="font-semibold text-white">{naira(Number(p.amount))}</span>
+                                    <span className="text-white/70">
+                                        {p.months} month{p.months === 1 ? "" : "s"}: {p.covered_months[0]}
+                                        {p.covered_months.length > 1 ? ` to ${p.covered_months[p.covered_months.length - 1]}` : ""}
+                                    </span>
+                                    <span className="text-xs text-white/40">Received {formatDate(p.paid_at)}</span>
+                                    <Link
+                                        href={`/customer/receipts/${p.id}`}
+                                        className="inline-flex items-center gap-1.5 rounded-xl bg-amber-400 px-3 py-1.5 text-xs font-bold text-black transition hover:bg-amber-300"
+                                    >
+                                        <Receipt className="h-3.5 w-3.5" />
+                                        Receipt
+                                    </Link>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 <InvoiceList
                     invoices={invoices}
