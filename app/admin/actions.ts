@@ -143,6 +143,7 @@ export async function createTask(
         { type: "task", id: created.id as string }
     );
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
@@ -1006,6 +1007,7 @@ export async function generateAllSchedules(): Promise<GenerateResult> {
 
     await logActivity(supabase, actor, "schedules_generated", `Generated schedules: ${created} pickups added`);
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
 
     return {
         success: true,
@@ -1108,6 +1110,7 @@ export async function generateCustomerBilling(
     if (!billable) return { success: false, message: "Customer not found." };
 
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/admin/payments");
     revalidatePath(`/admin/customers/${profileId}`);
 
@@ -1129,6 +1132,7 @@ export async function generateCustomerBilling(
         if (result.created > 0) {
             await logActivity(supabase, actor, "schedule_generated", `Generated ${result.created} pickups for ${billable.full_name ?? "a customer"} (${result.frequency})`, { type: "profile", id: profileId });
             revalidatePath("/admin/tasks");
+            revalidatePath("/admin");
         }
 
         return {
@@ -1406,6 +1410,7 @@ export async function updateTask(
         { type: "task", id: taskId }
     );
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
@@ -1462,6 +1467,7 @@ export async function markTaskServiced(taskId: string, confirmEarly = false): Pr
 
     await logActivity(supabase, actor, "task_serviced", "Marked a pickup as serviced", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
@@ -1508,6 +1514,7 @@ export async function reopenTask(taskId: string): Promise<TaskChangeResult> {
 
     await logActivity(supabase, actor, "task_reopened", "Reverted a serviced pickup to not done", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer");
@@ -1541,6 +1548,7 @@ export async function deleteTask(taskId: string, unlock = false): Promise<TaskCh
 
     await logActivity(supabase, actor, "task_deleted", "Deleted a pickup task", { type: "task", id: taskId });
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/employee/tasks");
     revalidatePath("/customer/schedule");
 

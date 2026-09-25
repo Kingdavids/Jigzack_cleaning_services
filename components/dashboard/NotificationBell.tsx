@@ -79,6 +79,7 @@ export default function NotificationBell({
 }) {
     const router = useRouter();
     const supabase = useMemo(() => createClient(), []);
+    const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [items, setItems] = useState<NotificationRow[]>([]);
     const [unread, setUnread] = useState(0);
     const [open, setOpen] = useState(false);
@@ -110,6 +111,11 @@ export default function NotificationBell({
         (fresh: NotificationRow[]) => {
             if (fresh.length === 0) return;
 
+            // Whatever page is open may now be out of date (a pickup was serviced, an
+            // invoice arrived), so it reloads its data a moment later.
+            if (refreshTimer.current) clearTimeout(refreshTimer.current);
+            refreshTimer.current = setTimeout(() => router.refresh(), 800);
+
             setRinging(true);
             if (ringTimer.current) clearTimeout(ringTimer.current);
             ringTimer.current = setTimeout(() => setRinging(false), 1600);
@@ -133,7 +139,7 @@ export default function NotificationBell({
                 });
             }
         },
-        [openItem]
+        [openItem, router]
     );
 
     const load = useCallback(async () => {
@@ -235,6 +241,7 @@ export default function NotificationBell({
             window.removeEventListener("keydown", unlock);
             supabase.removeChannel(channel);
             if (ringTimer.current) clearTimeout(ringTimer.current);
+            if (refreshTimer.current) clearTimeout(refreshTimer.current);
         };
     }, [announce, load, profileId, supabase]);
 

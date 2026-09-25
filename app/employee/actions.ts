@@ -60,6 +60,7 @@ export async function startTask(formData: FormData): Promise<TaskServiceResult> 
 
     revalidatePath("/employee/tasks");
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/customer/schedule");
 
     return { success: true };
@@ -96,6 +97,7 @@ export async function endTask(formData: FormData): Promise<TaskServiceResult> {
     revalidatePath("/employee");
     revalidatePath("/employee/tasks");
     revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
     revalidatePath("/customer/schedule");
@@ -222,6 +224,7 @@ export async function uploadTaskPhoto(
     revalidatePath("/employee/tasks");
     revalidatePath("/employee/uploads");
     revalidatePath("/admin/uploads");
+    revalidatePath("/admin");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
 
@@ -267,6 +270,7 @@ export async function deleteTaskPhoto(uploadId: string) {
     revalidatePath("/employee/tasks");
     revalidatePath("/employee/uploads");
     revalidatePath("/admin/uploads");
+    revalidatePath("/admin");
     revalidatePath("/customer");
     revalidatePath("/customer/tasks");
 }

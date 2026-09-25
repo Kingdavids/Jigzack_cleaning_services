@@ -12,6 +12,7 @@ import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 import RevertTaskButton from "@/components/dashboard/RevertTaskButton";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
 import { TaskFilter, TaskGroup } from "@/components/dashboard/TaskGroups";
 import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";
@@ -185,6 +186,7 @@ export default async function AdminTasksPage() {
             subtitle="Live overview of assigned service tasks."
             unreadCount={unreadCount}
         >
+            <LiveRefresh tables={["tasks"]} />
             <div className="space-y-6">
             <SectionCard
                 title="Schedule"

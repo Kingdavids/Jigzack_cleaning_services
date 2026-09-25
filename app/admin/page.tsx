@@ -9,6 +9,7 @@ import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel"
 import OwnerOverview from "@/components/dashboard/OwnerOverview";
 import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from "@/lib/billing/balance";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import {
     AlertTriangle,
     Briefcase,
@@ -205,6 +206,7 @@ export default async function AdminPage() {
             }
             unreadCount={unreadCount}
         >
+            <LiveRefresh tables={["tasks", "payments", "uploads", "profiles"]} />
             <div className="space-y-6">
                 {owner && <OwnerOverview supabase={supabase} collected={collected} outstanding={outstanding} />}
 
