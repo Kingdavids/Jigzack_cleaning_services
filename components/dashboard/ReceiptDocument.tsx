@@ -109,7 +109,7 @@ export default function ReceiptDocument({
 
                     <PropertyDetailsBlock customer={customer} fallbackName={fallbackName} />
 
-                    <div className="overflow-hidden rounded-lg border border-black/15">
+                    <div className="overflow-x-auto rounded-lg border border-black/15">
                         <table className="min-w-full text-left text-xs">
                             <thead className="bg-white/60">
                             <tr>

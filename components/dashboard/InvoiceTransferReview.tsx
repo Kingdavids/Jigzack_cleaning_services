@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { clearInvoiceTransferReport } from "@/app/admin/customer-actions";
+import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 // Shown above an unpaid invoice when the customer says they paid by transfer.
 // Marking the invoice paid below confirms it; "Not received" clears the report.
@@ -20,13 +21,13 @@ export default function InvoiceTransferReview({
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
+    const [confirming, setConfirming] = useState(false);
 
     const clear = async () => {
-        if (!window.confirm("Mark this transfer as not received? The customer can report it again.")) return;
-
         setBusy(true);
         const result = await clearInvoiceTransferReport(paymentId);
         setBusy(false);
+        setConfirming(false);
 
         if (!result.success) {
             toast.error(result.error ?? "Something went wrong.");
@@ -52,13 +53,25 @@ export default function InvoiceTransferReview({
                 <button
                     type="button"
                     disabled={busy}
-                    onClick={clear}
-                    className="text-xs font-semibold text-red-300 underline underline-offset-2 hover:text-red-200 disabled:opacity-50"
+                    onClick={() => setConfirming(true)}
+                    className="py-1 text-xs font-semibold text-red-300 underline underline-offset-2 hover:text-red-200 disabled:opacity-50"
                 >
-                    {busy ? "Clearing..." : "Not received"}
+                    Not received
                 </button>
             </div>
-            <p className="mt-2 text-xs text-white/45">Once you have checked your account, mark the invoice paid below to confirm it.</p>
+            <p className="mt-2 text-xs text-white/45">Once you have checked your account, record the payment below to confirm it.</p>
+
+            <ConfirmDialog
+                open={confirming}
+                title="Mark this transfer as not received?"
+                confirmLabel="Yes, not received"
+                tone="danger"
+                busy={busy}
+                onConfirm={clear}
+                onCancel={() => setConfirming(false)}
+            >
+                <p>The customer can report it again.</p>
+            </ConfirmDialog>
         </div>
     );
 }

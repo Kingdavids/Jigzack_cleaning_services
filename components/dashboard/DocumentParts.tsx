@@ -131,8 +131,7 @@ export function SupportBlock() {
     return (
         <div className="rounded-lg border border-black/15 bg-white/50 p-3 text-xs">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-black/50">Support</p>
-            <p className="mt-1 leading-5">LAWMA Response: 5577 / 07080601020 / 07055893400</p>
-            <p className="leading-5">Jigzack Cleaning Services: 0703 433 9721 / 0708 680 8079</p>
+            <p className="mt-1 leading-5">Jigzack Cleaning Services: 0703 433 9721 / 0708 680 8079</p>
         </div>
     );
 }

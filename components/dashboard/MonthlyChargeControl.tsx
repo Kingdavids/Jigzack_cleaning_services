@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { setMonthlyRate } from "@/app/admin/actions";
 import { naira } from "@/lib/customer/billing";
+import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
+
+const parseAmount = (text: string) => {
+    const cleaned = text.replace(/[,\s₦]/g, "");
+    return cleaned === "" || !/^\d*\.?\d{0,2}$/.test(cleaned) ? NaN : Number(cleaned);
+};
 
 // The amount used for a customer's monthly invoices. Changing it always asks
 // first, because it decides what every later invoice says.
@@ -26,20 +32,20 @@ export default function MonthlyChargeControl({
 }) {
     const router = useRouter();
     const [value, setValue] = useState(current > 0 ? String(current) : "");
+    // The change waiting for a yes: a new amount, or null for "use the calculated charge".
+    const [pendingChange, setPendingChange] = useState<{ next: number | null } | null>(null);
     const [busy, setBusy] = useState(false);
 
-    const save = async (next: number | null) => {
-        const before = naira(current);
-        const message =
-            next === null
-                ? `Go back to the calculated charge of ${naira(calculated)} for ${customName}? Future monthly invoices will use it.`
-                : `Change the monthly charge for ${customName} from ${before} to ${naira(next)}? Future monthly invoices will use ${naira(next)}. Invoices already sent are not changed.`;
+    const number = parseAmount(value);
+    const valid = Number.isFinite(number) && number > 0 && number !== current;
 
-        if (!window.confirm(message)) return;
+    const save = async () => {
+        if (!pendingChange) return;
 
         setBusy(true);
-        const result = await setMonthlyRate(profileId, next);
+        const result = await setMonthlyRate(profileId, pendingChange.next);
         setBusy(false);
+        setPendingChange(null);
 
         if (!result.success) {
             toast.error(result.error ?? "Could not save.");
@@ -49,9 +55,6 @@ export default function MonthlyChargeControl({
         toast.success(result.message ?? "Saved");
         router.refresh();
     };
-
-    const number = Number(value);
-    const valid = Number.isFinite(number) && number > 0 && number !== current;
 
     return (
         <div className="space-y-3">
@@ -71,34 +74,55 @@ export default function MonthlyChargeControl({
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
-                    type="number"
-                    min="1"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     aria-label="New monthly charge"
                     placeholder="New monthly charge (₦)"
-                    className="h-10 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 sm:w-64"
+                    className="h-12 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-base text-white outline-none placeholder:text-white/30 focus:border-amber-300/50 sm:h-10 sm:w-64 sm:text-sm"
                 />
                 <button
                     type="button"
-                    disabled={busy || !valid}
-                    onClick={() => save(number)}
-                    className="rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!valid}
+                    onClick={() => setPendingChange({ next: number })}
+                    className="h-12 rounded-xl bg-amber-400 px-4 text-sm font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50 sm:h-10"
                 >
-                    {busy ? "Saving…" : "Change monthly charge"}
+                    Change monthly charge
                 </button>
                 {custom && (
                     <button
                         type="button"
-                        disabled={busy}
-                        onClick={() => save(null)}
-                        className="text-sm font-semibold text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-50"
+                        onClick={() => setPendingChange({ next: null })}
+                        className="h-11 text-left text-sm font-semibold text-white/60 underline underline-offset-2 hover:text-white sm:h-auto"
                     >
                         Use the calculated charge
                     </button>
                 )}
             </div>
+
+            <ConfirmDialog
+                open={pendingChange !== null}
+                title="Change the monthly charge?"
+                confirmLabel="Yes, change it"
+                busy={busy}
+                onConfirm={save}
+                onCancel={() => setPendingChange(null)}
+            >
+                {pendingChange?.next === null ? (
+                    <p>
+                        {customName} goes back to the calculated charge of <span className="font-bold text-white">{naira(calculated)}</span>. Future
+                        monthly invoices will use it.
+                    </p>
+                ) : (
+                    <p>
+                        For {customName}, from <span className="font-bold text-white">{naira(current)}</span> to{" "}
+                        <span className="font-bold text-white">{naira(pendingChange?.next ?? 0)}</span>. Future monthly invoices will use the new amount.
+                        Invoices already sent are not changed.
+                    </p>
+                )}
+            </ConfirmDialog>
         </div>
     );
 }
