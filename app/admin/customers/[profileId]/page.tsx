@@ -317,6 +317,16 @@ export default async function AdminCustomerDetailPage({
                 {!tenantUnit && (
                     <SectionCard
                         title="Advance payments"
+                        collapsible
+                        badge={
+                            paidUpTo ? (
+                                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-300">
+                                    Paid until {paidUpTo}
+                                </span>
+                            ) : prepayments.length > 0 ? (
+                                <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold text-white/60">{prepayments.length} recorded</span>
+                            ) : null
+                        }
                         description={
                             paidUpTo
                                 ? `Paid in advance until ${paidUpTo}. No invoices are made for the months covered.`
