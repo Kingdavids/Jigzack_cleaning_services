@@ -12,7 +12,7 @@ import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, round2 } from "@/lib/billing/balance";
-import { isPastDate } from "@/lib/tasks";
+import { isPastDate, todayLagos } from "@/lib/tasks";
 import { frequencyToDays } from "@/lib/billing/schedule";
 import { naira } from "@/lib/customer/billing";
 import {
@@ -1246,6 +1246,60 @@ export async function updateTask(
         success: true,
         message: past ? "Saved. The date has passed, so it is marked serviced." : lead ? "Assigned. The pickup is now locked." : "Pickup updated",
     };
+}
+
+// An admin marks a pickup serviced, for example when the employee did the job
+// but did not tap End. A pickup dated in the future is not due yet, so it needs
+// an explicit yes (the screen asks; this checks again).
+export async function markTaskServiced(taskId: string, confirmEarly = false): Promise<TaskChangeResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!taskId) return { success: false, error: "Missing task." };
+
+    const { data: task } = await supabase.from("tasks").select("*").eq("id", taskId).maybeSingle();
+
+    if (!task) return { success: false, error: "Could not find that task." };
+    if (task.status === "completed") return { success: false, error: "This pickup is already marked serviced." };
+    if (task.status === "declined") return { success: false, error: "This pickup was declined, so it can't be marked serviced." };
+
+    const date = (task.scheduled_date as string | null) ?? null;
+
+    if (date && date > todayLagos() && !confirmEarly) {
+        return { success: false, error: `This pickup is scheduled for ${date}, which has not come yet. Confirm to mark it serviced early.` };
+    }
+
+    // A pickup from an earlier day is recorded on its own day; anything else is recorded now.
+    const past = isPastDate(date);
+    const now = new Date().toISOString();
+
+    const { data, error } = await supabase
+        .from("tasks")
+        .update({
+            status: "completed",
+            started_at: (task.started_at as string | null) ?? (past && date ? `${date}T08:00:00+01:00` : now),
+            completed_at: past && date ? `${date}T17:00:00+01:00` : now,
+        })
+        .eq("id", taskId)
+        .in("status", ["pending", "in progress"])
+        .select("id");
+
+    if (error) {
+        console.error("markTaskServiced error:", error.message);
+        return { success: false, error: "Could not mark it serviced. Please try again." };
+    }
+
+    if (!data || data.length === 0) return { success: false, error: "This pickup can't be marked serviced." };
+
+    await logActivity(supabase, actor, "task_serviced", "Marked a pickup as serviced", { type: "task", id: taskId });
+    revalidatePath("/admin/tasks");
+    revalidatePath("/employee");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/customer");
+    revalidatePath("/customer/tasks");
+    revalidatePath("/customer/schedule");
+
+    return { success: true, message: "Marked serviced. The customer has been told." };
 }
 
 // Puts a pickup that was marked serviced back to not done. It is flagged as

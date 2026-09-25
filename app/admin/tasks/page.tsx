@@ -12,6 +12,7 @@ import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 import RevertTaskButton from "@/components/dashboard/RevertTaskButton";
+import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
 import { TaskFilter, TaskGroup } from "@/components/dashboard/TaskGroups";
 import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";
 
@@ -162,6 +163,10 @@ export default async function AdminTasksPage() {
                     zone={task.zone}
                     employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
                 />
+            )}
+
+            {["pending", "in progress"].includes(task.status ?? "pending") && isFullAdmin(profile) && (
+                <MarkServicedButton taskId={task.id} title={task.title} scheduledDate={task.scheduled_date} />
             )}
 
             {(task.status ?? "pending") === "completed" && isFullAdmin(profile) && (
