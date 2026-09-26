@@ -2193,6 +2193,39 @@ drop trigger if exists notify_on_registration_fee on public.customers;
 create trigger notify_on_registration_fee after update of registration_fee_submitted_at, registration_fee_paid on public.customers
     for each row execute function public.trg_notify_registration_fee();
 
+-- An already approved customer finishes their property form. Anyone still
+-- pending is already announced (and emailed) as a new signup, so this is only
+-- for people approved before they filled it in.
+create or replace function public.trg_notify_setup_finished()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+    v_status text;
+begin
+    begin
+        select status into v_status from public.profiles where id = new.profile_id;
+
+        if v_status = 'approved' then
+            perform public.notify_admins(
+                'signup', coalesce(new.full_name, 'A customer') || ' finished their property form',
+                'Set up their pickup schedule and check the registration fee',
+                '/admin/customers/' || new.profile_id, new.profile_id
+            );
+        end if;
+    exception when others then
+        null;
+    end;
+    return new;
+end;
+$$;
+
+drop trigger if exists notify_on_setup_finished on public.customers;
+create trigger notify_on_setup_finished after insert on public.customers
+    for each row execute function public.trg_notify_setup_finished();
+
 -- ---------------------------------------------------------------
 -- 4. Triggers on tables that may not exist yet
 -- ---------------------------------------------------------------
