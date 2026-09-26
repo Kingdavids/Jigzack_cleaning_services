@@ -46,7 +46,7 @@ export default async function AdminCustomersPage({
         )
         .neq("status", "deleted")
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(1000);
 
     if (term) {
         query = query.or(
@@ -76,6 +76,24 @@ export default async function AdminCustomersPage({
         ...c,
         daysLeft: daysLeft(c.deleted_at),
     }));
+
+    // People who created a login as a customer but never finished the property form
+    // have no customer record, so they were missing from every list above. Pending
+    // ones are also in Signup approvals; approved ones were only visible in Supabase.
+    const [{ data: customerLogins }, { data: recordOwners }] = await Promise.all([
+        supabase
+            .from("profiles")
+            .select("id, full_name, email, status, created_at")
+            .eq("role", "customer")
+            .order("created_at", { ascending: false })
+            .limit(1000),
+        supabase.from("customers").select("profile_id").not("profile_id", "is", null).limit(10000),
+    ]);
+
+    const haveRecord = new Set((recordOwners ?? []).map((row) => row.profile_id as string));
+    const noDetails = ((customerLogins ?? []) as { id: string; full_name: string | null; email: string | null; status: string; created_at: string }[]).filter(
+        (person) => !haveRecord.has(person.id) && person.status !== "declined"
+    );
 
     const { data: unpaidData } = await supabase
         .from("payments")
@@ -234,6 +252,44 @@ export default async function AdminCustomersPage({
                     </div>
                 )}
             </SectionCard>
+
+            {noDetails.length > 0 && (
+                <div className="mt-6">
+                    <SectionCard
+                        title="Signed up, no details yet"
+                        description="These people created a login but have not filled in their property form, so there is no customer record to open. Pending ones can be reviewed in Signup approvals."
+                    >
+                        <div className="space-y-2">
+                            {noDetails.map((person) => (
+                                <div
+                                    key={person.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="font-semibold">{person.full_name ?? "No name"}</p>
+                                        <p className="truncate text-xs text-white/50">
+                                            {person.email ?? "No email"} · signed up {formatDate(person.created_at)}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <StatusBadge status={person.status} />
+                                        {person.status === "pending" ? (
+                                            <Link
+                                                href={`/admin/approvals#user-${person.id}`}
+                                                className="text-xs font-semibold text-amber-300 underline underline-offset-2"
+                                            >
+                                                Review
+                                            </Link>
+                                        ) : (
+                                            <span className="text-xs text-white/45">Waiting for them to finish setup</span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </SectionCard>
+                </div>
+            )}
 
             {deletedCustomers.length > 0 && (
                 <div className="mt-6">

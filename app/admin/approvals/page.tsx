@@ -3,6 +3,7 @@ import ApprovalsList from "../ApprovalsList";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import DeclinedList, { type DeclinedUser } from "@/components/dashboard/DeclinedList";
+import { isOwner } from "@/lib/auth/roles";
 
 export default async function AdminApprovalsPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -95,7 +96,7 @@ export default async function AdminApprovalsPage() {
                     title="Declined applications"
                     description="If someone contacts you after being declined, move them back to pending and review them again."
                 >
-                    <DeclinedList users={declined} />
+                    <DeclinedList users={declined} isOwner={isOwner(profile)} />
                 </SectionCard>
             </div>
         </DashboardShell>

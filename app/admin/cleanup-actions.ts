@@ -158,6 +158,104 @@ export async function deleteExpenses(ids: string[]): Promise<BulkResult> {
     return { success: true, deleted };
 }
 
+// ---------------------------------------------------------------------------
+// Declined signups: owner only. The login goes too, so their email is free and
+// they can sign up again.
+// ---------------------------------------------------------------------------
+const DECLINED_RULE = "Only an owner can delete a declined signup.";
+
+export async function deleteDeclinedSignup(profileId: string): Promise<BulkResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!profileId || !UUID.test(profileId)) return { success: false, error: "Invalid request." };
+
+    const { data: person } = await supabase.from("profiles").select("full_name, email, role, status").eq("id", profileId).maybeSingle();
+
+    if (!person) return { success: false, error: "Could not find that signup." };
+    if (person.status !== "declined") return { success: false, error: "Only a declined signup can be deleted here." };
+
+    const { error } = await supabase.rpc("admin_delete_declined_signup", { p_profile_id: profileId });
+
+    if (error) {
+        console.error("admin_delete_declined_signup error:", error.message);
+
+        return {
+            success: false,
+            error: /schema cache|could not find the function/i.test(error.message)
+                ? "Deleting declined signups is not switched on yet. Run supabase/declined-delete-2026-09.sql in Supabase first."
+                : error.code === "P0001"
+                    ? error.message
+                    : "Could not delete this signup. Please try again.",
+        };
+    }
+
+    await logActivity(supabase, actor, "declined_signup_deleted", `Deleted the declined signup of ${person.full_name ?? person.email ?? "someone"} (${person.role})`);
+
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin");
+
+    return { success: true, deleted: 1 };
+}
+
+// Every declined signup shown on the Approvals page, in one go.
+export async function deleteAllDeclinedSignups(confirm: string): Promise<BulkResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (confirm.trim() !== "DELETE") return { success: false, error: "Type DELETE to confirm." };
+
+    // The same list the page shows: not admins, and not employees who were removed on purpose.
+    const { data: declined, error: listError } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("status", "declined")
+        .neq("role", "admin")
+        .or("decline_reason.is.null,decline_reason.not.ilike.Removed*")
+        .limit(MAX_AT_ONCE);
+
+    if (listError) {
+        console.error("deleteAllDeclinedSignups list error:", listError.message);
+        return { success: false, error: "Could not load the declined signups. Please try again." };
+    }
+
+    if (!declined || declined.length === 0) return { success: false, error: "There are no declined signups to delete." };
+
+    let deleted = 0;
+    let firstError = "";
+
+    for (const row of declined) {
+        const { error } = await supabase.rpc("admin_delete_declined_signup", { p_profile_id: row.id });
+
+        if (error) {
+            if (!firstError) firstError = error.message;
+            continue;
+        }
+
+        deleted += 1;
+    }
+
+    if (deleted === 0) {
+        return {
+            success: false,
+            error: /schema cache|could not find the function/i.test(firstError)
+                ? "Deleting declined signups is not switched on yet. Run supabase/declined-delete-2026-09.sql in Supabase first."
+                : DECLINED_RULE,
+        };
+    }
+
+    await logActivity(supabase, actor, "declined_signups_cleared", `Deleted ${plural(deleted, "declined signup")}`);
+
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin");
+
+    return { success: true, deleted };
+}
+
 // Deletes messages and reports which rows went, including any attached files.
 // Before the attachments SQL has been run there is no such column, so it asks
 // again without it.
