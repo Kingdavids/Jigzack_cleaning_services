@@ -65,6 +65,15 @@ export async function loadInstallments(supabase: SupabaseClient, paymentIds: str
     return error ? [] : ((data ?? []) as Installment[]);
 }
 
+// The same, for a long list of invoices: split into batches so the request stays short.
+export async function loadInstallmentsChunked(supabase: SupabaseClient, paymentIds: string[], size = 80): Promise<Installment[]> {
+    const batches: string[][] = [];
+
+    for (let i = 0; i < paymentIds.length; i += size) batches.push(paymentIds.slice(i, i + size));
+
+    return (await Promise.all(batches.map((ids) => loadInstallments(supabase, ids)))).flat();
+}
+
 // Payments recorded on or after a moment, for "collected this month".
 export async function loadInstallmentsSince(supabase: SupabaseClient, since: string): Promise<Pick<Installment, "amount" | "payment_id">[]> {
     const { data, error } = await supabase.from("payment_installments").select("amount, payment_id").gte("paid_at", since);
