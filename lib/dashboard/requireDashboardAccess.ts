@@ -33,18 +33,25 @@ export async function requireDashboardAccess(role: UserRole) {
             .eq("profile_id", profile.id)
             .single();
 
+        // An approved customer who never filled in the property form has no customer
+        // record, so the dashboard would be empty and the registration fee would be
+        // skipped. Send them to finish the form first.
+        if (!customer) {
+            redirect("/auth/customer-setup");
+        }
+
         // A suspended account (set by an admin) cannot open the dashboard.
-        if (customer && (customer.status === "inactive" || customer.status === "deleted")) {
+        if (customer.status === "inactive" || customer.status === "deleted") {
             redirect("/auth/suspended");
         }
 
         // Tenants (linked to a unit) don't pay their own registration fee.
         // The estate they belong to is the paying account.
-        if (customer && !customer.unit_id && !customer.registration_fee_paid) {
+        if (!customer.unit_id && !customer.registration_fee_paid) {
             redirect("/auth/registration-fee");
         }
 
-        return { profile, supabase, unreadCount: count ?? 0, customer: customer ?? null };
+        return { profile, supabase, unreadCount: count ?? 0, customer };
     }
 
     return { profile, supabase, unreadCount: count ?? 0, customer: null };

@@ -705,16 +705,20 @@ export async function setUserApproval(
             // does not pay the registration fee. Marking it paid opens their
             // dashboard on first login.
             if (waiveFee) {
-                const { error: waiveError } = await supabase
+                const { data: waived, error: waiveError } = await supabase
                     .from("customers")
                     .update({
                         registration_fee_paid: true,
                         registration_fee_paid_at: new Date().toISOString(),
                         registration_fee_reference: "Existing customer, fee waived",
                     })
-                    .eq("profile_id", userId);
+                    .eq("profile_id", userId)
+                    .select("id");
 
-                if (waiveError) {
+                if (!waiveError && (!waived || waived.length === 0)) {
+                    // No customer record yet, so there is nothing to mark. They finish the property form first.
+                    notes.push("They have not filled in their property form yet, so the fee waiver could not be saved. After they finish it, mark the fee as paid from Payments.");
+                } else if (waiveError) {
                     console.error("setUserApproval waive error:", waiveError.message);
                     notes.push("Could not waive the registration fee. Confirm it from their customer page.");
                 } else {
