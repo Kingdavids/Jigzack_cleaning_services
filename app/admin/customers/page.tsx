@@ -9,6 +9,7 @@ import OrphanCustomerActions from "@/components/dashboard/OrphanCustomerActions"
 import { isOwner } from "@/lib/auth/roles";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
 import RecentlyDeletedList, { type DeletedCustomer } from "@/components/dashboard/RecentlyDeletedList";
+import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 
 type CustomerRow = {
     id: string;
@@ -95,14 +96,17 @@ export default async function AdminCustomersPage({
         (person) => !haveRecord.has(person.id) && person.status !== "declined"
     );
 
-    const { data: unpaidData } = await supabase
-        .from("payments")
-        .select("customer_id, amount")
-        .neq("status", "paid");
+    // Arrears count toward what a customer owes, and money already paid on a part
+    // paid invoice is subtracted, so this matches the balance shown everywhere else.
+    const unpaidData = await loadWithPaid(
+        (select) => supabase.from("payments").select(select).neq("status", "paid"),
+        "customer_id, amount, arrears, status"
+    );
 
     const owed = new Map<string, number>();
-    for (const row of unpaidData ?? []) {
-        owed.set(row.customer_id as string, (owed.get(row.customer_id as string) ?? 0) + Number(row.amount ?? 0));
+    for (const row of unpaidData as { customer_id: string | null; amount: number; arrears: number | null; status: string | null; amount_paid?: number | string | null }[]) {
+        if (!row.customer_id) continue;
+        owed.set(row.customer_id, (owed.get(row.customer_id) ?? 0) + balanceOf(row));
     }
 
     return (
