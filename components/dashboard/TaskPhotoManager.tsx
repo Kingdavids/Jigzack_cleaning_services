@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Image from "next/image";
-import { X, Plus, Loader2 } from "lucide-react";
+import { X, Camera, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { uploadTaskPhoto, deleteTaskPhoto } from "@/app/employee/actions";
@@ -28,6 +28,7 @@ export default function TaskPhotoManager({
     const [isCompressing, startCompressing] = useTransition();
     const [isUploading, startUploading] = useTransition();
     const inputRef = useRef<HTMLInputElement>(null);
+    const cameraRef = useRef<HTMLInputElement>(null);
     const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
     useEffect(() => {
@@ -119,6 +120,7 @@ export default function TaskPhotoManager({
         });
 
         if (inputRef.current) inputRef.current.value = "";
+        if (cameraRef.current) cameraRef.current.value = "";
     };
 
     const handleDelete = (id: string) => {
@@ -169,17 +171,41 @@ export default function TaskPhotoManager({
                 ))}
 
                 {photos.length < MAX_PHOTOS_PER_SLOT && (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => inputRef.current?.click()}
-                        className="flex aspect-square items-center justify-center rounded-lg border border-dashed border-white/15 text-white/40 transition hover:border-white/30 hover:text-white/70 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                        {busy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => cameraRef.current?.click()}
+                            aria-label={`Take a ${photoType} photo`}
+                            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 text-[11px] text-white/50 transition hover:border-white/30 hover:text-white/80 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {busy ? <Loader2 size={16} className="animate-spin" /> : <Camera size={18} />}
+                            Take photo
+                        </button>
+                        <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => inputRef.current?.click()}
+                            aria-label={`Choose ${photoType} photos from the gallery`}
+                            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/15 text-[11px] text-white/50 transition hover:border-white/30 hover:text-white/80 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {busy ? <Loader2 size={16} className="animate-spin" /> : <ImagePlus size={18} />}
+                            Gallery
+                        </button>
+                    </>
                 )}
             </div>
 
+            {/* Some phones only offer the gallery when a picker allows several
+                files, so the camera gets its own single-photo input. */}
+            <input
+                ref={cameraRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+            />
             <input
                 ref={inputRef}
                 type="file"
@@ -190,7 +216,7 @@ export default function TaskPhotoManager({
             />
 
             {photos.length === 0 && (
-                <p className="text-xs text-white/40">No {photoType} photos yet. Tap + to add up to {MAX_PHOTOS_PER_SLOT}.</p>
+                <p className="text-xs text-white/40">No {photoType} photos yet. Take or choose up to {MAX_PHOTOS_PER_SLOT}.</p>
             )}
 
             <PhotoLightbox
