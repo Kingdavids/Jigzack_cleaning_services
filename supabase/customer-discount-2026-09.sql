@@ -29,9 +29,10 @@ begin
         if new.discount_type is not null and (old.discount_type is distinct from new.discount_type or old.discount_value is distinct from new.discount_value) then
             perform public.notify(
                 new.profile_id, 'payment', 'A discount has been applied to your account',
-                new.discount_type = 'percent'
-                    ? new.discount_value || '% off your monthly charge'
-                    : '₦' || to_char(new.discount_value, 'FM999,999,999') || ' off your monthly charge',
+                case
+                    when new.discount_type = 'percent' then new.discount_value || '% off your monthly charge'
+                    else '₦' || to_char(new.discount_value, 'FM999,999,999') || ' off your monthly charge'
+                end,
                 '/customer/payments', new.profile_id
             );
         elsif old.discount_type is not null and new.discount_type is null then
