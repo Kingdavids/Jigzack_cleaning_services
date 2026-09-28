@@ -36,6 +36,41 @@ export async function loadTaskTeams(supabase: SupabaseClient, taskIds: string[])
     return teams;
 }
 
+export type TaskCustomer = {
+    task_id: string;
+    customer_profile_id: string;
+    full_name: string | null;
+    phone: string | null;
+    whatsapp_number: string | null;
+    address: string | null;
+    landmark: string | null;
+    lga: string | null;
+    state: string | null;
+    property_type: string | null;
+    waste_type: string | null;
+    preferred_pickup_frequency: string | null;
+    special_notes: string | null;
+    can_message: boolean;
+};
+
+// Who each task is for and how to reach them. Empty (not an error) before the
+// employee-task-customers SQL has been run.
+export async function loadTaskCustomers(supabase: SupabaseClient, taskIds: string[]) {
+    const customers = new Map<string, TaskCustomer>();
+
+    if (taskIds.length === 0) return customers;
+
+    const { data, error } = await supabase.rpc("task_customer_details", { p_task_ids: taskIds });
+
+    if (error) return customers;
+
+    for (const row of (data ?? []) as TaskCustomer[]) {
+        customers.set(row.task_id, row);
+    }
+
+    return customers;
+}
+
 // "Ada", "Ada and Bola", "Ada, Bola and Chi".
 export function teamNames(team: TeamMember[] | undefined) {
     const names = (team ?? []).map((m) => m.full_name ?? "Staff");
