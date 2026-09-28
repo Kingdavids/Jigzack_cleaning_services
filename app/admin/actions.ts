@@ -26,6 +26,7 @@ import {
 } from "@/lib/billing/generate";
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 import { removeUnreferencedAttachments, saveMessageAttachment } from "@/lib/message-attachments";
+import { emailEachRecipient } from "@/lib/broadcast-email";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -391,7 +392,7 @@ export async function sendBroadcast(
 
     const { data: recipients, error: recipientsError } = await supabase
         .from("profiles")
-        .select("id")
+        .select("id, full_name, email")
         .in("role", roles)
         .eq("status", "approved");
 
@@ -435,12 +436,72 @@ export async function sendBroadcast(
         return { success: false, error: "Could not send broadcast. Please try again." };
     }
 
-    await logActivity(supabase, profile, "broadcast_sent", "Sent a broadcast announcement");
+    // A copy in their inbox too, not just the in-app message. Best effort: an
+    // email problem never undoes the broadcast that has already been sent.
+    const emailed = await emailEachRecipient(recipients, subject, body).catch(() => 0);
+
+    await logActivity(
+        supabase,
+        profile,
+        "broadcast_sent",
+        `Sent a broadcast announcement (emailed ${emailed} of ${recipients.length})`
+    );
     revalidatePath("/admin/messages");
     revalidatePath("/employee/messages");
     revalidatePath("/customer/messages");
 
     return { success: true };
+}
+
+export type EmailResult = { success: boolean; error?: string; message?: string };
+
+// A one-off email to a specific customer, sent from the site's own address
+// through Resend, not the in-app messaging. Separate from sendMessage: this
+// reaches their inbox even if they never open the app.
+export async function emailCustomer(profileId: string, subject: string, body: string): Promise<EmailResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const cleanSubject = subject.trim().slice(0, 200);
+    const cleanBody = body.trim().slice(0, 5000);
+
+    if (!profileId || !cleanSubject || !cleanBody) {
+        return { success: false, error: "Choose a customer, then add a subject and a message." };
+    }
+
+    const { data: target } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role")
+        .eq("id", profileId)
+        .eq("role", "customer")
+        .maybeSingle();
+
+    if (!target) return { success: false, error: "Could not find that customer." };
+    if (!target.email) return { success: false, error: "This customer has no email address on file." };
+
+    const sent = await sendEmail({
+        to: [target.email],
+        subject: cleanSubject,
+        html: `
+            <p>Hi ${escapeHtml(target.full_name?.trim() || "there")},</p>
+            <p style="white-space:pre-wrap">${escapeHtml(cleanBody)}</p>
+        `,
+        replyTo: actor.email || undefined,
+    });
+
+    if (!sent) {
+        return { success: false, error: "Could not send the email. Check that Resend is configured, and try again." };
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "customer_emailed",
+        `Emailed ${target.full_name ?? target.email} directly: "${cleanSubject}"`,
+        { type: "profile", id: profileId }
+    );
+
+    return { success: true, message: `Emailed ${target.email}.` };
 }
 
 export type EstateActionState = { success: boolean; error?: string } | null;
@@ -1003,6 +1064,84 @@ export async function setMonthlyRate(profileId: string, amount: number | null): 
     };
 }
 
+export type DiscountResult = { success: boolean; error?: string; message?: string };
+
+// A discount for one customer: a percentage or a fixed amount off their
+// monthly charge, shown as its own line on the invoice. type = null removes it.
+export async function setCustomerDiscount(
+    profileId: string,
+    type: "percent" | "amount" | null,
+    value: number | null,
+    reason: string
+): Promise<DiscountResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!profileId) return { success: false, error: "Missing customer." };
+
+    const { data: before } = await supabase.from("customers").select("full_name").eq("profile_id", profileId).maybeSingle();
+    if (!before) return { success: false, error: "Customer not found." };
+
+    let update: { discount_type: "percent" | "amount" | null; discount_value: number | null; discount_reason: string | null; discount_set_by: string | null; discount_set_at: string | null };
+
+    if (type === null) {
+        update = { discount_type: null, discount_value: null, discount_reason: null, discount_set_by: null, discount_set_at: null };
+    } else {
+        const amount = round2(Number(value));
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            return { success: false, error: "Enter a discount greater than zero." };
+        }
+        if (type === "percent" && amount > 100) {
+            return { success: false, error: "A percentage discount can't be over 100." };
+        }
+        if (type === "amount" && amount > 100_000_000) {
+            return { success: false, error: "That amount looks too large. Please check it." };
+        }
+
+        update = {
+            discount_type: type,
+            discount_value: amount,
+            discount_reason: reason.trim().slice(0, 200) || null,
+            discount_set_by: actor.id,
+            discount_set_at: new Date().toISOString(),
+        };
+    }
+
+    const { error } = await supabase.from("customers").update(update).eq("profile_id", profileId);
+
+    if (error) {
+        console.error("setCustomerDiscount error:", error.message);
+        return {
+            success: false,
+            error: /discount_/.test(error.message)
+                ? "Not switched on yet. Run supabase/customer-discount-2026-09.sql in Supabase first."
+                : "Could not save the discount. Please try again.",
+        };
+    }
+
+    // This month's invoice follows the new discount if it is still untouched.
+    const billable = await loadBillable(supabase, profileId);
+    const repriced = billable ? await recalculateOpenInvoice(supabase, billable) : false;
+
+    const describe =
+        type === null
+            ? `Removed the discount for ${before.full_name ?? "a customer"}`
+            : `Set a ${type === "percent" ? `${update.discount_value}%` : naira(update.discount_value ?? 0)} discount for ${before.full_name ?? "a customer"}`;
+
+    await logActivity(supabase, actor, "customer_discount_changed", describe, { type: "profile", id: profileId });
+    revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message:
+            (type === null ? "Discount removed." : `Discount set: ${type === "percent" ? `${update.discount_value}% off` : `${naira(update.discount_value ?? 0)} off`}.`) +
+            (repriced ? " This month's open invoice was updated." : ""),
+    };
+}
+
 export async function generateAllSchedules(): Promise<GenerateResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -1297,8 +1436,13 @@ export async function updateInvoice(
     }
 
     if (items.length === 0) return { success: false, error: "Add at least one line item." };
-    if (items.some((item) => item.quantity < 0 || item.unit_price < 0)) {
-        return { success: false, error: "Quantities and prices can't be negative." };
+    if (items.some((item) => item.quantity < 0)) {
+        return { success: false, error: "Quantities can't be negative." };
+    }
+    // A discount line has a negative unit price on purpose, but the lines together
+    // can't add up to less than zero.
+    if (itemsTotal(items) < 0) {
+        return { success: false, error: "These line items add up to less than zero. Make the discount smaller." };
     }
 
     const arrears = Number(formData.get("arrears") || 0);

@@ -170,7 +170,8 @@ export default async function AdminMessagesPage() {
                         />
 
                         <p className="text-xs text-white/40">
-                            Recipients can&apos;t reply to a broadcast. Use &quot;Send message&quot; above for a two-way conversation.
+                            Recipients can&apos;t reply to a broadcast. Use &quot;Send message&quot; above for a two-way conversation. It also emails
+                            everyone in the audience, so it reaches them even if they don&apos;t open the app.
                         </p>
                     </SendMessageForm>
                     </>

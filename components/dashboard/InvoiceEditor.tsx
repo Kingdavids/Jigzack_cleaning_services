@@ -104,10 +104,9 @@ export default function InvoiceEditor({
                             />
                             <input
                                 type="number"
-                                min="0"
                                 value={item.unit_price}
                                 onChange={(e) => update(index, { unit_price: Number(e.target.value) })}
-                                aria-label="Unit price"
+                                aria-label="Unit price (negative for a discount line)"
                                 className={inputClass}
                             />
                             <input

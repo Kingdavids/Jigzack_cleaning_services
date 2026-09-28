@@ -30,23 +30,29 @@ export type BillableCustomer = {
     monthly_rate?: number | string | null;
     // The weekdays an admin chose for this customer (Monday = 1). Empty means use the text.
     pickup_days?: number[] | null;
+    // A discount given to this customer, taken off their monthly charge.
+    discount_type?: "percent" | "amount" | null;
+    discount_value?: number | string | null;
+    discount_reason?: string | null;
 };
 
 const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id";
-
-// monthly_rate comes from supabase/billing-installments-2026-09.sql and pickup_days
-// from supabase/schedule-days-2026-09.sql.
-export const BILLABLE_SELECT = `${BILLABLE_BASE}, monthly_rate, pickup_days`;
 const BILLABLE_WITH_RATE = `${BILLABLE_BASE}, monthly_rate`;
+const BILLABLE_WITH_DAYS = `${BILLABLE_WITH_RATE}, pickup_days`;
 
-// Runs a customers query with monthly_rate, or without it if that SQL has not
-// been run yet, so approvals and the daily job keep working in between.
+// monthly_rate comes from supabase/billing-installments-2026-09.sql, pickup_days
+// from supabase/schedule-days-2026-09.sql, and the discount fields from
+// supabase/customer-discount-2026-09.sql.
+export const BILLABLE_SELECT = `${BILLABLE_WITH_DAYS}, discount_type, discount_value, discount_reason`;
+
+// Runs a customers query with everything above, falling back a step at a time
+// for whichever of those SQL files has not been run yet, so approvals and the
+// daily job keep working in between.
 export async function queryBillable(run: (select: string) => PromiseLike<{ data: unknown; error: unknown }>) {
-    const first = await run(BILLABLE_SELECT);
-    if (!first.error) return first.data;
-
-    const second = await run(BILLABLE_WITH_RATE);
-    if (!second.error) return second.data;
+    for (const select of [BILLABLE_SELECT, BILLABLE_WITH_DAYS, BILLABLE_WITH_RATE]) {
+        const result = await run(select);
+        if (!result.error) return result.data;
+    }
 
     return (await run(BILLABLE_BASE)).data;
 }
@@ -56,16 +62,39 @@ export async function loadBillable(supabase: SupabaseServerClient, profileId: st
     return (data ?? null) as unknown as BillableCustomer | null;
 }
 
+// What a discount takes off, capped so a charge never goes below zero.
+function discountAmount(customer: BillableCustomer, baseTotal: number): number {
+    const value = Number(customer.discount_value ?? 0);
+    if (!customer.discount_type || !Number.isFinite(value) || value <= 0 || baseTotal <= 0) return 0;
+
+    const raw = customer.discount_type === "percent" ? (baseTotal * Math.min(value, 100)) / 100 : value;
+
+    return Math.min(Math.round(raw * 100) / 100, baseTotal);
+}
+
 // What a month costs this customer: their set monthly charge if there is one,
-// otherwise the per-unit prices from their property details.
+// otherwise the per-unit prices from their property details, minus any
+// discount they have been given.
 export function chargeItems(customer: BillableCustomer): LineItem[] {
     const rate = Number(customer.monthly_rate ?? 0);
 
-    if (Number.isFinite(rate) && rate > 0) {
-        return [{ label: "Monthly waste management service", quantity: 1, unit_price: rate }];
-    }
+    const base =
+        Number.isFinite(rate) && rate > 0
+            ? [{ label: "Monthly waste management service", quantity: 1, unit_price: rate }]
+            : buildLineItems(customer.facility_details, customer.vacancies);
 
-    return buildLineItems(customer.facility_details, customer.vacancies);
+    if (base.length === 0) return base;
+
+    const discount = discountAmount(customer, itemsTotal(base));
+    if (discount <= 0) return base;
+
+    const label = customer.discount_reason?.trim()
+        ? `Discount: ${customer.discount_reason.trim()}`
+        : customer.discount_type === "percent"
+            ? `Discount (${customer.discount_value}%)`
+            : "Discount";
+
+    return [...base, { label, quantity: 1, unit_price: -discount }];
 }
 
 export type PlanOptions = {

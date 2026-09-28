@@ -22,6 +22,8 @@ import CustomerDetailsForm from "@/components/dashboard/CustomerDetailsForm";
 import VacancyForm from "@/components/dashboard/VacancyForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import MonthlyChargeControl from "@/components/dashboard/MonthlyChargeControl";
+import DiscountControl from "@/components/dashboard/DiscountControl";
+import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { buildLineItems, itemsTotal } from "@/lib/billing/pricing";
@@ -98,6 +100,16 @@ export default async function AdminCustomerDetailPage({
     const customRate = Number((customer as { monthly_rate?: number | string | null }).monthly_rate ?? 0);
     const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
     const monthlyCharge = hasCustomRate ? customRate : calculatedMonthly;
+
+    // The discount an admin has given this customer, if any.
+    const discountRow = customer as {
+        discount_type?: "percent" | "amount" | null;
+        discount_value?: number | string | null;
+        discount_reason?: string | null;
+    };
+    const currentDiscount = discountRow.discount_type
+        ? { type: discountRow.discount_type, value: Number(discountRow.discount_value ?? 0), reason: discountRow.discount_reason ?? null }
+        : null;
 
     const allInvoices = invoices ?? [];
 
@@ -205,6 +217,12 @@ export default async function AdminCustomerDetailPage({
                     />
                 </SectionCard>
 
+                {isFullAdmin(profile) && (
+                    <SectionCard title="Email this customer" description="A one-off email to their inbox, separate from the in-app message thread.">
+                        <EmailCustomerForm profileId={profileId} email={customer.email} />
+                    </SectionCard>
+                )}
+
                 <SectionCard title="Property" description="Where the service takes place and what's on the property.">
                     <DetailList
                         items={[
@@ -311,6 +329,19 @@ export default async function AdminCustomerDetailPage({
                                 Monthly charge: <span className="font-semibold text-amber-300">{monthlyCharge > 0 ? naira(monthlyCharge) : "Not set"}</span>
                             </p>
                         )}
+
+                        <div className="mt-6 border-t border-white/10 pt-6">
+                            {isFullAdmin(profile) ? (
+                                <DiscountControl profileId={profileId} customName={customer.full_name ?? "this customer"} current={currentDiscount} />
+                            ) : (
+                                <p className="text-sm text-white/70">
+                                    Discount:{" "}
+                                    <span className="font-semibold text-emerald-300">
+                                        {currentDiscount ? (currentDiscount.type === "percent" ? `${currentDiscount.value}% off` : `${naira(currentDiscount.value)} off`) : "None"}
+                                    </span>
+                                </p>
+                            )}
+                        </div>
                     </SectionCard>
                 )}
 
