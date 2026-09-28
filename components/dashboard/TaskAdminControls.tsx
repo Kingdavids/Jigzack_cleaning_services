@@ -4,12 +4,16 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
-import { deleteTask, updateTask } from "@/app/admin/actions";
+import { adminMoveTaskToNextDay, deleteTask, updateTask } from "@/app/admin/actions";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
+import MoveToNextDayButton from "@/components/dashboard/MoveToNextDayButton";
 
 const inputClass =
     "h-11 rounded-lg border border-white/10 bg-white/8 px-2.5 text-base text-white outline-none placeholder:text-white/30 focus:border-amber-300/50 sm:h-9 sm:text-xs";
+
+const moveButtonClass =
+    "inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-sky-400/30 bg-sky-400/10 px-4 text-sm font-semibold text-sky-200 transition hover:bg-sky-400/20 disabled:opacity-60 sm:h-9 sm:text-xs";
 
 // The schedule controls for a pickup that has not started. Nothing is locked
 // until someone is put on it; from then on it stays locked (the date, area and
@@ -90,13 +94,24 @@ export default function TaskAdminControls({
                         </span>
                     </p>
                     {canUnlock && (
-                        <button
-                            type="button"
-                            onClick={() => setAsking("unlock")}
-                            className="h-11 rounded-lg border border-white/15 px-4 text-sm font-semibold text-white/80 transition hover:bg-white/10 sm:h-9 sm:text-xs"
-                        >
-                            Unlock to change
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                            {scheduledDate && (
+                                <MoveToNextDayButton
+                                    taskId={taskId}
+                                    title={title}
+                                    scheduledDate={scheduledDate}
+                                    action={adminMoveTaskToNextDay}
+                                    className={moveButtonClass}
+                                />
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setAsking("unlock")}
+                                className="h-11 rounded-lg border border-white/15 px-4 text-sm font-semibold text-white/80 transition hover:bg-white/10 sm:h-9 sm:text-xs"
+                            >
+                                Unlock to change
+                            </button>
+                        </div>
                     )}
                 </div>
             )}
@@ -168,6 +183,15 @@ export default function TaskAdminControls({
                         >
                             Remove
                         </button>
+                        {!unlocked && scheduledDate && (
+                            <MoveToNextDayButton
+                                taskId={taskId}
+                                title={title}
+                                scheduledDate={scheduledDate}
+                                action={adminMoveTaskToNextDay}
+                                className={moveButtonClass}
+                            />
+                        )}
                         {unlocked && (
                             <button
                                 type="button"

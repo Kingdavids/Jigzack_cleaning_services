@@ -13,7 +13,7 @@ import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/custom
 import { itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
 import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
-import { isPastDate, todayLagos } from "@/lib/tasks";
+import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
 import { frequencyToDays } from "@/lib/billing/schedule";
 import { naira, receiptNumber } from "@/lib/customer/billing";
 import {
@@ -1676,6 +1676,27 @@ export async function reopenTask(taskId: string): Promise<TaskChangeResult> {
     revalidatePath("/customer/schedule");
 
     return { success: true, message: "Back to not done. The crew and the customer have been told." };
+}
+
+// Pushes a pickup that has not started to the next day. An explicit, confirmed
+// action, so it works on an assigned (locked) pickup without unlocking it.
+export async function adminMoveTaskToNextDay(taskId: string): Promise<TaskChangeResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const result = await moveTaskToNextDay(supabase, taskId);
+
+    if (result.success) {
+        await logActivity(supabase, actor, "task_moved", "Moved a pickup to the next day", { type: "task", id: taskId });
+        revalidatePath("/admin/tasks");
+        revalidatePath("/admin");
+        revalidatePath("/employee");
+        revalidatePath("/employee/tasks");
+        revalidatePath("/customer");
+        revalidatePath("/customer/schedule");
+    }
+
+    return result;
 }
 
 export async function deleteTask(taskId: string, unlock = false): Promise<TaskChangeResult> {

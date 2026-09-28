@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { isFullAdmin } from "@/lib/auth/roles";
-import { todayLagos } from "@/lib/tasks";
+import { moveTaskToNextDay, todayLagos, type MoveTaskResult } from "@/lib/tasks";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 
@@ -103,6 +103,30 @@ export async function endTask(formData: FormData): Promise<TaskServiceResult> {
     revalidatePath("/customer/schedule");
 
     return { success: true };
+}
+
+// Someone on the job can push a pickup that has not started to the next day,
+// for example when they could not get there. The database only lets them
+// change tasks they lead or are crew on.
+export async function moveMyTaskToNextDay(taskId: string): Promise<MoveTaskResult> {
+    const profile = await getUserProfile();
+
+    if (profile.role !== "employee" || profile.status !== "approved") {
+        return { success: false, error: "Only approved staff can move a pickup." };
+    }
+
+    const result = await moveTaskToNextDay(await createClient(), taskId);
+
+    if (result.success) {
+        revalidatePath("/employee");
+        revalidatePath("/employee/tasks");
+        revalidatePath("/admin/tasks");
+        revalidatePath("/admin");
+        revalidatePath("/customer");
+        revalidatePath("/customer/schedule");
+    }
+
+    return result;
 }
 
 const IMAGE_EXTENSIONS: Record<string, string> = {

@@ -8,6 +8,8 @@ import SendMessageForm from "@/components/dashboard/SendMessageForm";
 import TaskPhotoManager from "@/components/dashboard/TaskPhotoManager";
 import TaskTimer from "@/components/dashboard/TaskTimer";
 import TaskServiceButtons from "@/components/dashboard/TaskServiceButtons";
+import MoveToNextDayButton from "@/components/dashboard/MoveToNextDayButton";
+import { moveMyTaskToNextDay } from "@/app/employee/actions";
 import { sendMessageToCustomer } from "@/lib/messaging-actions";
 import { loadTaskCustomers, loadTaskTeams, taskDisplayStatus, type TaskCustomer } from "@/lib/tasks";
 
@@ -271,6 +273,15 @@ export default async function EmployeeTasksPage({
                                             <TaskServiceButtons taskId={task.id} status={task.status} scheduledDate={task.scheduled_date} />
 
                                             {inProgress && task.started_at && <TaskTimer startedAt={task.started_at} />}
+
+                                            {(task.status ?? "pending").toLowerCase() === "pending" && task.scheduled_date && (
+                                                <MoveToNextDayButton
+                                                    taskId={task.id}
+                                                    title={task.title}
+                                                    scheduledDate={task.scheduled_date}
+                                                    action={moveMyTaskToNextDay}
+                                                />
+                                            )}
                                         </div>
 
                                         <div className="grid gap-4 lg:grid-cols-2">
