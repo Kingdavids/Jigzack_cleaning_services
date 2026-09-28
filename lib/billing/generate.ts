@@ -88,11 +88,11 @@ export function chargeItems(customer: BillableCustomer): LineItem[] {
     const discount = discountAmount(customer, itemsTotal(base));
     if (discount <= 0) return base;
 
-    const label = customer.discount_reason?.trim()
-        ? `Discount: ${customer.discount_reason.trim()}`
-        : customer.discount_type === "percent"
-            ? `Discount (${customer.discount_value}%)`
-            : "Discount";
+    // The percentage always shows, even when a reason is also given, so the
+    // invoice makes clear how the discount was worked out.
+    const rateTag = customer.discount_type === "percent" ? ` (${customer.discount_value}%)` : "";
+    const reasonTag = customer.discount_reason?.trim() ? `: ${customer.discount_reason.trim()}` : "";
+    const label = `Discount${rateTag}${reasonTag}`;
 
     return [...base, { label, quantity: 1, unit_price: -discount }];
 }

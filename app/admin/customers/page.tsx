@@ -6,9 +6,10 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import OrphanCustomerActions from "@/components/dashboard/OrphanCustomerActions";
-import { isOwner } from "@/lib/auth/roles";
+import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
 import RecentlyDeletedList, { type DeletedCustomer } from "@/components/dashboard/RecentlyDeletedList";
+import EmailProfileButton from "@/components/dashboard/EmailProfileButton";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 
 type CustomerRow = {
@@ -275,7 +276,7 @@ export default async function AdminCustomersPage({
                                             {person.email ?? "No email"} · signed up {formatDate(person.created_at)}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-wrap items-center gap-3">
                                         <StatusBadge status={person.status} />
                                         {person.status === "pending" ? (
                                             <Link
@@ -287,6 +288,7 @@ export default async function AdminCustomersPage({
                                         ) : (
                                             <span className="text-xs text-white/45">Waiting for them to finish setup</span>
                                         )}
+                                        {isFullAdmin(profile) && <EmailProfileButton profileId={person.id} email={person.email} />}
                                     </div>
                                 </div>
                             ))}
