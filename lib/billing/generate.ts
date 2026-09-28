@@ -188,7 +188,21 @@ export async function planSchedule(supabase: SupabaseServerClient, customer: Bil
         ? monthWindow(options.period, today)
         : { startKey: addDays(today, 2), horizonDays: options.horizonDays ?? 28, label: "the next 4 weeks" };
 
-    const dates = window.horizonDays < 0 ? [] : generateDates(frequency, window.startKey, window.horizonDays);
+    // Their last pickup before the window, so weekly, fortnightly and monthly
+    // pickups carry on from the same day rather than restarting.
+    const { data: lastBefore } = customer.profile_id
+        ? await supabase
+              .from("tasks")
+              .select("scheduled_date")
+              .eq("customer_id", customer.profile_id)
+              .neq("status", "declined")
+              .lt("scheduled_date", window.startKey)
+              .order("scheduled_date", { ascending: false })
+              .limit(1)
+        : { data: [] as { scheduled_date: string }[] };
+
+    const anchor = (lastBefore?.[0]?.scheduled_date as string | undefined) ?? null;
+    const dates = window.horizonDays < 0 ? [] : generateDates(frequency, window.startKey, window.horizonDays, anchor);
 
     const { data: existing } = customer.profile_id
         ? await supabase.from("tasks").select("scheduled_date").eq("customer_id", customer.profile_id).gte("scheduled_date", today)

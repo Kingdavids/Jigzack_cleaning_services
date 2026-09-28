@@ -7,8 +7,10 @@ export type Frequency =
     | { kind: "perWeek"; times: number }
     // Named days, Sunday = 0 ... Saturday = 6, for example Monday and Thursday.
     | { kind: "weekdays"; days: number[] }
-    | { kind: "everyNDays"; days: number }
-    | { kind: "monthly" }
+    // weekday: the day the customer asked for, for example "bi-weekly on Tuesday".
+    | { kind: "everyNDays"; days: number; weekday?: number }
+    // With a weekday it is the first of that day each month, for example the first Friday.
+    | { kind: "monthly"; weekday?: number }
     | { kind: "unknown" };
 
 const WORD_NUMBERS: Record<string, number> = {
@@ -25,7 +27,7 @@ const WORD_NUMBERS: Record<string, number> = {
 
 const toNumber = (value: string) => WORD_NUMBERS[value] ?? parseInt(value, 10);
 
-const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const DAY_WORDS: [RegExp, number][] = [
@@ -51,12 +53,15 @@ export function parseFrequency(input: string | null | undefined): Frequency {
 
     if (!text) return { kind: "unknown" };
 
-    if (/\b(bi-?weekly|fortnight(ly)?|every\s+(2|two)\s+weeks?)\b/.test(text)) return { kind: "everyNDays", days: 14 };
-    if (/\b(monthly|once\s+(a|per|every)\s+month|every\s+month|every\s+4\s+weeks?)\b/.test(text)) return { kind: "monthly" };
+    // A single named day pins a fortnightly or monthly pickup to that day.
+    const named = namedDays(text);
+    const oneDay = named.length === 1 ? { weekday: named[0] } : {};
+
+    if (/\b(bi-?weekly|fortnight(ly)?|every\s+(2|two)\s+weeks?)\b/.test(text)) return { kind: "everyNDays", days: 14, ...oneDay };
+    if (/\b(monthly|once\s+(a|per|every)\s+month|every\s+month|every\s+4\s+weeks?)\b/.test(text)) return { kind: "monthly", ...oneDay };
     if (/\b(daily|every\s*day|everyday)\b/.test(text)) return { kind: "daily" };
 
     // Days the customer named win over a count: "twice a week, Tuesday and Friday".
-    const named = namedDays(text);
     if (named.length > 0) return { kind: "weekdays", days: named };
 
     const perMonth = text.match(/(\d+|once|twice|thrice|two|three|four)\s*(?:x|times?)?\s*(?:a|per|each|every)\s*month/);
@@ -156,9 +161,11 @@ export function describeFrequency(frequency: Frequency) {
                 ? `Every ${DAY_NAMES[frequency.days[0]]}`
                 : `Every ${frequency.days.map((d) => DAY_SHORT[d]).join(", ")}`;
         case "everyNDays":
-            return `Every ${frequency.days} days`;
+            return frequency.weekday !== undefined
+                ? `Every ${frequency.days === 14 ? "2 weeks" : `${frequency.days} days`} on ${DAY_NAMES[frequency.weekday]}`
+                : `Every ${frequency.days} days`;
         case "monthly":
-            return "Once a month";
+            return frequency.weekday !== undefined ? `First ${DAY_NAMES[frequency.weekday]} of each month` : "Once a month";
         default:
             return "Not recognised (defaulting to weekly)";
     }
@@ -203,14 +210,27 @@ export function addDays(key: string, days: number) {
 
 // Dates (YYYY-MM-DD) from `startKey` up to `horizonDays` later. Sundays are
 // skipped for anything that would otherwise land on one.
-export function generateDates(input: Frequency, startKey: string, horizonDays = 28): string[] {
-    const frequency: Frequency = input.kind === "unknown" ? { kind: "perWeek", times: 1 } : input;
+//
+// `anchorKey` is the customer's last pickup before the window. Weekly,
+// fortnightly and monthly pickups carry on from it, so they stay on the same
+// day instead of restarting from wherever the window happens to begin.
+export function generateDates(input: Frequency, startKey: string, horizonDays = 28, anchorKey?: string | null): string[] {
+    const weekday = (ms: number) => new Date(ms).getUTCDay();
+    const nextNonSunday = (ms: number) => (weekday(ms) === 0 ? ms + DAY_MS : ms);
+    // The first date on or after `from` that falls on `day`.
+    const onOrAfter = (from: number, day: number) => from + ((day - weekday(from) + 7) % 7) * DAY_MS;
+
+    const anchor = anchorKey && anchorKey < startKey ? fromKey(anchorKey) : null;
+    let frequency: Frequency = input.kind === "unknown" ? { kind: "perWeek", times: 1 } : input;
+
+    // Once a week with no day named keeps the day of their last pickup.
+    if (frequency.kind === "perWeek" && frequency.times === 1 && anchor !== null && weekday(anchor) !== 0) {
+        frequency = { kind: "weekdays", days: [weekday(anchor)] };
+    }
+
     const start = fromKey(startKey);
     const end = start + horizonDays * DAY_MS;
     const dates: string[] = [];
-
-    const weekday = (ms: number) => new Date(ms).getUTCDay();
-    const nextNonSunday = (ms: number) => (weekday(ms) === 0 ? ms + DAY_MS : ms);
 
     if (frequency.kind === "daily") {
         for (let ms = start; ms <= end; ms += DAY_MS) {
@@ -242,16 +262,44 @@ export function generateDates(input: Frequency, startKey: string, horizonDays = 
     }
 
     if (frequency.kind === "everyNDays") {
-        for (let ms = nextNonSunday(start); ms <= end; ms += frequency.days * DAY_MS) dates.push(toKey(ms));
+        const step = frequency.days * DAY_MS;
+        const wanted = frequency.weekday;
+        let first: number;
+
+        if (anchor !== null && (wanted === undefined || weekday(anchor) === wanted)) {
+            // Keep the same rhythm as their last pickup.
+            first = anchor + Math.ceil((start - anchor) / step) * step;
+        } else if (wanted !== undefined && wanted !== 0) {
+            first = onOrAfter(start, wanted);
+        } else {
+            first = nextNonSunday(start);
+        }
+
+        for (let ms = first; ms <= end; ms += step) dates.push(toKey(ms));
         return dates;
     }
 
-    // monthly: same calendar day each month
-    const first = new Date(nextNonSunday(start));
+    const startDate = new Date(start);
+    const monthStart = (i: number) => Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + i, 1);
+
+    // monthly on a named day: the first of that day in each month
+    if (frequency.weekday !== undefined && frequency.weekday !== 0) {
+        for (let i = 0; ; i++) {
+            const ms = onOrAfter(monthStart(i), frequency.weekday);
+            if (ms > end) break;
+            if (ms >= start) dates.push(toKey(ms));
+        }
+        return dates;
+    }
+
+    // monthly: the same day of the month as their last pickup, or as the window's
+    // first day. Short months use their last day instead of spilling into the next.
+    const dayOfMonth = new Date(anchor ?? nextNonSunday(start)).getUTCDate();
     for (let i = 0; ; i++) {
-        const ms = nextNonSunday(Date.UTC(first.getUTCFullYear(), first.getUTCMonth() + i, first.getUTCDate()));
+        const lastDay = new Date(monthStart(i + 1) - DAY_MS).getUTCDate();
+        const ms = nextNonSunday(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + i, Math.min(dayOfMonth, lastDay)));
         if (ms > end) break;
-        dates.push(toKey(ms));
+        if (ms >= start) dates.push(toKey(ms));
     }
     return dates;
 }

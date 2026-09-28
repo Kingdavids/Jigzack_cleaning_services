@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { notifyAdminsOfNewApplication } from "@/lib/signup-notify";
+import { DAY_NAMES, DAY_SHORT } from "@/lib/billing/schedule";
 
 type PropertyType = "residential" | "commercial";
 
@@ -49,6 +50,9 @@ type FormState = {
     commercialOthers: string;
     preferredPickupFrequency: string;
     customFrequency: string;
+    // Monday = 1 ... Saturday = 6. Written into the frequency ("Weekly on
+    // Tuesday"), which is what the schedule is built from.
+    pickupDays: number[];
     wasteType: string;
     specialNotes: string;
     agreed: boolean;
@@ -85,10 +89,29 @@ const initialState: FormState = {
     commercialOthers: "",
     preferredPickupFrequency: "Weekly",
     customFrequency: "",
+    pickupDays: [],
     wasteType: "General Waste",
     specialNotes: "",
     agreed: false,
 };
+
+// Fortnightly and monthly pickups happen on one day; weekly can be several.
+const ONE_DAY_ONLY = ["Bi-weekly", "Monthly"];
+
+// "Monday", "Monday and Thursday", "Monday, Wednesday and Friday".
+function dayList(days: number[]) {
+    const names = [...days].sort().map((d) => DAY_NAMES[d]);
+    return names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+// What is saved as the pickup frequency, with the chosen days in words.
+function frequencyText(form: FormState) {
+    const base = form.preferredPickupFrequency === "Custom" ? form.customFrequency.trim() : form.preferredPickupFrequency;
+    return form.pickupDays.length > 0 ? `${base} on ${dayList(form.pickupDays)}` : base;
+}
+
+// Custom can say the days in words instead; everything else needs a day picked.
+const needsDays = (form: FormState) => form.preferredPickupFrequency !== "Custom" && form.pickupDays.length === 0;
 
 function FieldLabel({
                         children,
@@ -236,7 +259,8 @@ export default function CustomerSetupPage() {
                 done: Boolean(
                     form.wasteType &&
                     form.preferredPickupFrequency &&
-                    (form.preferredPickupFrequency !== "Custom" || form.customFrequency.trim())
+                    (form.preferredPickupFrequency !== "Custom" || form.customFrequency.trim()) &&
+                    !needsDays(form)
                 ),
             },
         ];
@@ -244,6 +268,26 @@ export default function CustomerSetupPage() {
 
     function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
         setForm((prev) => ({ ...prev, [key]: value }));
+    }
+
+    function changeFrequency(value: string) {
+        // Switching to a one-day frequency keeps only the first day picked.
+        setForm((prev) => ({
+            ...prev,
+            preferredPickupFrequency: value,
+            pickupDays: ONE_DAY_ONLY.includes(value) ? prev.pickupDays.slice(0, 1) : prev.pickupDays,
+        }));
+    }
+
+    function toggleDay(day: number) {
+        setForm((prev) => {
+            if (ONE_DAY_ONLY.includes(prev.preferredPickupFrequency)) return { ...prev, pickupDays: [day] };
+
+            return {
+                ...prev,
+                pickupDays: prev.pickupDays.includes(day) ? prev.pickupDays.filter((d) => d !== day) : [...prev.pickupDays, day],
+            };
+        });
     }
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -264,6 +308,11 @@ export default function CustomerSetupPage() {
 
         if (form.preferredPickupFrequency === "Custom" && !form.customFrequency.trim()) {
             alert("Please describe how often you want pickups, for example: daily, or 3 times a week.");
+            return;
+        }
+
+        if (needsDays(form)) {
+            alert("Please choose which day you want your pickups.");
             return;
         }
 
@@ -293,10 +342,7 @@ export default function CustomerSetupPage() {
                 state: form.state,
                 landmark: form.landmark,
                 property_type: form.propertyType,
-                preferred_pickup_frequency:
-                    form.preferredPickupFrequency === "Custom"
-                        ? form.customFrequency.trim()
-                        : form.preferredPickupFrequency,
+                preferred_pickup_frequency: frequencyText(form),
                 waste_type: form.wasteType,
                 special_notes: form.specialNotes,
                 facility_details: {
@@ -550,7 +596,7 @@ export default function CustomerSetupPage() {
                                 <FieldLabel>Preferred Pickup Frequency</FieldLabel>
                                 <SelectInput
                                     value={form.preferredPickupFrequency}
-                                    onChange={(value) => updateField("preferredPickupFrequency", value)}
+                                    onChange={changeFrequency}
                                     options={["Weekly", "Bi-weekly", "Monthly", "Custom"]}
                                 />
                             </div>
@@ -568,6 +614,43 @@ export default function CustomerSetupPage() {
                                     </p>
                                 </div>
                             )}
+
+                            <div className="md:col-span-2 xl:col-span-3">
+                                <FieldLabel required={form.preferredPickupFrequency !== "Custom"}>
+                                    {ONE_DAY_ONLY.includes(form.preferredPickupFrequency) ? "Which day?" : "Which days?"}
+                                </FieldLabel>
+                                <div role="group" aria-label="Pickup days" className="flex flex-wrap gap-2">
+                                    {[1, 2, 3, 4, 5, 6].map((day) => {
+                                        const on = form.pickupDays.includes(day);
+
+                                        return (
+                                            <button
+                                                key={day}
+                                                type="button"
+                                                onClick={() => toggleDay(day)}
+                                                aria-pressed={on}
+                                                aria-label={DAY_NAMES[day]}
+                                                className={`h-12 min-w-14 rounded-2xl border px-4 text-sm font-semibold transition ${
+                                                    on
+                                                        ? "border-amber-400 bg-amber-400 text-black"
+                                                        : "border-white/10 bg-white/8 text-white/70 hover:bg-white/10"
+                                                }`}
+                                            >
+                                                {DAY_SHORT[day]}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <p className="mt-2 text-xs text-white/40">
+                                    {form.pickupDays.length > 0
+                                        ? `Your pickups: ${frequencyText(form)}.`
+                                        : form.preferredPickupFrequency === "Custom"
+                                            ? "Optional if you have named the days above. We don't collect on Sundays."
+                                            : ONE_DAY_ONLY.includes(form.preferredPickupFrequency)
+                                                ? "Pick the day that suits you. We don't collect on Sundays."
+                                                : "Pick one day, or more if you want more than one pickup a week. We don't collect on Sundays."}
+                                </p>
+                            </div>
 
                             <div>
                                 <FieldLabel>Waste Type</FieldLabel>
