@@ -35,24 +35,28 @@ export default async function EmployeePage() {
                     label="Assigned Pickups"
                     value={String(tasks.length)}
                     helper="Total assigned tasks"
+                    href="/employee/tasks"
                 />
                 <StatCard
                     icon={ClipboardList}
                     label="Pending Jobs"
                     value={String(pending)}
                     helper="Includes scheduled and active"
+                    href="/employee/tasks?show=pending"
                 />
                 <StatCard
                     icon={CheckCircle2}
                     label="Completed"
                     value={String(completed)}
                     helper="Finished service tasks"
+                    href="/employee/tasks?show=completed"
                 />
                 <StatCard
                     icon={AlertTriangle}
                     label="High Priority"
                     value={String(highPriority)}
                     helper="Urgent work orders"
+                    href="/employee/tasks?show=high"
                 />
             </div>
         </DashboardShell>

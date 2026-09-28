@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { ChevronDown, Clock3, MapPin, MapPinned, MessageCircle, Phone, StickyNote } from "lucide-react";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -123,8 +124,34 @@ function CustomerDetails({ customer }: { customer: TaskCustomer }) {
     );
 }
 
-export default async function EmployeeTasksPage() {
+// The dashboard cards link here with ?show= to open just that group.
+const FILTERS = [
+    { key: "all", label: "All" },
+    { key: "pending", label: "Pending" },
+    { key: "completed", label: "Completed" },
+    { key: "high", label: "High priority" },
+] as const;
+
+type Filter = (typeof FILTERS)[number]["key"];
+
+function matchesFilter(task: TaskRow, filter: Filter) {
+    const status = (task.status ?? "").toLowerCase();
+
+    if (filter === "pending") return status !== "completed";
+    if (filter === "completed") return status === "completed";
+    if (filter === "high") return (task.priority ?? "").toLowerCase() === "high";
+
+    return true;
+}
+
+export default async function EmployeeTasksPage({
+                                                    searchParams,
+                                                }: {
+    searchParams: Promise<{ show?: string }>;
+}) {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");
+    const { show } = await searchParams;
+    const filter: Filter = FILTERS.some((f) => f.key === show) ? (show as Filter) : "all";
 
     // The database returns only the tasks this person is on, as the lead or as
     // crew, so a job shared with a colleague shows up for both of them.
@@ -137,7 +164,8 @@ export default async function EmployeeTasksPage() {
         console.error("Failed to load employee tasks:", taskError.message);
     }
 
-    const tasks: TaskRow[] = taskData ?? [];
+    const allTasks: TaskRow[] = taskData ?? [];
+    const tasks = allTasks.filter((t) => matchesFilter(t, filter));
     const taskIds = tasks.map((t) => t.id);
     const [teams, customers] = await Promise.all([
         loadTaskTeams(supabase, taskIds),
@@ -167,10 +195,33 @@ export default async function EmployeeTasksPage() {
             unreadCount={unreadCount}
         >
             <SectionCard title="Assigned Tasks" description="Tap a task to see the customer's details, message them and add photos.">
+                <nav aria-label="Filter tasks" className="mb-4 flex flex-wrap gap-2">
+                    {FILTERS.map((f) => {
+                        const count = allTasks.filter((t) => matchesFilter(t, f.key)).length;
+                        const active = f.key === filter;
+
+                        return (
+                            <Link
+                                key={f.key}
+                                href={f.key === "all" ? "/employee/tasks" : `/employee/tasks?show=${f.key}`}
+                                aria-current={active ? "page" : undefined}
+                                className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm transition ${
+                                    active
+                                        ? "border-amber-400 bg-amber-400 font-semibold text-black"
+                                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                                }`}
+                            >
+                                {f.label}
+                                <span className={active ? "text-black/60" : "text-white/40"}>{count}</span>
+                            </Link>
+                        );
+                    })}
+                </nav>
+
                 <div className="space-y-4">
                     {tasks.length === 0 ? (
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/50">
-                            No tasks assigned yet.
+                            {allTasks.length === 0 ? "No tasks assigned yet." : "No tasks in this group."}
                         </div>
                     ) : (
                         tasks.map((task) => {
