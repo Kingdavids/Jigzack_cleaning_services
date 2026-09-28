@@ -19,13 +19,14 @@ export default async function EmployeePage() {
     const completed = tasks.filter((t) => (t.status ?? "").toLowerCase() === "completed").length;
     const pending = tasks.filter((t) => (t.status ?? "").toLowerCase() !== "completed").length;
     const highPriority = tasks.filter((t) => (t.priority ?? "").toLowerCase() === "high").length;
+    const firstName = (profile.full_name ?? "").trim().split(/\s+/)[0] || "there";
 
     return (
         <DashboardShell
             role="employee"
             profileId={profile.id}
-            title="Employee Dashboard"
-            subtitle="Track pickups, upload photos, and stay in touch with admin."
+            title={profile.full_name?.trim() || "Employee Dashboard"}
+            subtitle={`Welcome back, ${firstName}. Track pickups, upload photos, and stay in touch with admin.`}
             unreadCount={unreadCount}
         >
             <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
