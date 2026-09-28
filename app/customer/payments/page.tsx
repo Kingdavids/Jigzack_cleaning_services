@@ -5,13 +5,15 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import InvoiceList, { type InvoiceRow } from "@/components/dashboard/InvoiceList";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
+import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
 
 export default async function CustomerPaymentsPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
-    const { billingProfileId, isTenant } = await resolveBilling(supabase, profile.id, customer);
+    const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, profile.id, customer);
+    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer);
 
     // "*" includes the transfer and part payment columns once they exist, so the
     // page works before and after those SQL files have been run.
@@ -75,6 +77,15 @@ export default async function CustomerPaymentsPage() {
                         </div>
                     ))}
                 </div>
+
+                {discount && (
+                    <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-4">
+                        <p className="font-bold text-emerald-200">You&apos;re on a {discount.percent}% discount</p>
+                        <p className="mt-1 text-sm text-white/60">
+                            {discount.reason ? discount.reason : "Applied automatically to your monthly charge."} It shows as its own line on your invoice.
+                        </p>
+                    </div>
+                )}
 
                 {prepayments.length > 0 && (
                     <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-4">

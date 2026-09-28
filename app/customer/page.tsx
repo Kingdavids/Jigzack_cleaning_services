@@ -5,6 +5,7 @@ import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { taskDisplayStatus } from "@/lib/tasks";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
+import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 import { describeFacilities } from "@/lib/customer/facilities";
 import { customerFrequency, describeFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -74,6 +75,7 @@ export default async function CustomerPage() {
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
     const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, profile.id));
+    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer);
 
     const { counted, notes } = describeFacilities(customer?.facility_details);
     const vacancies = describeFacilities(customer?.vacancies).counted;
@@ -109,6 +111,16 @@ export default async function CustomerPage() {
                     <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-100">
                         <p className="font-semibold">Paid in advance until {paidUpTo}</p>
                         <p className="mt-0.5 text-emerald-100/75">No invoices are made for the months you have paid for. Your receipt is under Payments.</p>
+                    </div>
+                )}
+
+                {discount && (
+                    <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-sm text-emerald-100">
+                        <p className="font-semibold">You&apos;re on a {discount.percent}% discount</p>
+                        <p className="mt-0.5 text-emerald-100/75">
+                            {discount.reason ? discount.reason : "Applied automatically to your monthly charge."} See it on your invoice under
+                            Payments.
+                        </p>
                     </div>
                 )}
 

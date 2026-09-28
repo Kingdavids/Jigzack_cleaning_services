@@ -72,6 +72,14 @@ function discountAmount(customer: BillableCustomer, baseTotal: number): number {
     return Math.min(Math.round(raw * 100) / 100, baseTotal);
 }
 
+// "10" instead of "10.0", but "12.5" kept as it is. Used anywhere a discount
+// percentage is shown, so a flat-amount discount reads the same way a
+// percentage one does.
+export function formatPercent(value: number): string {
+    const rounded = Math.round(value * 10) / 10;
+    return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
 // What a month costs this customer: their set monthly charge if there is one,
 // otherwise the per-unit prices from their property details, minus any
 // discount they have been given.
@@ -85,16 +93,58 @@ export function chargeItems(customer: BillableCustomer): LineItem[] {
 
     if (base.length === 0) return base;
 
-    const discount = discountAmount(customer, itemsTotal(base));
+    const baseTotal = itemsTotal(base);
+    const discount = discountAmount(customer, baseTotal);
     if (discount <= 0) return base;
 
-    // The percentage always shows, even when a reason is also given, so the
-    // invoice makes clear how the discount was worked out.
-    const rateTag = customer.discount_type === "percent" ? ` (${customer.discount_value}%)` : "";
+    // Worked out as a percentage of the base charge either way, so a discount
+    // given as a flat amount still reads as a percentage on the invoice, the
+    // same as one given as a percentage.
+    const percent = formatPercent((discount / baseTotal) * 100);
     const reasonTag = customer.discount_reason?.trim() ? `: ${customer.discount_reason.trim()}` : "";
-    const label = `Discount${rateTag}${reasonTag}`;
+    const label = `Discount (${percent}%)${reasonTag}`;
 
     return [...base, { label, quantity: 1, unit_price: -discount }];
+}
+
+// The narrow slice of a customer's record needed to work out their discount,
+// used wherever a screen wants to show "this customer is on a discount"
+// without loading everything chargeItems needs.
+export type DiscountableCustomer = Pick<
+    BillableCustomer,
+    "facility_details" | "vacancies" | "monthly_rate" | "discount_type" | "discount_value" | "discount_reason"
+>;
+
+export type DiscountInfo = {
+    type: "percent" | "amount";
+    value: number;
+    reason: string | null;
+    // Always the percentage, whichever way the discount was set.
+    percent: string;
+};
+
+// The discount a customer currently has, expressed as a percentage of what
+// they would otherwise be charged. Returns null when they have none, or when
+// there is nothing yet to work a percentage out of.
+export function discountInfo(customer: DiscountableCustomer): DiscountInfo | null {
+    if (!customer.discount_type) return null;
+
+    const rate = Number(customer.monthly_rate ?? 0);
+    const base =
+        Number.isFinite(rate) && rate > 0
+            ? rate
+            : itemsTotal(buildLineItems(customer.facility_details, customer.vacancies));
+
+    const value = Number(customer.discount_value ?? 0);
+    const amount = discountAmount(customer as BillableCustomer, base);
+    if (amount <= 0) return null;
+
+    return {
+        type: customer.discount_type,
+        value,
+        reason: customer.discount_reason?.trim() || null,
+        percent: formatPercent((amount / base) * 100),
+    };
 }
 
 export type PlanOptions = {

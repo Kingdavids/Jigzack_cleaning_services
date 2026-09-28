@@ -17,6 +17,7 @@ import { isPastDate, todayLagos } from "@/lib/tasks";
 import { frequencyToDays } from "@/lib/billing/schedule";
 import { naira, receiptNumber } from "@/lib/customer/billing";
 import {
+    discountInfo,
     generateInvoiceFor,
     generateScheduleFor,
     loadBillable,
@@ -1123,21 +1124,27 @@ export async function setCustomerDiscount(
     // This month's invoice follows the new discount if it is still untouched.
     const billable = await loadBillable(supabase, profileId);
     const repriced = billable ? await recalculateOpenInvoice(supabase, billable) : false;
+    // Shown as a percentage either way, so it reads the same as the invoice line does.
+    const percent = billable ? discountInfo(billable)?.percent : null;
 
     const describe =
         type === null
             ? `Removed the discount for ${before.full_name ?? "a customer"}`
-            : `Set a ${type === "percent" ? `${update.discount_value}%` : naira(update.discount_value ?? 0)} discount for ${before.full_name ?? "a customer"}`;
+            : `Set a ${percent ?? update.discount_value}% discount for ${before.full_name ?? "a customer"}${
+                  type === "amount" ? ` (${naira(update.discount_value ?? 0)})` : ""
+              }`;
 
     await logActivity(supabase, actor, "customer_discount_changed", describe, { type: "profile", id: profileId });
     revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/customers");
     revalidatePath("/admin/payments");
+    revalidatePath("/customer");
     revalidatePath("/customer/payments");
 
     return {
         success: true,
         message:
-            (type === null ? "Discount removed." : `Discount set: ${type === "percent" ? `${update.discount_value}% off` : `${naira(update.discount_value ?? 0)} off`}.`) +
+            (type === null ? "Discount removed." : `Discount set: ${percent ?? update.discount_value}% off.`) +
             (repriced ? " This month's open invoice was updated." : ""),
     };
 }

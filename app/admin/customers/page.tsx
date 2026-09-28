@@ -11,6 +11,7 @@ import { daysLeft } from "@/lib/admin/deletedCustomers";
 import RecentlyDeletedList, { type DeletedCustomer } from "@/components/dashboard/RecentlyDeletedList";
 import EmailProfileButton from "@/components/dashboard/EmailProfileButton";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
+import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 
 type CustomerRow = {
     id: string;
@@ -28,6 +29,14 @@ type CustomerRow = {
     is_estate: boolean;
     unit_id: string | null;
     created_at: string;
+    // monthly_rate comes from billing-installments-2026-09.sql, the rest from
+    // customer-discount-2026-09.sql; a row loads without them until those have run.
+    monthly_rate?: number | string | null;
+    facility_details?: DiscountableCustomer["facility_details"];
+    vacancies?: DiscountableCustomer["vacancies"];
+    discount_type?: "percent" | "amount" | null;
+    discount_value?: number | string | null;
+    discount_reason?: string | null;
 };
 
 export default async function AdminCustomersPage({
@@ -41,31 +50,41 @@ export default async function AdminCustomersPage({
     // Strip characters that have meaning inside a PostgREST or() filter.
     const term = (q ?? "").replace(/[,()%*]/g, " ").trim().slice(0, 60);
 
-    let query = supabase
-        .from("customers")
-        .select(
-            "id, profile_id, full_name, email, phone, address, lga, property_type, preferred_pickup_frequency, account_code, last_serviced, status, is_estate, unit_id, created_at"
-        )
-        .neq("status", "deleted")
-        .order("created_at", { ascending: false })
-        .limit(1000);
+    const BASE_COLUMNS =
+        "id, profile_id, full_name, email, phone, address, lga, property_type, preferred_pickup_frequency, account_code, last_serviced, status, is_estate, unit_id, created_at, facility_details, vacancies";
+    // monthly_rate and the discount fields work out the "X% discount" badge on
+    // each row; both come from SQL run after the base columns above.
+    const FULL_COLUMNS = `${BASE_COLUMNS}, monthly_rate, discount_type, discount_value, discount_reason`;
 
-    if (term) {
-        query = query.or(
-            ["full_name", "email", "phone", "address", "lga", "account_code", "property_code"]
-                .map((column) => `${column}.ilike.%${term}%`)
-                .join(",")
-        );
-    }
+    const buildQuery = (select: string) => {
+        let q = supabase
+            .from("customers")
+            .select(select)
+            .neq("status", "deleted")
+            .order("created_at", { ascending: false })
+            .limit(1000);
 
-    // ?fee=reported: customers who say they paid the registration fee and are
-    // waiting for an admin to confirm it.
-    if (fee === "reported") {
-        query = query.not("registration_fee_submitted_at", "is", null).eq("registration_fee_paid", false);
-    }
+        if (term) {
+            q = q.or(
+                ["full_name", "email", "phone", "address", "lga", "account_code", "property_code"]
+                    .map((column) => `${column}.ilike.%${term}%`)
+                    .join(",")
+            );
+        }
 
-    const { data: customersData } = await query;
-    const customers = (customersData ?? []) as CustomerRow[];
+        // ?fee=reported: customers who say they paid the registration fee and are
+        // waiting for an admin to confirm it.
+        if (fee === "reported") {
+            q = q.not("registration_fee_submitted_at", "is", null).eq("registration_fee_paid", false);
+        }
+
+        return q;
+    };
+
+    const fullResult = await buildQuery(FULL_COLUMNS);
+    const customersData = fullResult.error ? (await buildQuery(BASE_COLUMNS)).data : fullResult.data;
+
+    const customers = (customersData ?? []) as unknown as CustomerRow[];
 
     // Customers waiting in Recently deleted (an owner can restore them).
     const { data: deletedData } = await supabase
@@ -145,6 +164,7 @@ export default async function AdminCustomersPage({
                     <div className="space-y-3">
                         {customers.map((customer) => {
                             const outstanding = customer.profile_id ? owed.get(customer.profile_id) ?? 0 : 0;
+                            const discount = discountInfo(customer as unknown as DiscountableCustomer);
 
                             return (
                                 (customer.profile_id ? (
@@ -165,6 +185,11 @@ export default async function AdminCustomersPage({
                                                 {customer.unit_id && (
                                                     <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/60">
                                                         Tenant
+                                                    </span>
+                                                )}
+                                                {discount && (
+                                                    <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                                                        {discount.percent}% discount
                                                     </span>
                                                 )}
                                             </div>
@@ -210,6 +235,11 @@ export default async function AdminCustomersPage({
                                                 {customer.unit_id && (
                                                     <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/60">
                                                         Tenant
+                                                    </span>
+                                                )}
+                                                {discount && (
+                                                    <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">
+                                                        {discount.percent}% discount
                                                     </span>
                                                 )}
                                             </div>

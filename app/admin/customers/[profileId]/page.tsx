@@ -26,6 +26,7 @@ import DiscountControl from "@/components/dashboard/DiscountControl";
 import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
+import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
 
@@ -101,15 +102,9 @@ export default async function AdminCustomerDetailPage({
     const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
     const monthlyCharge = hasCustomRate ? customRate : calculatedMonthly;
 
-    // The discount an admin has given this customer, if any.
-    const discountRow = customer as {
-        discount_type?: "percent" | "amount" | null;
-        discount_value?: number | string | null;
-        discount_reason?: string | null;
-    };
-    const currentDiscount = discountRow.discount_type
-        ? { type: discountRow.discount_type, value: Number(discountRow.discount_value ?? 0), reason: discountRow.discount_reason ?? null }
-        : null;
+    // The discount an admin has given this customer, if any, always expressed
+    // as a percentage even when it was set as a flat amount.
+    const currentDiscount = discountInfo(customer as unknown as DiscountableCustomer);
 
     const allInvoices = invoices ?? [];
 
@@ -149,6 +144,11 @@ export default async function AdminCustomerDetailPage({
                         {tenantUnit && (
                             <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white/70">
                                 Tenant: {tenantUnit.estate?.full_name ?? "Estate"} / {tenantUnit.label}
+                            </span>
+                        )}
+                        {currentDiscount && (
+                            <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-emerald-300">
+                                {currentDiscount.percent}% discount
                             </span>
                         )}
                     </div>
@@ -335,10 +335,7 @@ export default async function AdminCustomerDetailPage({
                                 <DiscountControl profileId={profileId} customName={customer.full_name ?? "this customer"} current={currentDiscount} />
                             ) : (
                                 <p className="text-sm text-white/70">
-                                    Discount:{" "}
-                                    <span className="font-semibold text-emerald-300">
-                                        {currentDiscount ? (currentDiscount.type === "percent" ? `${currentDiscount.value}% off` : `${naira(currentDiscount.value)} off`) : "None"}
-                                    </span>
+                                    Discount: <span className="font-semibold text-emerald-300">{currentDiscount ? `${currentDiscount.percent}% off` : "None"}</span>
                                 </p>
                             )}
                         </div>

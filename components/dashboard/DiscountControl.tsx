@@ -22,7 +22,9 @@ export default function DiscountControl({
                                         }: {
     profileId: string;
     customName: string;
-    current: { type: "percent" | "amount"; value: number; reason: string | null } | null;
+    // percent is always the equivalent percentage, even when the discount was
+    // set as a flat amount, so it always reads the same way the invoice does.
+    current: { type: "percent" | "amount"; value: number; reason: string | null; percent: string } | null;
 }) {
     const router = useRouter();
     const [type, setType] = useState<"percent" | "amount">(current?.type ?? "percent");
@@ -59,10 +61,15 @@ export default function DiscountControl({
             <div>
                 <p className="text-xs uppercase tracking-[0.12em] text-white/40">Discount</p>
                 {current ? (
-                    <p className="mt-0.5 text-2xl font-bold text-emerald-300">
-                        {current.type === "percent" ? `${current.value}% off` : `${naira(current.value)} off`}
-                        {current.reason && <span className="ml-2 text-sm font-normal text-white/55">{current.reason}</span>}
-                    </p>
+                    <>
+                        <p className="mt-0.5 text-2xl font-bold text-emerald-300">
+                            {current.percent}% off
+                            {current.reason && <span className="ml-2 text-sm font-normal text-white/55">{current.reason}</span>}
+                        </p>
+                        {current.type === "amount" && (
+                            <p className="mt-0.5 text-xs text-white/45">Set as {naira(current.value)} off. Shown as a percentage on the invoice.</p>
+                        )}
+                    </>
                 ) : (
                     <p className="mt-0.5 text-sm text-white/55">No discount given.</p>
                 )}
