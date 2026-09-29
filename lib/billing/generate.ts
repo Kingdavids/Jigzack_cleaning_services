@@ -326,14 +326,13 @@ export async function generateInvoiceFor(
 
     if (existing && existing.length > 0) return "exists";
 
-    // Arrears waiting on this customer land on this invoice, then are cleared
-    // so they are never added to a later one too.
-    const pendingArrears = Number(customer.arrears ?? 0) || 0;
-
+    // The customer's current arrears (set from their Billing section, or from
+    // this same field on an earlier invoice) carries onto this one too, the
+    // same single number everywhere until it is changed.
     const { error } = await supabase.from("payments").insert({
         customer_id: customer.profile_id,
         amount: itemsTotal(items),
-        arrears: pendingArrears,
+        arrears: Number(customer.arrears ?? 0) || 0,
         units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
         description: `Waste management service charge, ${month}`,
         invoice_month: month,
@@ -346,16 +345,12 @@ export async function generateInvoiceFor(
         return "error";
     }
 
-    if (pendingArrears > 0) {
-        await supabase.from("customers").update({ arrears: 0 }).eq("profile_id", customer.profile_id);
-    }
-
     return "created";
 }
 
-// Re-prices an unpaid, still-automatic invoice after the property details or
-// vacancies change. Manually edited invoices (auto_generated = false) are
-// left alone on purpose.
+// Re-prices an unpaid, still-automatic invoice after the property details,
+// vacancies or arrears change. Manually edited invoices (auto_generated =
+// false) are left alone on purpose.
 export async function recalculateOpenInvoice(
     supabase: SupabaseServerClient,
     customer: BillableCustomer,
@@ -389,6 +384,7 @@ export async function recalculateOpenInvoice(
         .from("payments")
         .update({
             amount: itemsTotal(items),
+            arrears: Number(customer.arrears ?? 0) || 0,
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             line_items: items,
         })

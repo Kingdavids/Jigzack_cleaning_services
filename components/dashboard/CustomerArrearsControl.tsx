@@ -12,9 +12,10 @@ const parseAmount = (text: string) => {
     return cleaned === "" || !/^\d*\.?\d{0,2}$/.test(cleaned) ? NaN : Number(cleaned);
 };
 
-// Arrears waiting to land on this customer's current or next invoice. Lands
-// on the current one right away if it is still untouched and unpaid, so it
-// also shows up in "Preview before generating" straight away.
+// One arrears figure per customer, the same one shown and editable from an
+// invoice on the Payments page, so the two can never disagree. It lands on
+// the current invoice right away if it is still untouched and unpaid, then
+// carries onto every invoice generated after that until it is changed again.
 export default function CustomerArrearsControl({
                                                     profileId,
                                                     customName,
@@ -56,8 +57,8 @@ export default function CustomerArrearsControl({
                 <p className="mt-0.5 text-2xl font-bold text-amber-300">{current > 0 ? naira(current) : "None"}</p>
                 <p className="mt-1 text-sm text-white/55">
                     {current > 0
-                        ? "Waiting to land on their current or next invoice."
-                        : "Added on top of their current or next invoice, until cleared."}
+                        ? "Added on top of their current and every future invoice, until changed or cleared."
+                        : "Added on top of their current and every future invoice, until cleared."}
                 </p>
             </div>
 
@@ -104,8 +105,8 @@ export default function CustomerArrearsControl({
                 ) : (
                     <p>
                         {customName}&apos;s arrears become <span className="font-bold text-white">{naira(pending ?? 0)}</span>. It lands on their
-                        current invoice right away if it&apos;s still untouched and unpaid, or their next invoice otherwise, and shows up in
-                        &quot;Preview before generating&quot; either way.
+                        current invoice right away if it&apos;s still untouched and unpaid, and every invoice after that until it&apos;s changed
+                        again. It also shows up in &quot;Preview before generating&quot;.
                     </p>
                 )}
             </ConfirmDialog>

@@ -1542,7 +1542,7 @@ export async function updateInvoice(
     }
 
     const arrears = Number(formData.get("arrears") || 0);
-    const cleanArrears = Number.isFinite(arrears) && arrears > 0 ? arrears : 0;
+    const cleanArrears = Number.isFinite(arrears) && arrears > 0 ? round2(arrears) : 0;
     const newTotal = round2(itemsTotal(items) + cleanArrears);
 
     // Money may already have been received on this invoice, with receipts
@@ -1581,10 +1581,19 @@ export async function updateInvoice(
         return { success: false, error: "This invoice is already paid and can't be edited." };
     }
 
+    // Kept as the same figure shown in the customer's own Billing section, so
+    // arrears set from either place can never disagree.
+    if (current?.customer_id) {
+        await supabase.from("customers").update({ arrears: cleanArrears }).eq("profile_id", current.customer_id);
+    }
+
     await logActivity(supabase, actor, "invoice_edited", "Edited an invoice");
     revalidatePath("/admin/payments");
     revalidatePath("/admin/customers");
-    if (current?.customer_id) revalidatePath(`/admin/customers/${current.customer_id}`);
+    if (current?.customer_id) {
+        revalidatePath(`/admin/customers/${current.customer_id}`);
+        revalidatePath(`/admin/invoices/preview/${current.customer_id}`);
+    }
     revalidatePath("/customer/payments");
     revalidatePath("/customer");
 
@@ -1593,10 +1602,11 @@ export async function updateInvoice(
 
 export type ArrearsResult = { success: boolean; error?: string; message?: string };
 
-// Arrears for a customer, set from their Billing section. Lands on their
-// current open invoice right away if one is still untouched and unpaid,
-// otherwise it waits and lands on the next invoice generated for them. Either
-// way it is cleared the moment it lands on an invoice, so it is never added twice.
+// One arrears figure per customer, set here or from an invoice on the
+// Payments page: both write the same customers.arrears field, so the two can
+// never disagree. It syncs onto their current invoice right away if one is
+// still untouched and unpaid, and carries onto every invoice generated after
+// that until it is changed again, the same way a monthly charge override does.
 export async function setCustomerArrears(profileId: string, arrears: number): Promise<ArrearsResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -1621,30 +1631,7 @@ export async function setCustomerArrears(profileId: string, arrears: number): Pr
         };
     }
 
-    // If this month's invoice already exists and is still untouched and
-    // unpaid, it picks up the change right away instead of waiting for the next one.
-    let syncedToInvoice = false;
-
-    if (clean > 0) {
-        const { data: open } = await supabase
-            .from("payments")
-            .select("id, amount, arrears, amount_paid, status")
-            .eq("customer_id", profileId)
-            .eq("invoice_month", monthLabel())
-            .eq("auto_generated", true)
-            .neq("status", "paid");
-
-        const untouched = (open ?? []).find((row) => amountPaid(row) === 0);
-
-        if (untouched) {
-            const { error: syncError } = await supabase.from("payments").update({ arrears: clean }).eq("id", untouched.id);
-
-            if (!syncError) {
-                syncedToInvoice = true;
-                await supabase.from("customers").update({ arrears: 0 }).eq("profile_id", profileId);
-            }
-        }
-    }
+    const syncedToInvoice = await syncArrearsToOpenInvoice(supabase, profileId, clean);
 
     await logActivity(supabase, actor, "customer_arrears_changed", `Set arrears of ${naira(clean)} for ${customer.full_name ?? "a customer"}`, {
         type: "profile",
@@ -1667,6 +1654,26 @@ export async function setCustomerArrears(profileId: string, arrears: number): Pr
                     ? "Saved. This month's open invoice was updated."
                     : "Saved. It will be added to their next invoice.",
     };
+}
+
+// This month's invoice, if it still exists untouched and unpaid, is kept in
+// step with customers.arrears right away instead of waiting for the next one.
+// Shared by setCustomerArrears and updateInvoice so both write the exact same
+// figure to the exact same places.
+async function syncArrearsToOpenInvoice(supabase: Awaited<ReturnType<typeof createClient>>, profileId: string, amount: number) {
+    const { data: open } = await supabase
+        .from("payments")
+        .select("id, amount, arrears, amount_paid, status")
+        .eq("customer_id", profileId)
+        .eq("invoice_month", monthLabel())
+        .eq("auto_generated", true)
+        .neq("status", "paid");
+
+    const untouched = (open ?? []).find((row) => amountPaid(row) === 0 && Number(row.arrears ?? 0) !== amount);
+    if (!untouched) return false;
+
+    const { error } = await supabase.from("payments").update({ arrears: amount }).eq("id", untouched.id);
+    return !error;
 }
 
 // ---------------------------------------------------------------------------
