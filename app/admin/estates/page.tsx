@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { promoteToEstate, createUnit } from "../actions";
@@ -7,6 +6,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import PromoteEstateForm from "@/components/dashboard/PromoteEstateForm";
 import AddUnitForm from "@/components/dashboard/AddUnitForm";
 import UnitPriceControl from "@/components/dashboard/UnitPriceControl";
+import ClearFixedChargeButton from "@/components/dashboard/ClearFixedChargeButton";
 import { naira } from "@/lib/customer/billing";
 import { DOMESTIC_FACILITIES, type FacilityDetails } from "@/lib/customer/facilities";
 import { UNIT_PRICES, buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
@@ -149,12 +149,9 @@ export default async function AdminEstatesPage() {
 
                                         {hasCustomRate && (
                                             <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
-                                                This estate has a fixed monthly charge set by an admin, so unit prices below have no effect on the bill
-                                                until it is cleared on{" "}
-                                                <Link href={`/admin/customers/${estate.profile_id}`} className="font-semibold underline underline-offset-2">
-                                                    its customer page
-                                                </Link>
-                                                .
+                                                This estate has a fixed monthly charge of {naira(customRate)} set by an admin, so its unit prices below
+                                                (currently {naira(calculated)}) have no effect on the bill.{" "}
+                                                <ClearFixedChargeButton profileId={estate.profile_id} current={customRate} calculated={calculated} />
                                             </div>
                                         )}
 
