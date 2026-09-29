@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
-import { buildLineItems, itemsTotal, monthLabel, type LineItem } from "@/lib/billing/pricing";
+import { buildLineItems, itemsTotal, monthLabel, unitLineItems, unitsCoverBilling, type EstateUnit, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid } from "@/lib/billing/balance";
 import { isMonthPrepaid } from "@/lib/billing/prepaid";
 import {
@@ -25,6 +25,8 @@ export type BillableCustomer = {
     facility_details: FacilityDetails;
     vacancies: FacilityDetails;
     unit_id?: string | null;
+    // True for an estate account, billed for its units rather than for itself.
+    is_estate?: boolean | null;
     // A charge the admin set for this customer. Empty means work it out from
     // their property details.
     monthly_rate?: number | string | null;
@@ -36,7 +38,7 @@ export type BillableCustomer = {
     discount_reason?: string | null;
 };
 
-const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id";
+const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id, is_estate";
 const BILLABLE_WITH_RATE = `${BILLABLE_BASE}, monthly_rate`;
 const BILLABLE_WITH_DAYS = `${BILLABLE_WITH_RATE}, pickup_days`;
 
@@ -62,6 +64,26 @@ export async function loadBillable(supabase: SupabaseServerClient, profileId: st
     return (data ?? null) as unknown as BillableCustomer | null;
 }
 
+const UNITS_WITH_PRICING = "id, label, property_type, monthly_rate, is_vacant";
+const UNITS_BASE = "id, label";
+
+// An estate's units, with their price if that SQL has been run. Empty for a
+// non-estate customer, and plain label-only units before the pricing columns
+// exist, so an estate stays billed the old way until it is.
+export async function loadEstateUnits(supabase: SupabaseServerClient, estateProfileId: string): Promise<EstateUnit[]> {
+    const { data, error } = await supabase.from("units").select(UNITS_WITH_PRICING).eq("estate_profile_id", estateProfileId);
+
+    if (!error) return (data ?? []) as unknown as EstateUnit[];
+
+    const fallback = await supabase.from("units").select(UNITS_BASE).eq("estate_profile_id", estateProfileId);
+    return ((fallback.data ?? []) as { id: string; label: string }[]).map((u) => ({
+        ...u,
+        property_type: null,
+        monthly_rate: null,
+        is_vacant: false,
+    }));
+}
+
 // What a discount takes off, capped so a charge never goes below zero.
 function discountAmount(customer: BillableCustomer, baseTotal: number): number {
     const value = Number(customer.discount_value ?? 0);
@@ -80,16 +102,28 @@ export function formatPercent(value: number): string {
     return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
+// What an estate charges before any account-wide override or discount: each
+// unit's own price once every unit has a type, otherwise the counts on the
+// estate's own property form, exactly as a non-estate customer is priced.
+function baseChargeItems(customer: BillableCustomer, units?: EstateUnit[]): LineItem[] {
+    if (customer.is_estate && units && unitsCoverBilling(units)) {
+        return unitLineItems(units);
+    }
+
+    return buildLineItems(customer.facility_details, customer.vacancies);
+}
+
 // What a month costs this customer: their set monthly charge if there is one,
-// otherwise the per-unit prices from their property details, minus any
-// discount they have been given.
-export function chargeItems(customer: BillableCustomer): LineItem[] {
+// otherwise their units' own prices (for an estate that has them) or the
+// per-unit prices from their property details, minus any discount they have
+// been given. `units` only matters for an estate; pass it whenever you have it.
+export function chargeItems(customer: BillableCustomer, units?: EstateUnit[]): LineItem[] {
     const rate = Number(customer.monthly_rate ?? 0);
 
     const base =
         Number.isFinite(rate) && rate > 0
             ? [{ label: "Monthly waste management service", quantity: 1, unit_price: rate }]
-            : buildLineItems(customer.facility_details, customer.vacancies);
+            : baseChargeItems(customer, units);
 
     if (base.length === 0) return base;
 
@@ -112,7 +146,7 @@ export function chargeItems(customer: BillableCustomer): LineItem[] {
 // without loading everything chargeItems needs.
 export type DiscountableCustomer = Pick<
     BillableCustomer,
-    "facility_details" | "vacancies" | "monthly_rate" | "discount_type" | "discount_value" | "discount_reason"
+    "facility_details" | "vacancies" | "monthly_rate" | "discount_type" | "discount_value" | "discount_reason" | "is_estate"
 >;
 
 export type DiscountInfo = {
@@ -125,15 +159,14 @@ export type DiscountInfo = {
 
 // The discount a customer currently has, expressed as a percentage of what
 // they would otherwise be charged. Returns null when they have none, or when
-// there is nothing yet to work a percentage out of.
-export function discountInfo(customer: DiscountableCustomer): DiscountInfo | null {
+// there is nothing yet to work a percentage out of. `units` only matters for
+// an estate; pass it whenever you have it.
+export function discountInfo(customer: DiscountableCustomer, units?: EstateUnit[]): DiscountInfo | null {
     if (!customer.discount_type) return null;
 
     const rate = Number(customer.monthly_rate ?? 0);
     const base =
-        Number.isFinite(rate) && rate > 0
-            ? rate
-            : itemsTotal(buildLineItems(customer.facility_details, customer.vacancies));
+        Number.isFinite(rate) && rate > 0 ? rate : itemsTotal(baseChargeItems(customer as BillableCustomer, units));
 
     const value = Number(customer.discount_value ?? 0);
     const amount = discountAmount(customer as BillableCustomer, base);
@@ -269,7 +302,8 @@ export async function generateInvoiceFor(
     // A month the customer paid for in advance gets no invoice.
     if (await isMonthPrepaid(supabase, customer.profile_id, month)) return "prepaid";
 
-    const items = chargeItems(customer);
+    const units = customer.is_estate ? await loadEstateUnits(supabase, customer.profile_id) : undefined;
+    const items = chargeItems(customer, units);
     if (items.length === 0) return "no-pricing";
 
     const { data: existing } = await supabase
@@ -310,7 +344,8 @@ export async function recalculateOpenInvoice(
 ) {
     if (!customer.profile_id) return false;
 
-    const items = chargeItems(customer);
+    const units = customer.is_estate ? await loadEstateUnits(supabase, customer.profile_id) : undefined;
+    const items = chargeItems(customer, units);
     if (items.length === 0) return false;
 
     const { data: open, error: findError } = await supabase

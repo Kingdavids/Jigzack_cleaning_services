@@ -26,8 +26,8 @@ import DiscountControl from "@/components/dashboard/DiscountControl";
 import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
-import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
-import { buildLineItems, itemsTotal } from "@/lib/billing/pricing";
+import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/billing/generate";
+import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
@@ -96,15 +96,23 @@ export default async function AdminCustomerDetailPage({
     const frequency = customerFrequency(customer);
     const tenantUnit = unit as unknown as { label: string; estate: { full_name: string | null } | null } | null;
 
-    // What monthly invoices use: the amount an admin set, or else the per-unit prices.
-    const calculatedMonthly = itemsTotal(buildLineItems(customer.facility_details, customer.vacancies));
+    // An estate's own units, if it has any, so its total reflects their own
+    // prices once every one of them has a type (see loadEstateUnits).
+    const estateUnits = customer.is_estate ? await loadEstateUnits(supabase, profileId) : [];
+    const unitPricingActive = customer.is_estate ? unitsCoverBilling(estateUnits) : false;
+
+    // What monthly invoices use: the amount an admin set, or else each unit's
+    // own price (for an estate with one), or the per-unit prices on the form.
+    const calculatedMonthly = itemsTotal(
+        unitPricingActive ? unitLineItems(estateUnits) : buildLineItems(customer.facility_details, customer.vacancies)
+    );
     const customRate = Number((customer as { monthly_rate?: number | string | null }).monthly_rate ?? 0);
     const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
     const monthlyCharge = hasCustomRate ? customRate : calculatedMonthly;
 
     // The discount an admin has given this customer, if any, always expressed
     // as a percentage even when it was set as a flat amount.
-    const currentDiscount = discountInfo(customer as unknown as DiscountableCustomer);
+    const currentDiscount = discountInfo(customer as unknown as DiscountableCustomer, estateUnits);
 
     const allInvoices = invoices ?? [];
 
@@ -303,6 +311,30 @@ export default async function AdminCustomerDetailPage({
                         title="Billing"
                         description="What this customer is charged each month, and what they have paid so far."
                     >
+                        {customer.is_estate && (
+                            <p className="mb-4 text-sm text-white/60">
+                                {unitPricingActive ? (
+                                    <>Billed from its units below. <Link href="/admin/estates" className="text-amber-300 underline underline-offset-2">Manage unit prices</Link>.</>
+                                ) : estateUnits.length > 0 ? (
+                                    <>
+                                        {estateUnits.filter((u) => !u.property_type).length} of {estateUnits.length} units still need a type, so this
+                                        estate is still billed by the counts below.{" "}
+                                        <Link href="/admin/estates" className="text-amber-300 underline underline-offset-2">
+                                            Set unit prices
+                                        </Link>
+                                        .
+                                    </>
+                                ) : (
+                                    <>
+                                        Billed by the counts below. Give its units their own prices on the{" "}
+                                        <Link href="/admin/estates" className="text-amber-300 underline underline-offset-2">
+                                            Estates page
+                                        </Link>{" "}
+                                        if they are not all the same.
+                                    </>
+                                )}
+                            </p>
+                        )}
                         <div className="mb-5 grid gap-3 sm:grid-cols-3">
                             {[
                                 { label: "Total billed", value: naira(billed), tone: "text-white" },

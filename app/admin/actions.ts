@@ -567,6 +567,74 @@ export async function createUnit(
     return { success: true };
 }
 
+export type UnitPricingResult = { success: boolean; error?: string; message?: string };
+
+// The type and price of one estate unit. Once every unit belonging to an
+// estate has a type, that estate is billed from its units instead of the
+// counts on its own property form, so this also reprices the estate's current
+// open invoice straight away.
+export async function setUnitPricing(
+    unitId: string,
+    propertyType: string | null,
+    monthlyRate: number | null,
+    isVacant: boolean
+): Promise<UnitPricingResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!unitId) return { success: false, error: "Missing unit." };
+
+    if (propertyType && !DOMESTIC_FACILITIES.some((f) => f.key === propertyType)) {
+        return { success: false, error: "Choose a valid property type." };
+    }
+
+    const rate = monthlyRate === null ? null : round2(Number(monthlyRate));
+    if (rate !== null && (!Number.isFinite(rate) || rate <= 0)) {
+        return { success: false, error: "Enter a price greater than zero, or leave it blank to use the standard price." };
+    }
+
+    const { data: before } = await supabase.from("units").select("label, estate_profile_id").eq("id", unitId).maybeSingle();
+    if (!before) return { success: false, error: "Could not find that unit." };
+
+    const { error } = await supabase
+        .from("units")
+        .update({ property_type: propertyType, monthly_rate: rate, is_vacant: isVacant })
+        .eq("id", unitId);
+
+    if (error) {
+        console.error("setUnitPricing error:", error.message);
+        return {
+            success: false,
+            error: /property_type|monthly_rate|is_vacant/.test(error.message)
+                ? "Not switched on yet. Run supabase/estate-unit-pricing-2026-09.sql in Supabase first."
+                : "Could not save this unit. Please try again.",
+        };
+    }
+
+    // The estate's current open invoice follows the change if it is still untouched.
+    const billable = await loadBillable(supabase, before.estate_profile_id);
+    const repriced = billable ? await recalculateOpenInvoice(supabase, billable) : false;
+
+    const facility = propertyType ? DOMESTIC_FACILITIES.find((f) => f.key === propertyType) : null;
+    const describe = isVacant
+        ? `Marked the unit "${before.label}" vacant`
+        : propertyType
+            ? `Set "${before.label}" as a ${facility?.unitLabel ?? propertyType}${rate ? ` at ${naira(rate)}` : ""}`
+            : `Cleared the type for "${before.label}"`;
+
+    await logActivity(supabase, actor, "unit_price_changed", describe, { type: "profile", id: before.estate_profile_id });
+    revalidatePath("/admin/estates");
+    revalidatePath(`/admin/customers/${before.estate_profile_id}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        message: "Saved." + (repriced ? " This month's open invoice was updated." : ""),
+    };
+}
+
 export async function linkTenantToUnit(tenantProfileId: string, unitId: string | null) {
     const actor = await requireAdmin();
     const supabase = await createClient();

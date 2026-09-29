@@ -3202,3 +3202,19 @@ revoke execute on function public.task_customer_details(uuid[]) from public, ano
 grant execute on function public.task_customer_details(uuid[]) to authenticated;
 
 select 'done' as result;
+
+-- ============================================================
+-- Per-unit pricing for estates
+-- (also in supabase/estate-unit-pricing-2026-09.sql for the live project)
+-- ============================================================
+
+alter table public.units
+    add column if not exists property_type text
+        check (
+            property_type is null
+            or property_type in ('duplexCount', 'flatsCount', 'miniFlatsCount', 'bungalowCount', 'terraceCount', 'shopsCount')
+        ),
+    add column if not exists monthly_rate numeric(12, 2) check (monthly_rate is null or monthly_rate > 0),
+    add column if not exists is_vacant boolean not null default false;
+
+select 'done' as result;
