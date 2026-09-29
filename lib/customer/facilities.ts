@@ -13,6 +13,7 @@ export const DOMESTIC_FACILITIES: FacilityDef[] = [
 ];
 
 export const COMMERCIAL_FACILITIES: FacilityDef[] = [
+    { key: "banksCount", label: "Banks", unitLabel: "Bank" },
     { key: "supermarketsCount", label: "Supermarkets", unitLabel: "Supermarket" },
     { key: "complexesCount", label: "Complexes", unitLabel: "Complex" },
     { key: "beachesCount", label: "Beaches", unitLabel: "Beach" },

@@ -37,6 +37,7 @@ type FormState = {
     terraceCount: string;
     shopsCount: string;
     domesticOthers: string;
+    banksCount: string;
     supermarketsCount: string;
     complexesCount: string;
     beachesCount: string;
@@ -76,6 +77,7 @@ const initialState: FormState = {
     terraceCount: "",
     shopsCount: "",
     domesticOthers: "",
+    banksCount: "",
     supermarketsCount: "",
     complexesCount: "",
     beachesCount: "",
@@ -231,6 +233,7 @@ export default function CustomerSetupPage() {
             form.terraceCount,
             form.shopsCount,
             form.domesticOthers,
+            form.banksCount,
             form.supermarketsCount,
             form.complexesCount,
             form.beachesCount,
@@ -353,6 +356,7 @@ export default function CustomerSetupPage() {
                     terraceCount: form.terraceCount,
                     shopsCount: form.shopsCount,
                     domesticOthers: form.domesticOthers,
+                    banksCount: form.banksCount,
                     supermarketsCount: form.supermarketsCount,
                     complexesCount: form.complexesCount,
                     beachesCount: form.beachesCount,
@@ -746,6 +750,15 @@ export default function CustomerSetupPage() {
                         subtitle="Fill this for business or mixed-use properties where applicable."
                     >
                         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+                            <div>
+                                <FieldLabel>Banks</FieldLabel>
+                                <TextInput
+                                    value={form.banksCount}
+                                    onChange={(value) => updateField("banksCount", value)}
+                                    placeholder="0"
+                                />
+                            </div>
+
                             <div>
                                 <FieldLabel>Supermarkets</FieldLabel>
                                 <TextInput
