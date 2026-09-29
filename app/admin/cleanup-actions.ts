@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { isFullAdmin, isOwner } from "@/lib/auth/roles";
@@ -270,6 +271,48 @@ async function deleteMessagesReturning(run: (select: string) => PromiseLike<{ da
         error: result.error,
         rows: (result.data ?? []) as { id: string; attachment_path?: string | null }[],
     };
+}
+
+// ---------------------------------------------------------------------------
+// Stuck signups: owner only. Confirms someone's email by hand for when
+// Supabase's own confirmation email never arrives (its built-in mailer is
+// often unreliable) — the same thing as confirming it from the Supabase
+// dashboard, just without leaving the app. Needs the service role key, since
+// only it can change a login's confirmation state.
+// ---------------------------------------------------------------------------
+export async function confirmSignupEmail(profileId: string): Promise<BulkResult> {
+    const actor = await requireOwner();
+    const supabase = await createClient();
+
+    if (!profileId || !UUID.test(profileId)) return { success: false, error: "Invalid request." };
+
+    const { data: person } = await supabase.from("profiles").select("full_name, email").eq("id", profileId).maybeSingle();
+    if (!person) return { success: false, error: "Could not find that signup." };
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!serviceKey || !url) {
+        return {
+            success: false,
+            error: "This needs SUPABASE_SERVICE_ROLE_KEY set on the server. Add it in Railway's environment variables first.",
+        };
+    }
+
+    const admin = createServiceClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await admin.auth.admin.updateUserById(profileId, { email_confirm: true });
+
+    if (error) {
+        console.error("confirmSignupEmail error:", error.message);
+        return { success: false, error: "Could not confirm this email. Please try again." };
+    }
+
+    await logActivity(supabase, actor, "signup_email_confirmed", `Manually confirmed the email for ${person.full_name ?? person.email ?? "a signup"}`);
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/approvals");
+
+    return { success: true };
 }
 
 // ---------------------------------------------------------------------------
