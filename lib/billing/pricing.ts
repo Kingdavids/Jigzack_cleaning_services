@@ -65,7 +65,7 @@ export function unitsCoverBilling(units: EstateUnit[]): boolean {
 // with no recognised type, or marked vacant, is left off, the same as a vacant
 // count used to be.
 export function unitLineItems(units: EstateUnit[]): LineItem[] {
-    const groups = new Map<string, { label: string; rate: number; count: number; custom: boolean }>();
+    const groups = new Map<string, { label: string; rate: number; count: number }>();
 
     for (const unit of units) {
         if (unit.is_vacant || !unit.property_type) continue;
@@ -82,14 +82,13 @@ export function unitLineItems(units: EstateUnit[]): LineItem[] {
         const existing = groups.get(key);
 
         if (existing) existing.count += count;
-        else groups.set(key, { label: facility?.unitLabel ?? "Unit", rate, count, custom: rate !== standard });
+        else groups.set(key, { label: facility?.unitLabel ?? "Unit", rate, count });
     }
 
     return [...groups.values()].map((g) => ({
         label: g.label,
         quantity: g.count,
         unit_price: g.rate,
-        note: g.custom ? "custom price" : undefined,
     }));
 }
 
