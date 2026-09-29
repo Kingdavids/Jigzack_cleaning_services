@@ -1583,10 +1583,66 @@ export async function updateInvoice(
 
     await logActivity(supabase, actor, "invoice_edited", "Edited an invoice");
     revalidatePath("/admin/payments");
+    revalidatePath("/admin/customers");
+    if (current?.customer_id) revalidatePath(`/admin/customers/${current.customer_id}`);
     revalidatePath("/customer/payments");
     revalidatePath("/customer");
 
     return { success: true };
+}
+
+export type ArrearsResult = { success: boolean; error?: string; message?: string };
+
+// Arrears carried onto one invoice, editable from the customer's own page so
+// an admin doesn't have to go find it on the Payments page. Works on any
+// invoice that is not paid yet; leaves its line items and auto-pricing alone.
+export async function setInvoiceArrears(paymentId: string, arrears: number): Promise<ArrearsResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!paymentId) return { success: false, error: "Missing invoice." };
+
+    const clean = round2(Number(arrears));
+    if (!Number.isFinite(clean) || clean < 0) return { success: false, error: "Enter an amount of zero or more." };
+
+    const { data: current } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
+    if (!current) return { success: false, error: "Could not find that invoice." };
+    if (current.status === "paid") return { success: false, error: "This invoice is already paid and can't be edited." };
+
+    const newTotal = round2(Number(current.amount ?? 0) + clean);
+    const alreadyPaid = amountPaid(current);
+
+    if (newTotal < alreadyPaid) {
+        return { success: false, error: `${naira(alreadyPaid)} has already been paid on this invoice, so the total can't be lower than that.` };
+    }
+
+    const { error } = await supabase
+        .from("payments")
+        .update({
+            arrears: clean,
+            // The new total exactly matches what was paid, so nothing is owed.
+            ...(alreadyPaid > 0 && newTotal === alreadyPaid ? { status: "paid", paid_at: new Date().toISOString() } : {}),
+        })
+        .eq("id", paymentId)
+        .neq("status", "paid");
+
+    if (error) {
+        console.error("setInvoiceArrears error:", error.message);
+        return { success: false, error: "Could not save the arrears. Please try again." };
+    }
+
+    await logActivity(supabase, actor, "invoice_edited", `Set arrears of ${naira(clean)} on an invoice`, {
+        type: "profile",
+        id: current.customer_id as string,
+    });
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/customers");
+    if (current.customer_id) revalidatePath(`/admin/customers/${current.customer_id}`);
+    revalidatePath("/customer/payments");
+    revalidatePath("/customer");
+
+    return { success: true, message: "Arrears saved." };
 }
 
 // ---------------------------------------------------------------------------

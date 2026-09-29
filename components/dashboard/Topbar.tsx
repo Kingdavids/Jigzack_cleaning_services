@@ -10,6 +10,7 @@ import { playNotificationSound } from "@/lib/notification-sound";
 import type { UserRole } from "@/lib/dashboard-types";
 import { LEVEL_LABEL, useViewer } from "@/components/dashboard/ViewerContext";
 import NotificationBell from "@/components/dashboard/NotificationBell";
+import DashboardSearch from "@/components/dashboard/DashboardSearch";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export default function Topbar({
@@ -228,6 +229,8 @@ export default function Topbar({
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {role === "admin" && <DashboardSearch />}
+
                         {viewer.level && viewer.name && (
                             <div className="flex min-w-0 items-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-1.5 pl-1.5 pr-3">
                                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400 text-xs font-bold text-black">
