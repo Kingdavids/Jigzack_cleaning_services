@@ -5,7 +5,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import InvoiceList, { type InvoiceRow } from "@/components/dashboard/InvoiceList";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
-import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
+import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/billing/generate";
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
@@ -13,7 +13,11 @@ import { formatDate } from "@/lib/customer/billing";
 export default async function CustomerPaymentsPage() {
     const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
     const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, profile.id, customer);
-    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer);
+
+    // An estate's own units, so a discount reads against their real per-unit
+    // priced total rather than the older count-based one.
+    const estateUnits = billingCustomer?.is_estate ? await loadEstateUnits(supabase, billingProfileId) : undefined;
+    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer, estateUnits);
 
     // "*" includes the transfer and part payment columns once they exist, so the
     // page works before and after those SQL files have been run.

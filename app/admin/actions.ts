@@ -21,6 +21,7 @@ import {
     generateInvoiceFor,
     generateScheduleFor,
     loadBillable,
+    loadEstateUnits,
     planSchedule,
     recalculateOpenInvoice,
     type BillableCustomer,
@@ -1193,7 +1194,8 @@ export async function setCustomerDiscount(
     const billable = await loadBillable(supabase, profileId);
     const repriced = billable ? await recalculateOpenInvoice(supabase, billable) : false;
     // Shown as a percentage either way, so it reads the same as the invoice line does.
-    const percent = billable ? discountInfo(billable)?.percent : null;
+    const estateUnits = billable?.is_estate ? await loadEstateUnits(supabase, profileId) : undefined;
+    const percent = billable ? discountInfo(billable, estateUnits)?.percent : null;
 
     const describe =
         type === null

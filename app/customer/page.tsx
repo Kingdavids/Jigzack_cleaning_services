@@ -5,7 +5,7 @@ import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { taskDisplayStatus } from "@/lib/tasks";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
-import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
+import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/billing/generate";
 import { describeFacilities } from "@/lib/customer/facilities";
 import { customerFrequency, describeFrequency, todayKey } from "@/lib/billing/schedule";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -75,7 +75,11 @@ export default async function CustomerPage() {
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
     const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, profile.id));
-    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer);
+
+    // An estate's own units, so a discount reads against their real per-unit
+    // priced total rather than the older count-based one.
+    const estateUnits = billingCustomer?.is_estate ? await loadEstateUnits(supabase, billingProfileId) : undefined;
+    const discount = discountInfo(billingCustomer as unknown as DiscountableCustomer, estateUnits);
 
     const { counted, notes } = describeFacilities(customer?.facility_details);
     const vacancies = describeFacilities(customer?.vacancies).counted;

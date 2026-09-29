@@ -13,6 +13,7 @@ import EmailProfileButton from "@/components/dashboard/EmailProfileButton";
 import DeleteSignupButton from "@/components/dashboard/DeleteSignupButton";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
+import type { EstateUnit } from "@/lib/billing/pricing";
 
 type CustomerRow = {
     id: string;
@@ -130,6 +131,31 @@ export default async function AdminCustomersPage({
         owed.set(row.customer_id, (owed.get(row.customer_id) ?? 0) + balanceOf(row));
     }
 
+    // Estates' own units, so a discount badge reads against their real
+    // per-unit priced total rather than the older count-based one.
+    const estateIds = customers.filter((c) => c.is_estate && c.profile_id).map((c) => c.profile_id as string);
+    const unitsByEstate = new Map<string, EstateUnit[]>();
+    if (estateIds.length > 0) {
+        const FULL_UNIT_COLUMNS = "id, label, estate_profile_id, property_type, monthly_rate, is_vacant";
+        const BASE_UNIT_COLUMNS = "id, label, estate_profile_id";
+
+        const fullUnits = await supabase.from("units").select(FULL_UNIT_COLUMNS).in("estate_profile_id", estateIds);
+        const unitRows = fullUnits.error
+            ? ((await supabase.from("units").select(BASE_UNIT_COLUMNS).in("estate_profile_id", estateIds)).data ?? []).map((u) => ({
+                  ...u,
+                  property_type: null,
+                  monthly_rate: null,
+                  is_vacant: false,
+              }))
+            : (fullUnits.data ?? []);
+
+        for (const unit of unitRows as unknown as (EstateUnit & { estate_profile_id: string })[]) {
+            const list = unitsByEstate.get(unit.estate_profile_id) ?? [];
+            list.push(unit);
+            unitsByEstate.set(unit.estate_profile_id, list);
+        }
+    }
+
     return (
         <DashboardShell
             role="admin"
@@ -165,7 +191,10 @@ export default async function AdminCustomersPage({
                     <div className="space-y-3">
                         {customers.map((customer) => {
                             const outstanding = customer.profile_id ? owed.get(customer.profile_id) ?? 0 : 0;
-                            const discount = discountInfo(customer as unknown as DiscountableCustomer);
+                            const discount = discountInfo(
+                                customer as unknown as DiscountableCustomer,
+                                customer.profile_id ? unitsByEstate.get(customer.profile_id) : undefined
+                            );
 
                             return (
                                 (customer.profile_id ? (
