@@ -26,7 +26,7 @@ import DiscountControl from "@/components/dashboard/DiscountControl";
 import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
-import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/billing/generate";
+import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
 
@@ -113,6 +113,10 @@ export default async function AdminCustomerDetailPage({
     // The discount an admin has given this customer, if any, always expressed
     // as a percentage even when it was set as a flat amount.
     const currentDiscount = discountInfo(customer as unknown as DiscountableCustomer, estateUnits);
+
+    // What this month's invoice actually comes to once the discount is taken off,
+    // the same figure chargeItems uses to generate it.
+    const netMonthly = itemsTotal(chargeItems(customer as unknown as BillableCustomer, estateUnits));
 
     const allInvoices = invoices ?? [];
 
@@ -370,6 +374,13 @@ export default async function AdminCustomerDetailPage({
                                     Discount: <span className="font-semibold text-emerald-300">{currentDiscount ? `${currentDiscount.percent}% off` : "None"}</span>
                                 </p>
                             )}
+
+                            {currentDiscount && (
+                                <p className="mt-3 text-sm text-white/70">
+                                    Actually charged each month, discount included:{" "}
+                                    <span className="font-semibold text-emerald-300">{naira(netMonthly)}</span>
+                                </p>
+                            )}
                         </div>
                     </SectionCard>
                 )}
@@ -411,13 +422,19 @@ export default async function AdminCustomerDetailPage({
                 )}
 
                 <SectionCard title="Schedule and invoices" description="Generated from the details above. Both stay editable.">
-                    <div className="mb-5 flex flex-wrap gap-3">
+                    <div className="mb-5 flex flex-wrap items-center gap-3">
                         <BillingActionButton run={generateCustomerBilling.bind(null, profileId, "schedule")}>
                             Extend schedule (next 4 weeks)
                         </BillingActionButton>
                         <BillingActionButton run={generateCustomerBilling.bind(null, profileId, "invoice")} variant="secondary">
                             Generate this month&apos;s invoice
                         </BillingActionButton>
+                        <Link
+                            href={`/admin/invoices/preview/${profileId}`}
+                            className="text-sm font-semibold text-amber-300 underline underline-offset-2"
+                        >
+                            Preview before generating
+                        </Link>
                     </div>
 
                     <div className="grid gap-6 lg:grid-cols-2">

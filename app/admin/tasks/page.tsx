@@ -85,8 +85,11 @@ export default async function AdminTasksPage() {
         supabase.from("tasks").select(columns).eq("status", "completed").order("scheduled_date", { ascending: false }).limit(200),
     ]);
 
-    const openTasks = (openData ?? []) as unknown as TaskRow[];
-    const servicedTasks = (servicedData ?? []) as unknown as TaskRow[];
+    // A customer in Recently deleted keeps their task history in the database for
+    // the record, but they no longer belong on the working Tasks list.
+    const notDeleted = (t: TaskRow) => !t.customer_id || !hidden.has(t.customer_id);
+    const openTasks = ((openData ?? []) as unknown as TaskRow[]).filter(notDeleted);
+    const servicedTasks = ((servicedData ?? []) as unknown as TaskRow[]).filter(notDeleted);
     const tasks = [...openTasks, ...servicedTasks];
     const canBulk = isFullAdmin(profile);
     const unassigned = openTasks.filter((t) => !t.employee_id).length;

@@ -70,8 +70,11 @@ export default async function AdminPaymentsPage() {
         supabase.from("payments").select(withCustomer).eq("status", "paid").order("paid_at", { ascending: false, nullsFirst: false }).limit(PAID_LIMIT),
     ]);
 
-    const unpaidList = (unpaidResult.data ?? []) as unknown as PaymentRow[];
-    const paidList = (paidResult.data ?? []) as unknown as PaymentRow[];
+    // A customer in Recently deleted keeps their invoices in the database for the
+    // record, but they no longer belong on the working Payments list.
+    const notDeleted = (p: PaymentRow) => !p.customer_id || !hidden.has(p.customer_id);
+    const unpaidList = ((unpaidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
+    const paidList = ((paidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
     const payments = [...unpaidList, ...paidList];
     const canBulk = isOwner(profile);
     const canAct = isFullAdmin(profile);
