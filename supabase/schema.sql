@@ -3191,6 +3191,16 @@ create trigger notify_on_discount after update of discount_type, discount_value 
 select 'done' as result;
 
 -- ============================================================
+-- Customer arrears
+-- (also in supabase/customer-arrears-2026-09.sql for the live project)
+-- ============================================================
+
+alter table public.customers
+    add column if not exists arrears numeric(12, 2) not null default 0 check (arrears >= 0);
+
+select 'done' as result;
+
+-- ============================================================
 -- Customer details for an employee's tasks
 -- (also in supabase/employee-task-customers-2026-09.sql for the live project)
 -- ============================================================

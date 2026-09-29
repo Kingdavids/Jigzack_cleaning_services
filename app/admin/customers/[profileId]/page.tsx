@@ -25,7 +25,7 @@ import MonthlyChargeControl from "@/components/dashboard/MonthlyChargeControl";
 import DiscountControl from "@/components/dashboard/DiscountControl";
 import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
-import ArrearsControl from "@/components/dashboard/ArrearsControl";
+import CustomerArrearsControl from "@/components/dashboard/CustomerArrearsControl";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
@@ -377,6 +377,23 @@ export default async function AdminCustomerDetailPage({
                                 </p>
                             )}
                         </div>
+
+                        <div className="mt-6 border-t border-white/10 pt-6">
+                            {isFullAdmin(profile) ? (
+                                <CustomerArrearsControl
+                                    profileId={profileId}
+                                    customName={customer.full_name ?? "this customer"}
+                                    current={Number((customer as { arrears?: number | string | null }).arrears ?? 0)}
+                                />
+                            ) : (
+                                <p className="text-sm text-white/70">
+                                    Arrears:{" "}
+                                    <span className="font-semibold text-amber-300">
+                                        {naira(Number((customer as { arrears?: number | string | null }).arrears ?? 0))}
+                                    </span>
+                                </p>
+                            )}
+                        </div>
                     </SectionCard>
                 )}
 
@@ -443,33 +460,22 @@ export default async function AdminCustomerDetailPage({
                                         const partPaid = invoice.status !== "paid" && amountPaid(invoice) > 0;
 
                                         return (
-                                            <div key={invoice.id} className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                                                <div className="flex items-center justify-between gap-3">
-                                                    <span>
-                                                        {invoice.invoice_month ?? formatDate(invoice.created_at)}
-                                                        <Link
-                                                            href={`/admin/invoices/${invoice.id}`}
-                                                            className="ml-3 text-xs font-semibold text-amber-300 underline underline-offset-2"
-                                                        >
-                                                            Preview
-                                                        </Link>
+                                            <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
+                                                <span>
+                                                    {invoice.invoice_month ?? formatDate(invoice.created_at)}
+                                                    <Link
+                                                        href={`/admin/invoices/${invoice.id}`}
+                                                        className="ml-3 text-xs font-semibold text-amber-300 underline underline-offset-2"
+                                                    >
+                                                        Preview
+                                                    </Link>
+                                                </span>
+                                                <span className="flex items-center gap-3">
+                                                    <span className="font-semibold text-amber-300">
+                                                        {naira(partPaid ? balanceOf(invoice) : invoiceTotal(invoice))}
                                                     </span>
-                                                    <span className="flex items-center gap-3">
-                                                        <span className="font-semibold text-amber-300">
-                                                            {naira(partPaid ? balanceOf(invoice) : invoiceTotal(invoice))}
-                                                        </span>
-                                                        <StatusBadge status={partPaid ? "part_paid" : invoice.status ?? "pending"} />
-                                                    </span>
-                                                </div>
-                                                {invoice.status !== "paid" && isFullAdmin(profile) && (
-                                                    <div className="mt-2">
-                                                        <ArrearsControl
-                                                            paymentId={invoice.id}
-                                                            current={Number(invoice.arrears ?? 0)}
-                                                            label={invoice.invoice_month ?? formatDate(invoice.created_at)}
-                                                        />
-                                                    </div>
-                                                )}
+                                                    <StatusBadge status={partPaid ? "part_paid" : invoice.status ?? "pending"} />
+                                                </span>
                                             </div>
                                         );
                                     })}

@@ -1593,56 +1593,80 @@ export async function updateInvoice(
 
 export type ArrearsResult = { success: boolean; error?: string; message?: string };
 
-// Arrears carried onto one invoice, editable from the customer's own page so
-// an admin doesn't have to go find it on the Payments page. Works on any
-// invoice that is not paid yet; leaves its line items and auto-pricing alone.
-export async function setInvoiceArrears(paymentId: string, arrears: number): Promise<ArrearsResult> {
+// Arrears for a customer, set from their Billing section. Lands on their
+// current open invoice right away if one is still untouched and unpaid,
+// otherwise it waits and lands on the next invoice generated for them. Either
+// way it is cleared the moment it lands on an invoice, so it is never added twice.
+export async function setCustomerArrears(profileId: string, arrears: number): Promise<ArrearsResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
-    if (!paymentId) return { success: false, error: "Missing invoice." };
+    if (!profileId) return { success: false, error: "Invalid request." };
 
     const clean = round2(Number(arrears));
     if (!Number.isFinite(clean) || clean < 0) return { success: false, error: "Enter an amount of zero or more." };
 
-    const { data: current } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
-    if (!current) return { success: false, error: "Could not find that invoice." };
-    if (current.status === "paid") return { success: false, error: "This invoice is already paid and can't be edited." };
+    const { data: customer } = await supabase.from("customers").select("full_name").eq("profile_id", profileId).maybeSingle();
+    if (!customer) return { success: false, error: "Could not find that customer." };
 
-    const newTotal = round2(Number(current.amount ?? 0) + clean);
-    const alreadyPaid = amountPaid(current);
-
-    if (newTotal < alreadyPaid) {
-        return { success: false, error: `${naira(alreadyPaid)} has already been paid on this invoice, so the total can't be lower than that.` };
-    }
-
-    const { error } = await supabase
-        .from("payments")
-        .update({
-            arrears: clean,
-            // The new total exactly matches what was paid, so nothing is owed.
-            ...(alreadyPaid > 0 && newTotal === alreadyPaid ? { status: "paid", paid_at: new Date().toISOString() } : {}),
-        })
-        .eq("id", paymentId)
-        .neq("status", "paid");
+    const { error } = await supabase.from("customers").update({ arrears: clean }).eq("profile_id", profileId);
 
     if (error) {
-        console.error("setInvoiceArrears error:", error.message);
-        return { success: false, error: "Could not save the arrears. Please try again." };
+        console.error("setCustomerArrears error:", error.message);
+        return {
+            success: false,
+            error: /arrears/.test(error.message)
+                ? "Not switched on yet. Run supabase/customer-arrears-2026-09.sql in Supabase first."
+                : "Could not save the arrears. Please try again.",
+        };
     }
 
-    await logActivity(supabase, actor, "invoice_edited", `Set arrears of ${naira(clean)} on an invoice`, {
+    // If this month's invoice already exists and is still untouched and
+    // unpaid, it picks up the change right away instead of waiting for the next one.
+    let syncedToInvoice = false;
+
+    if (clean > 0) {
+        const { data: open } = await supabase
+            .from("payments")
+            .select("id, amount, arrears, amount_paid, status")
+            .eq("customer_id", profileId)
+            .eq("invoice_month", monthLabel())
+            .eq("auto_generated", true)
+            .neq("status", "paid");
+
+        const untouched = (open ?? []).find((row) => amountPaid(row) === 0);
+
+        if (untouched) {
+            const { error: syncError } = await supabase.from("payments").update({ arrears: clean }).eq("id", untouched.id);
+
+            if (!syncError) {
+                syncedToInvoice = true;
+                await supabase.from("customers").update({ arrears: 0 }).eq("profile_id", profileId);
+            }
+        }
+    }
+
+    await logActivity(supabase, actor, "customer_arrears_changed", `Set arrears of ${naira(clean)} for ${customer.full_name ?? "a customer"}`, {
         type: "profile",
-        id: current.customer_id as string,
+        id: profileId,
     });
 
-    revalidatePath("/admin/payments");
+    revalidatePath(`/admin/customers/${profileId}`);
     revalidatePath("/admin/customers");
-    if (current.customer_id) revalidatePath(`/admin/customers/${current.customer_id}`);
+    revalidatePath("/admin/payments");
+    revalidatePath(`/admin/invoices/preview/${profileId}`);
     revalidatePath("/customer/payments");
     revalidatePath("/customer");
 
-    return { success: true, message: "Arrears saved." };
+    return {
+        success: true,
+        message:
+            clean === 0
+                ? "Cleared."
+                : syncedToInvoice
+                    ? "Saved. This month's open invoice was updated."
+                    : "Saved. It will be added to their next invoice.",
+    };
 }
 
 // ---------------------------------------------------------------------------

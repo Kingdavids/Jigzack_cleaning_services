@@ -32,7 +32,7 @@ export default async function AdminInvoicePreviewForCustomerPage({
     const invoice = {
         id: "preview",
         amount: itemsTotal(items),
-        arrears: 0,
+        arrears: Number((customer as { arrears?: number | string | null }).arrears ?? 0) || 0,
         units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
         status: "pending",
         amount_paid: 0,

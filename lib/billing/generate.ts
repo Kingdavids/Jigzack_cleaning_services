@@ -36,22 +36,28 @@ export type BillableCustomer = {
     discount_type?: "percent" | "amount" | null;
     discount_value?: number | string | null;
     discount_reason?: string | null;
+    // Arrears waiting to land on their next invoice (or their current one, if
+    // it is still untouched). Cleared once it lands on one, so it is only ever
+    // added once.
+    arrears?: number | string | null;
 };
 
 const BILLABLE_BASE = "profile_id, full_name, lga, preferred_pickup_frequency, facility_details, vacancies, unit_id, is_estate";
 const BILLABLE_WITH_RATE = `${BILLABLE_BASE}, monthly_rate`;
 const BILLABLE_WITH_DAYS = `${BILLABLE_WITH_RATE}, pickup_days`;
+const BILLABLE_WITH_DISCOUNT = `${BILLABLE_WITH_DAYS}, discount_type, discount_value, discount_reason`;
 
 // monthly_rate comes from supabase/billing-installments-2026-09.sql, pickup_days
-// from supabase/schedule-days-2026-09.sql, and the discount fields from
-// supabase/customer-discount-2026-09.sql.
-export const BILLABLE_SELECT = `${BILLABLE_WITH_DAYS}, discount_type, discount_value, discount_reason`;
+// from supabase/schedule-days-2026-09.sql, discount from
+// supabase/customer-discount-2026-09.sql, and arrears from
+// supabase/customer-arrears-2026-09.sql.
+export const BILLABLE_SELECT = `${BILLABLE_WITH_DISCOUNT}, arrears`;
 
 // Runs a customers query with everything above, falling back a step at a time
 // for whichever of those SQL files has not been run yet, so approvals and the
 // daily job keep working in between.
 export async function queryBillable(run: (select: string) => PromiseLike<{ data: unknown; error: unknown }>) {
-    for (const select of [BILLABLE_SELECT, BILLABLE_WITH_DAYS, BILLABLE_WITH_RATE]) {
+    for (const select of [BILLABLE_SELECT, BILLABLE_WITH_DISCOUNT, BILLABLE_WITH_DAYS, BILLABLE_WITH_RATE]) {
         const result = await run(select);
         if (!result.error) return result.data;
     }
@@ -320,10 +326,14 @@ export async function generateInvoiceFor(
 
     if (existing && existing.length > 0) return "exists";
 
+    // Arrears waiting on this customer land on this invoice, then are cleared
+    // so they are never added to a later one too.
+    const pendingArrears = Number(customer.arrears ?? 0) || 0;
+
     const { error } = await supabase.from("payments").insert({
         customer_id: customer.profile_id,
         amount: itemsTotal(items),
-        arrears: 0,
+        arrears: pendingArrears,
         units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
         description: `Waste management service charge, ${month}`,
         invoice_month: month,
@@ -334,6 +344,10 @@ export async function generateInvoiceFor(
     if (error) {
         console.error("generateInvoiceFor insert error:", error.message);
         return "error";
+    }
+
+    if (pendingArrears > 0) {
+        await supabase.from("customers").update({ arrears: 0 }).eq("profile_id", customer.profile_id);
     }
 
     return "created";
