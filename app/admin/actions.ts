@@ -1123,7 +1123,9 @@ export async function setMonthlyRate(profileId: string, amount: number | null): 
         { type: "profile", id: profileId }
     );
     revalidatePath(`/admin/customers/${profileId}`);
+    revalidatePath("/admin/estates");
     revalidatePath("/admin/payments");
+    revalidatePath("/customer");
     revalidatePath("/customer/payments");
 
     return {

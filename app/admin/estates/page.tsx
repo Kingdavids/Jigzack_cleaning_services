@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Building2 } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { promoteToEstate, createUnit } from "../actions";
@@ -17,6 +18,10 @@ type CustomerRow = {
     is_estate: boolean;
     facility_details?: FacilityDetails;
     vacancies?: FacilityDetails;
+    // Comes from billing-installments-2026-09.sql; a row loads without it until
+    // that has run. A fixed amount here always wins over any unit pricing, so an
+    // estate stuck on one from before this feature existed needs it cleared.
+    monthly_rate?: number | string | null;
 };
 
 type UnitRow = {
@@ -34,10 +39,14 @@ const STANDARD_PRICES = DOMESTIC_FACILITIES.map((f) => ({ key: f.key, label: f.u
 export default async function AdminEstatesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
-    const { data: customersData } = await supabase
+    const CUSTOMER_BASE_COLUMNS = "profile_id, full_name, address, is_estate, facility_details, vacancies";
+    const fullCustomers = await supabase
         .from("customers")
-        .select("profile_id, full_name, address, is_estate, facility_details, vacancies")
+        .select(`${CUSTOMER_BASE_COLUMNS}, monthly_rate`)
         .order("full_name", { ascending: true });
+    const customersData = fullCustomers.error
+        ? (await supabase.from("customers").select(CUSTOMER_BASE_COLUMNS).order("full_name", { ascending: true })).data
+        : fullCustomers.data;
 
     const customers = (customersData ?? []) as CustomerRow[];
     const estates = customers.filter((c) => c.is_estate);
@@ -102,11 +111,14 @@ export default async function AdminEstatesPage() {
                             {estates.map((estate) => {
                                 const estateUnits = unitsByEstate.get(estate.profile_id) ?? [];
                                 const perUnitReady = unitsCoverBilling(estateUnits);
-                                const total = itemsTotal(
+                                const calculated = itemsTotal(
                                     perUnitReady
                                         ? unitLineItems(estateUnits)
                                         : buildLineItems(estate.facility_details, estate.vacancies)
                                 );
+                                const customRate = Number(estate.monthly_rate ?? 0);
+                                const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
+                                const total = hasCustomRate ? customRate : calculated;
                                 const needType = estateUnits.filter((u) => !u.property_type).length;
 
                                 return (
@@ -124,14 +136,27 @@ export default async function AdminEstatesPage() {
                                             <div className="text-right">
                                                 <p className="font-bold text-amber-300">{naira(total)}</p>
                                                 <p className="text-[11px] text-white/40">
-                                                    {perUnitReady
-                                                        ? "billed per unit"
-                                                        : estateUnits.length > 0
-                                                            ? `billed by counts (${needType} of ${estateUnits.length} units need a type)`
-                                                            : "billed by counts"}
+                                                    {hasCustomRate
+                                                        ? "fixed monthly charge"
+                                                        : perUnitReady
+                                                            ? "billed per unit"
+                                                            : estateUnits.length > 0
+                                                                ? `billed by counts (${needType} of ${estateUnits.length} units need a type)`
+                                                                : "billed by counts"}
                                                 </p>
                                             </div>
                                         </div>
+
+                                        {hasCustomRate && (
+                                            <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-400/[0.06] px-3 py-2 text-xs text-amber-100/80">
+                                                This estate has a fixed monthly charge set by an admin, so unit prices below have no effect on the bill
+                                                until it is cleared on{" "}
+                                                <Link href={`/admin/customers/${estate.profile_id}`} className="font-semibold underline underline-offset-2">
+                                                    its customer page
+                                                </Link>
+                                                .
+                                            </div>
+                                        )}
 
                                         <div className="mt-4 space-y-2">
                                             {estateUnits.map((unit) => (
