@@ -10,6 +10,7 @@ import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
 import RecentlyDeletedList, { type DeletedCustomer } from "@/components/dashboard/RecentlyDeletedList";
 import EmailProfileButton from "@/components/dashboard/EmailProfileButton";
+import DeleteSignupButton from "@/components/dashboard/DeleteSignupButton";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 
@@ -319,6 +320,9 @@ export default async function AdminCustomersPage({
                                             <span className="text-xs text-white/45">Waiting for them to finish setup</span>
                                         )}
                                         {isFullAdmin(profile) && <EmailProfileButton profileId={person.id} email={person.email} />}
+                                        {isFullAdmin(profile) && (
+                                            <DeleteSignupButton profileId={person.id} name={person.full_name ?? person.email ?? "This signup"} />
+                                        )}
                                     </div>
                                 </div>
                             ))}

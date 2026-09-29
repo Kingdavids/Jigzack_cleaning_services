@@ -409,3 +409,52 @@ export async function restoreCustomer(profileId: string): Promise<CustomerAccoun
 
     return { success: true, message: "Restored. Their pickups will be scheduled again on the next run." };
 }
+
+// A signup with a login but no customer record yet (they never filled in
+// their property form). Any full admin can delete these outright: there is
+// nothing billed or scheduled to lose. Removes the login for good, which
+// frees their email address so they can sign up again.
+export async function deleteNoDetailsSignup(profileId: string): Promise<CustomerAccountResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!profileId) return { success: false, error: "Invalid request." };
+
+    const { data: person } = await supabase
+        .from("profiles")
+        .select("full_name, email, role, status")
+        .eq("id", profileId)
+        .maybeSingle();
+
+    if (!person) return { success: false, error: "Could not find that signup." };
+    if (person.role !== "customer") return { success: false, error: "Only customer signups can be deleted here." };
+    if (person.status === "declined") return { success: false, error: "Delete a declined signup from Signup approvals instead." };
+
+    const { error } = await supabase.rpc("admin_delete_signup_with_no_details", { p_profile_id: profileId });
+
+    if (error) {
+        console.error("deleteNoDetailsSignup error:", error.message);
+
+        return {
+            success: false,
+            error: /schema cache|could not find the function/i.test(error.message)
+                ? "Deleting these is not switched on yet. Run supabase/signup-delete-2026-09.sql in Supabase first."
+                : error.code === "P0001"
+                    ? error.message
+                    : "Could not delete this signup. Please try again.",
+        };
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "signup_deleted",
+        `Deleted the signup of ${person.full_name ?? person.email ?? "someone"}, who had not filled in their details`
+    );
+
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/approvals");
+    revalidatePath("/admin");
+
+    return { success: true, message: "Deleted." };
+}
