@@ -3269,3 +3269,14 @@ alter table public.units
     add column if not exists is_vacant boolean not null default false;
 
 select 'done' as result;
+
+-- ============================================================
+-- An estate unit row can stand for more than one identical unit
+-- (also in supabase/estate-unit-quantity-2026-09.sql for the live project)
+-- ============================================================
+
+alter table public.units
+    add column if not exists quantity integer not null default 1
+        check (quantity > 0);
+
+select 'done' as result;

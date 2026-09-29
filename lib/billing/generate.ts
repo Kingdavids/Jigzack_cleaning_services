@@ -64,7 +64,8 @@ export async function loadBillable(supabase: SupabaseServerClient, profileId: st
     return (data ?? null) as unknown as BillableCustomer | null;
 }
 
-const UNITS_WITH_PRICING = "id, label, property_type, monthly_rate, is_vacant";
+const UNITS_WITH_PRICING = "id, label, property_type, monthly_rate, is_vacant, quantity";
+const UNITS_WITH_PRICING_NO_QTY = "id, label, property_type, monthly_rate, is_vacant";
 const UNITS_BASE = "id, label";
 
 // An estate's units, with their price if that SQL has been run. Empty for a
@@ -75,12 +76,16 @@ export async function loadEstateUnits(supabase: SupabaseServerClient, estateProf
 
     if (!error) return (data ?? []) as unknown as EstateUnit[];
 
+    const noQty = await supabase.from("units").select(UNITS_WITH_PRICING_NO_QTY).eq("estate_profile_id", estateProfileId);
+    if (!noQty.error) return ((noQty.data ?? []) as unknown as EstateUnit[]).map((u) => ({ ...u, quantity: 1 }));
+
     const fallback = await supabase.from("units").select(UNITS_BASE).eq("estate_profile_id", estateProfileId);
     return ((fallback.data ?? []) as { id: string; label: string }[]).map((u) => ({
         ...u,
         property_type: null,
         monthly_rate: null,
         is_vacant: false,
+        quantity: 1,
     }));
 }
 

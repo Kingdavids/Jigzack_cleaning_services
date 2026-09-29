@@ -40,13 +40,17 @@ export function buildLineItems(facilityDetails: FacilityDetails, vacancies: Faci
 }
 
 // One unit inside an estate: its own type, and an optional price that
-// overrides the standard rate for that type.
+// overrides the standard rate for that type. quantity lets one row stand for
+// several identical units (a block of duplexes, say) so pricing them doesn't
+// need one row each; it defaults to 1, exactly one unit, before that column
+// exists.
 export type EstateUnit = {
     id: string;
     label: string;
     property_type: string | null;
     monthly_rate: number | string | null;
     is_vacant: boolean;
+    quantity?: number | string | null;
 };
 
 // An estate switches to per-unit pricing only once every one of its units has
@@ -71,12 +75,14 @@ export function unitLineItems(units: EstateUnit[]): LineItem[] {
 
         const customRate = Number(unit.monthly_rate ?? 0);
         const rate = customRate > 0 ? customRate : standard;
+        const quantity = Number(unit.quantity ?? 1);
+        const count = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
         const facility = DOMESTIC_FACILITIES.find((f) => f.key === unit.property_type);
         const key = `${unit.property_type}:${rate}`;
         const existing = groups.get(key);
 
-        if (existing) existing.count += 1;
-        else groups.set(key, { label: facility?.unitLabel ?? "Unit", rate, count: 1, custom: rate !== standard });
+        if (existing) existing.count += count;
+        else groups.set(key, { label: facility?.unitLabel ?? "Unit", rate, count, custom: rate !== standard });
     }
 
     return [...groups.values()].map((g) => ({

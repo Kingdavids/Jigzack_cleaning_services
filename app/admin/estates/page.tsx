@@ -32,6 +32,8 @@ type UnitRow = {
     property_type: string | null;
     monthly_rate: number | string | null;
     is_vacant: boolean;
+    // Comes from estate-unit-quantity-2026-09.sql; defaults to 1 until it has run.
+    quantity: number;
 };
 
 const STANDARD_PRICES = DOMESTIC_FACILITIES.map((f) => ({ key: f.key, label: f.unitLabel, price: UNIT_PRICES[f.key] }));
@@ -53,19 +55,27 @@ export default async function AdminEstatesPage() {
     const promotionCandidates = customers.filter((c) => !c.is_estate && c.profile_id);
 
     // property_type, monthly_rate and is_vacant come from
-    // estate-unit-pricing-2026-09.sql; fall back to plain labels until it runs.
-    const FULL_UNIT_COLUMNS = "id, estate_profile_id, label, created_at, property_type, monthly_rate, is_vacant";
+    // estate-unit-pricing-2026-09.sql, quantity from
+    // estate-unit-quantity-2026-09.sql; fall back a step at a time until they run.
+    const FULL_UNIT_COLUMNS = "id, estate_profile_id, label, created_at, property_type, monthly_rate, is_vacant, quantity";
+    const UNIT_COLUMNS_NO_QTY = "id, estate_profile_id, label, created_at, property_type, monthly_rate, is_vacant";
     const BASE_UNIT_COLUMNS = "id, estate_profile_id, label, created_at";
 
     const fullUnits = await supabase.from("units").select(FULL_UNIT_COLUMNS).order("created_at", { ascending: true });
-    const unitsData = fullUnits.error
-        ? ((await supabase.from("units").select(BASE_UNIT_COLUMNS).order("created_at", { ascending: true })).data ?? []).map((u) => ({
-              ...u,
-              property_type: null,
-              monthly_rate: null,
-              is_vacant: false,
-          }))
-        : fullUnits.data;
+    const noQtyUnits = fullUnits.error
+        ? await supabase.from("units").select(UNIT_COLUMNS_NO_QTY).order("created_at", { ascending: true })
+        : null;
+    const unitsData = fullUnits.data
+        ? fullUnits.data
+        : noQtyUnits && !noQtyUnits.error
+            ? (noQtyUnits.data ?? []).map((u) => ({ ...u, quantity: 1 }))
+            : ((await supabase.from("units").select(BASE_UNIT_COLUMNS).order("created_at", { ascending: true })).data ?? []).map((u) => ({
+                  ...u,
+                  property_type: null,
+                  monthly_rate: null,
+                  is_vacant: false,
+                  quantity: 1,
+              }));
 
     const units = (unitsData ?? []) as unknown as UnitRow[];
     const unitsByEstate = new Map<string, UnitRow[]>();
@@ -120,6 +130,7 @@ export default async function AdminEstatesPage() {
                                 const hasCustomRate = Number.isFinite(customRate) && customRate > 0;
                                 const total = hasCustomRate ? customRate : calculated;
                                 const needType = estateUnits.filter((u) => !u.property_type).length;
+                                const unitCount = estateUnits.reduce((sum, u) => sum + (Number(u.quantity) || 1), 0);
 
                                 return (
                                     <div key={estate.profile_id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
@@ -139,9 +150,9 @@ export default async function AdminEstatesPage() {
                                                     {hasCustomRate
                                                         ? "fixed monthly charge"
                                                         : perUnitReady
-                                                            ? "billed per unit"
+                                                            ? `billed per unit (${unitCount} unit${unitCount === 1 ? "" : "s"})`
                                                             : estateUnits.length > 0
-                                                                ? `billed by counts (${needType} of ${estateUnits.length} units need a type)`
+                                                                ? `billed by counts (${needType} of ${estateUnits.length} rows need a type)`
                                                                 : "billed by counts"}
                                                 </p>
                                             </div>
@@ -164,6 +175,7 @@ export default async function AdminEstatesPage() {
                                                     propertyType={unit.property_type}
                                                     monthlyRate={unit.monthly_rate === null ? null : Number(unit.monthly_rate)}
                                                     isVacant={unit.is_vacant}
+                                                    quantity={Number(unit.quantity) || 1}
                                                     standardPrices={STANDARD_PRICES}
                                                 />
                                             ))}

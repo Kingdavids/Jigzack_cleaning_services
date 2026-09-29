@@ -570,15 +570,18 @@ export async function createUnit(
 
 export type UnitPricingResult = { success: boolean; error?: string; message?: string };
 
-// The type and price of one estate unit. Once every unit belonging to an
-// estate has a type, that estate is billed from its units instead of the
-// counts on its own property form, so this also reprices the estate's current
-// open invoice straight away.
+// The type and price of one estate unit, and how many identical units this
+// row stands for (a block of duplexes can be one row, priced in one go,
+// instead of one row each). Once every unit belonging to an estate has a
+// type, that estate is billed from its units instead of the counts on its
+// own property form, so this also reprices the estate's current open invoice
+// straight away.
 export async function setUnitPricing(
     unitId: string,
     propertyType: string | null,
     monthlyRate: number | null,
-    isVacant: boolean
+    isVacant: boolean,
+    quantity: number = 1
 ): Promise<UnitPricingResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
@@ -594,13 +597,25 @@ export async function setUnitPricing(
         return { success: false, error: "Enter a price greater than zero, or leave it blank to use the standard price." };
     }
 
+    const qty = Math.round(Number(quantity));
+    if (!Number.isFinite(qty) || qty < 1) {
+        return { success: false, error: "Enter a number of units of at least 1." };
+    }
+
     const { data: before } = await supabase.from("units").select("label, estate_profile_id").eq("id", unitId).maybeSingle();
     if (!before) return { success: false, error: "Could not find that unit." };
 
-    const { error } = await supabase
+    const fullUpdate = await supabase
         .from("units")
-        .update({ property_type: propertyType, monthly_rate: rate, is_vacant: isVacant })
+        .update({ property_type: propertyType, monthly_rate: rate, is_vacant: isVacant, quantity: qty })
         .eq("id", unitId);
+
+    // quantity comes from estate-unit-quantity-2026-09.sql; save everything
+    // else even if it has not been run yet, the same as before that column existed.
+    const error =
+        fullUpdate.error && /quantity/.test(fullUpdate.error.message)
+            ? (await supabase.from("units").update({ property_type: propertyType, monthly_rate: rate, is_vacant: isVacant }).eq("id", unitId)).error
+            : fullUpdate.error;
 
     if (error) {
         console.error("setUnitPricing error:", error.message);
@@ -620,7 +635,9 @@ export async function setUnitPricing(
     const describe = isVacant
         ? `Marked the unit "${before.label}" vacant`
         : propertyType
-            ? `Set "${before.label}" as a ${facility?.unitLabel ?? propertyType}${rate ? ` at ${naira(rate)}` : ""}`
+            ? `Set "${before.label}" as ${qty > 1 ? `${qty} × ` : "a "}${facility?.unitLabel ?? propertyType}${
+                  rate ? ` at ${naira(rate)}${qty > 1 ? " each" : ""}` : ""
+              }`
             : `Cleared the type for "${before.label}"`;
 
     await logActivity(supabase, actor, "unit_price_changed", describe, { type: "profile", id: before.estate_profile_id });
