@@ -124,7 +124,9 @@ export default function ReceiptDocument({
                                     <tr key={`${item.label}-${index}`} className="border-t border-black/10">
                                         <td className="px-3 py-2">
                                             <span className="font-medium">{item.label}</span>
-                                            {item.note && <span className="ml-2 text-[11px] text-black/55">({item.note})</span>}
+                                            {item.note && item.note !== "custom price" && (
+                                                <span className="ml-2 text-[11px] text-black/55">({item.note})</span>
+                                            )}
                                         </td>
                                         <td className="px-3 py-2 text-right">{item.quantity}</td>
                                         <td className="px-3 py-2 text-right">{naira(item.quantity * item.unit_price)}</td>
