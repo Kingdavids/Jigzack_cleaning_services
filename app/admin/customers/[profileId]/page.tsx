@@ -359,10 +359,11 @@ export default async function AdminCustomerDetailPage({
                                 current={monthlyCharge}
                                 calculated={calculatedMonthly}
                                 custom={hasCustomRate}
+                                net={netMonthly}
                             />
                         ) : (
                             <p className="text-sm text-white/70">
-                                Monthly charge: <span className="font-semibold text-amber-300">{monthlyCharge > 0 ? naira(monthlyCharge) : "Not set"}</span>
+                                Monthly charge: <span className="font-semibold text-amber-300">{netMonthly > 0 ? naira(netMonthly) : "Not set"}</span>
                             </p>
                         )}
 
@@ -372,13 +373,6 @@ export default async function AdminCustomerDetailPage({
                             ) : (
                                 <p className="text-sm text-white/70">
                                     Discount: <span className="font-semibold text-emerald-300">{currentDiscount ? `${currentDiscount.percent}% off` : "None"}</span>
-                                </p>
-                            )}
-
-                            {currentDiscount && (
-                                <p className="mt-3 text-sm text-white/70">
-                                    Actually charged each month, discount included:{" "}
-                                    <span className="font-semibold text-emerald-300">{naira(netMonthly)}</span>
                                 </p>
                             )}
                         </div>
@@ -407,7 +401,7 @@ export default async function AdminCustomerDetailPage({
                         <PrepaymentForm
                             profileId={profileId}
                             customName={customer.full_name ?? "this customer"}
-                            monthlyCharge={monthlyCharge}
+                            monthlyCharge={netMonthly}
                             canRecord={isFullAdmin(profile)}
                             payments={prepayments.map((p) => ({
                                 id: p.id,

@@ -20,15 +20,19 @@ export default function MonthlyChargeControl({
                                                  current,
                                                  calculated,
                                                  custom,
+                                                 net,
                                              }: {
     profileId: string;
     customName: string;
-    // What monthly invoices use right now.
+    // The base charge: what an admin edits here, before any discount.
     current: number;
     // What the property details work out to.
     calculated: number;
     // True when an admin has set the amount by hand.
     custom: boolean;
+    // What actually lands on the invoice once a discount is taken off. Same as
+    // current when there is no discount.
+    net?: number;
 }) {
     const router = useRouter();
     const [value, setValue] = useState(current > 0 ? String(current) : "");
@@ -38,6 +42,8 @@ export default function MonthlyChargeControl({
 
     const number = parseAmount(value);
     const valid = Number.isFinite(number) && number > 0 && number !== current;
+    const invoiced = net ?? current;
+    const discounted = invoiced > 0 && invoiced !== current;
 
     const save = async () => {
         if (!pendingChange) return;
@@ -61,16 +67,26 @@ export default function MonthlyChargeControl({
             <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
                 <div>
                     <p className="text-xs uppercase tracking-[0.12em] text-white/40">Used for monthly invoices</p>
-                    <p className="mt-0.5 text-2xl font-bold text-amber-300">{current > 0 ? naira(current) : "Not set"}</p>
+                    <p className="mt-0.5 text-2xl font-bold text-amber-300">{invoiced > 0 ? naira(invoiced) : "Not set"}</p>
                 </div>
                 <div className="text-sm text-white/55">
                     {custom ? (
-                        <>Set by an admin. Their property details would give {calculated > 0 ? naira(calculated) : "no price"}.</>
+                        <>
+                            Set by an admin at {naira(current)}
+                            {discounted ? <> before their discount</> : null}. Their property details would give{" "}
+                            {calculated > 0 ? naira(calculated) : "no price"}.
+                        </>
+                    ) : discounted ? (
+                        <>{naira(current)} worked out from their property details, before their discount.</>
                     ) : (
                         <>Worked out from their property details.</>
                     )}
                 </div>
             </div>
+
+            {discounted && (
+                <p className="text-xs text-white/40">Editing this sets the amount before their discount, not the {naira(invoiced)} above.</p>
+            )}
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
