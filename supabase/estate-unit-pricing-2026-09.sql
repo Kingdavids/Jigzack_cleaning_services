@@ -4,7 +4,8 @@
 -- unit can also be given a custom price of its own, different from the
 -- standard price for its type. Until every unit has a type, nothing changes:
 -- the estate keeps being billed the old way, so no estate is ever under-billed
--- mid-migration. Safe to run more than once. Run it in the Supabase SQL editor.
+-- mid-migration. Safe to run more than once. Run it in the Supabase SQL editor,
+-- after estates-2026-09.sql (which creates the units table itself).
 
 alter table public.units
     add column if not exists property_type text
