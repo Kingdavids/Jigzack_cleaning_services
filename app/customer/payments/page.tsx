@@ -147,7 +147,7 @@ export default async function CustomerPaymentsPage({ searchParams }: { searchPar
 
                 <InvoiceList
                     invoices={invoices}
-                    canReport={!isTenant && !isLinked}
+                    canReport={!isTenant}
                     installments={Object.fromEntries(byInvoice)}
                 />
             </SectionCard>

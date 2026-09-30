@@ -123,15 +123,26 @@ export async function reportInvoiceTransfer(formData: FormData): Promise<Payment
 
     if (!paymentId) return { success: false, error: "Invalid request." };
 
-    // Only the customer the invoice belongs to (not a tenant viewing an estate bill).
-    const { data: invoice } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("id", paymentId)
-        .eq("customer_id", profile.id)
-        .maybeSingle();
+    const { data: invoice } = await supabase.from("payments").select("*").eq("id", paymentId).maybeSingle();
 
-    if (!invoice) return { success: false, error: "Could not find that invoice." };
+    if (!invoice || !invoice.customer_id) return { success: false, error: "Could not find that invoice." };
+
+    // Their own invoice, or one on a property linked to their login. Not a
+    // tenant viewing their estate's shared bill: that one is never theirs to report.
+    let authorized = invoice.customer_id === profile.id;
+
+    if (!authorized) {
+        const { data: link } = await supabase
+            .from("property_links")
+            .select("id")
+            .eq("primary_profile_id", profile.id)
+            .eq("linked_profile_id", invoice.customer_id)
+            .maybeSingle();
+
+        authorized = Boolean(link);
+    }
+
+    if (!authorized) return { success: false, error: "Could not find that invoice." };
     if (invoice.status === "paid") return { success: true };
 
     // Sending again (to add a receipt that was forgotten) keeps whatever was sent

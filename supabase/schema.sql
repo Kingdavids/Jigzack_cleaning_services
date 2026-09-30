@@ -3433,3 +3433,30 @@ create trigger apply_registration_fee_waiver
     for each row execute function public.apply_registration_fee_waiver();
 
 select 'done' as result;
+
+-- ============================================================
+-- Reporting a bank transfer also works on a linked property
+-- (also in supabase/linked-property-payments-2026-09.sql for the live project)
+-- ============================================================
+
+create or replace function public.report_invoice_transfer(p_payment_id uuid, p_note text, p_receipt_path text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+    update public.payments
+    set transfer_reported_at = now(),
+        transfer_note = nullif(left(coalesce(p_note, ''), 300), ''),
+        transfer_receipt_path = p_receipt_path
+    where id = p_payment_id
+      and (customer_id = auth.uid() or customer_id in (select public.linked_profile_ids()))
+      and status = 'pending';
+end;
+$$;
+
+revoke execute on function public.report_invoice_transfer(uuid, text, text) from public, anon;
+grant execute on function public.report_invoice_transfer(uuid, text, text) to authenticated;
+
+select 'done' as result;
