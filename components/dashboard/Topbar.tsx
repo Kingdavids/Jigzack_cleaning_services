@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, LogOut, Menu } from "lucide-react";
+import { Bell, LogOut, Menu, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { playNotificationSound } from "@/lib/notification-sound";
@@ -248,6 +248,21 @@ export default function Topbar({
                                     </span>
                                 </span>
                             </div>
+                        )}
+
+                        {(role === "admin" || role === "customer") && (
+                            <Link
+                                href={`/${role}/messages`}
+                                aria-label={unreadCount > 0 ? `${unreadCount} unread messages` : "Messages"}
+                                className="relative flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/80 transition hover:bg-white/10 hover:text-white"
+                            >
+                                <MessageCircle size={18} />
+                                {unreadCount > 0 && (
+                                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                                        {unreadCount > 9 ? "9+" : unreadCount}
+                                    </span>
+                                )}
+                            </Link>
                         )}
 
                         {!legacy && <NotificationBell profileId={profileId} onUnavailable={useLegacy} />}

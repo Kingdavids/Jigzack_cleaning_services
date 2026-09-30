@@ -1,4 +1,5 @@
 import type { createClient } from "@/utils/supabase/server";
+import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -63,4 +64,17 @@ export async function resolveActiveProperty(
         .maybeSingle();
 
     return data ? { activeProfileId: requestedProfileId, isLinked: true } : { activeProfileId: primaryProfileId, isLinked: false };
+}
+
+// What is still owed, added up across every property a customer manages. For
+// a customer with just their own property this is the same figure their own
+// invoices already give; it only differs once more than one property is
+// linked to their login.
+export async function loadCombinedOutstanding(supabase: SupabaseServerClient, profileIds: string[]): Promise<number> {
+    const rows = (await loadWithPaid(
+        (select) => supabase.from("payments").select(select).in("customer_id", profileIds).neq("status", "paid"),
+        "amount, arrears, status"
+    )) as { amount: number | string | null; arrears: number | string | null; status: string | null; amount_paid?: number | string | null }[];
+
+    return rows.reduce((sum, row) => sum + balanceOf(row), 0);
 }

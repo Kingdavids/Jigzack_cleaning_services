@@ -10,7 +10,7 @@ import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
-import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
+import { loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 export default async function CustomerPaymentsPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
     const { property: requestedProperty } = await searchParams;
@@ -22,6 +22,11 @@ export default async function CustomerPaymentsPage({ searchParams }: { searchPar
     const customer = isLinked ? (await supabase.from("customers").select("*").eq("profile_id", activeProfileId).maybeSingle()).data : ownCustomer;
 
     const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, activeProfileId, customer);
+
+    // Only queried once there is actually more than one property, since it is
+    // otherwise the exact same figure the totals below already show.
+    const combinedOutstanding =
+        myProperties.length > 1 ? await loadCombinedOutstanding(supabase, myProperties.map((p) => p.profileId)) : null;
 
     // An estate's own units, so a discount reads against their real per-unit
     // priced total rather than the older count-based one.
@@ -72,8 +77,12 @@ export default async function CustomerPaymentsPage({ searchParams }: { searchPar
                         : "View or print any invoice, and a receipt for every payment you've made."
                 }
             >
-                {myProperties.length > 1 && (
-                    <div className="mb-5 flex justify-end">
+                {combinedOutstanding !== null && (
+                    <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
+                        <span className="text-white/60">
+                            Across all {myProperties.length} of your properties:{" "}
+                            <span className="font-bold text-amber-300">{naira(combinedOutstanding)}</span> owed
+                        </span>
                         <PropertySwitcher properties={myProperties} activeProfileId={activeProfileId} />
                     </div>
                 )}

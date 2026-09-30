@@ -27,6 +27,7 @@ import DiscountControl from "@/components/dashboard/DiscountControl";
 import EmailCustomerForm from "@/components/dashboard/EmailCustomerForm";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import CustomerArrearsControl from "@/components/dashboard/CustomerArrearsControl";
+import { loadCombinedOutstanding } from "@/lib/dashboard/propertyLinks";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
@@ -114,6 +115,11 @@ export default async function AdminCustomerDetailPage({
     const managedByCustomer = managedByProfileId
         ? (await supabase.from("customers").select("full_name").eq("profile_id", managedByProfileId).maybeSingle()).data
         : null;
+
+    // What this customer owes across this property and every other one linked
+    // to their login, added together.
+    const combinedOutstanding =
+        ownedPropertyIds.length > 0 ? await loadCombinedOutstanding(supabase, [profileId, ...ownedPropertyIds]) : null;
 
     // An estate's own units, if it has any, so its total reflects their own
     // prices once every one of them has a type (see loadEstateUnits).
@@ -249,6 +255,12 @@ export default async function AdminCustomerDetailPage({
                             </p>
                         ) : (
                             <div className="space-y-4">
+                                {combinedOutstanding !== null && (
+                                    <p className="text-sm text-white/70">
+                                        Owed across this and {ownedProperties.length} other propert{ownedProperties.length === 1 ? "y" : "ies"}:{" "}
+                                        <span className="font-bold text-amber-300">{naira(combinedOutstanding)}</span>
+                                    </p>
+                                )}
                                 {ownedProperties.length > 0 && (
                                     <div className="space-y-2">
                                         {ownedProperties.map((p) => (

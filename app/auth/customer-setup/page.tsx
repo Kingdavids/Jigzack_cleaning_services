@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { notifyAdminsOfNewApplication } from "@/lib/signup-notify";
-import { DAY_NAMES, DAY_SHORT } from "@/lib/billing/schedule";
+import { DAY_NAMES, DAY_SHORT, frequencyToDays, parseFrequency } from "@/lib/billing/schedule";
 
 type PropertyType = "residential" | "commercial";
 
@@ -98,7 +98,7 @@ const initialState: FormState = {
 };
 
 // Fortnightly and monthly pickups happen on one day; weekly can be several.
-const ONE_DAY_ONLY = ["Bi-weekly", "Monthly"];
+const ONE_DAY_ONLY = ["Weekly", "Bi-weekly", "Monthly"];
 
 // "Monday", "Monday and Thursday", "Monday, Wednesday and Friday".
 function dayList(days: number[]) {
@@ -282,13 +282,36 @@ export default function CustomerSetupPage() {
         }));
     }
 
+    // How many days "3 times a week" or similar implies, so Custom can't pick
+    // more days than the description says. 0 means nothing recognised, so any
+    // number of days is still allowed.
+    function customDayLimit(text: string): number {
+        return frequencyToDays(parseFrequency(text)).length;
+    }
+
     function toggleDay(day: number) {
         setForm((prev) => {
             if (ONE_DAY_ONLY.includes(prev.preferredPickupFrequency)) return { ...prev, pickupDays: [day] };
 
+            const already = prev.pickupDays.includes(day);
+            const limit = prev.preferredPickupFrequency === "Custom" ? customDayLimit(prev.customFrequency) : 0;
+
+            if (!already && limit > 0 && prev.pickupDays.length >= limit) return prev;
+
             return {
                 ...prev,
-                pickupDays: prev.pickupDays.includes(day) ? prev.pickupDays.filter((d) => d !== day) : [...prev.pickupDays, day],
+                pickupDays: already ? prev.pickupDays.filter((d) => d !== day) : [...prev.pickupDays, day],
+            };
+        });
+    }
+
+    function changeCustomFrequency(value: string) {
+        setForm((prev) => {
+            const limit = customDayLimit(value);
+            return {
+                ...prev,
+                customFrequency: value,
+                pickupDays: limit > 0 ? prev.pickupDays.slice(0, limit) : prev.pickupDays,
             };
         });
     }
@@ -388,6 +411,8 @@ export default function CustomerSetupPage() {
             setSubmitting(false);
         }
     }
+
+    const customLimit = form.preferredPickupFrequency === "Custom" ? customDayLimit(form.customFrequency) : 0;
 
     return (
         <div className="min-h-screen bg-[#0a0a0b] text-white">
@@ -610,7 +635,7 @@ export default function CustomerSetupPage() {
                                     <FieldLabel required>Describe your pickup frequency</FieldLabel>
                                     <TextInput
                                         value={form.customFrequency}
-                                        onChange={(value) => updateField("customFrequency", value)}
+                                        onChange={changeCustomFrequency}
                                         placeholder="e.g. Daily, or 3 times a week"
                                     />
                                     <p className="mt-2 text-xs text-white/40">
@@ -626,18 +651,26 @@ export default function CustomerSetupPage() {
                                 <div role="group" aria-label="Pickup days" className="flex flex-wrap gap-2">
                                     {[1, 2, 3, 4, 5, 6].map((day) => {
                                         const on = form.pickupDays.includes(day);
+                                        const atLimit =
+                                            form.preferredPickupFrequency === "Custom" &&
+                                            customLimit > 0 &&
+                                            !on &&
+                                            form.pickupDays.length >= customLimit;
 
                                         return (
                                             <button
                                                 key={day}
                                                 type="button"
                                                 onClick={() => toggleDay(day)}
+                                                disabled={atLimit}
                                                 aria-pressed={on}
                                                 aria-label={DAY_NAMES[day]}
                                                 className={`h-12 min-w-14 rounded-2xl border px-4 text-sm font-semibold transition ${
                                                     on
                                                         ? "border-amber-400 bg-amber-400 text-black"
-                                                        : "border-white/10 bg-white/8 text-white/70 hover:bg-white/10"
+                                                        : atLimit
+                                                            ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-white/25"
+                                                            : "border-white/10 bg-white/8 text-white/70 hover:bg-white/10"
                                                 }`}
                                             >
                                                 {DAY_SHORT[day]}
@@ -649,11 +682,16 @@ export default function CustomerSetupPage() {
                                     {form.pickupDays.length > 0
                                         ? `Your pickups: ${frequencyText(form)}.`
                                         : form.preferredPickupFrequency === "Custom"
-                                            ? "Optional if you have named the days above. We don't collect on Sundays."
-                                            : ONE_DAY_ONLY.includes(form.preferredPickupFrequency)
-                                                ? "Pick the day that suits you. We don't collect on Sundays."
-                                                : "Pick one day, or more if you want more than one pickup a week. We don't collect on Sundays."}
+                                            ? customLimit > 0
+                                                ? `Pick ${customLimit} day${customLimit === 1 ? "" : "s"} to match what you described. We don't collect on Sundays.`
+                                                : "Optional if you have named the days above. We don't collect on Sundays."
+                                            : "Pick the day that suits you. We don't collect on Sundays."}
                                 </p>
+                                {form.preferredPickupFrequency === "Custom" && customLimit > 0 && form.pickupDays.length >= customLimit && (
+                                    <p className="mt-1 text-xs text-amber-300/80">
+                                        That&apos;s {customLimit} day{customLimit === 1 ? "" : "s"}, matching &quot;{form.customFrequency}&quot;.
+                                    </p>
+                                )}
                             </div>
 
                             <div>

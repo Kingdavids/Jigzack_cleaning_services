@@ -13,7 +13,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
-import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
+import { loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
     id: string;
@@ -52,6 +52,11 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
     const customer = isLinked ? (await supabase.from("customers").select("*").eq("profile_id", activeProfileId).maybeSingle()).data : ownCustomer;
 
     const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, activeProfileId, customer);
+
+    // Only queried once there is actually more than one property, since it is
+    // otherwise the exact same figure this page already shows below.
+    const combinedOutstanding =
+        myProperties.length > 1 ? await loadCombinedOutstanding(supabase, myProperties.map((p) => p.profileId)) : null;
 
     const [tasks, invoices] = await Promise.all([
         isTenant
@@ -100,13 +105,17 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
         <DashboardShell
             role="customer"
             profileId={profile.id}
-            title="Customer Dashboard"
-            subtitle={`Welcome back, ${profile.full_name ?? customer?.full_name ?? "there"}.`}
+            title={`Welcome, ${profile.full_name ?? customer?.full_name ?? "there"}`}
+            subtitle="Here's what's happening with your account."
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
-                {myProperties.length > 1 && (
-                    <div className="flex justify-end">
+                {combinedOutstanding !== null && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">
+                        <span className="text-white/60">
+                            Across all {myProperties.length} of your properties:{" "}
+                            <span className="font-bold text-amber-300">{naira(combinedOutstanding)}</span> owed
+                        </span>
                         <PropertySwitcher properties={myProperties} activeProfileId={activeProfileId} />
                     </div>
                 )}
