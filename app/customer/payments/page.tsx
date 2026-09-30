@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { naira, resolveBilling } from "@/lib/customer/billing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -10,10 +11,11 @@ import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
-import { loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
+import { ACTIVE_PROPERTY_COOKIE, loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 export default async function CustomerPaymentsPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
-    const { property: requestedProperty } = await searchParams;
+    const { property: queryProperty } = await searchParams;
+    const requestedProperty = queryProperty ?? (await cookies()).get(ACTIVE_PROPERTY_COOKIE)?.value;
     const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
 
     const myProperties = await loadMyProperties(supabase, profile.id, { full_name: ownCustomer?.full_name ?? null, address: ownCustomer?.address ?? null });

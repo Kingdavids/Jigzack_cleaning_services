@@ -3,6 +3,12 @@ import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
+// Remembers which property a customer last switched to, so it survives moving
+// between Dashboard, Payments and Schedule instead of resetting to their own
+// on every navigation. Read on the server as a fallback for whichever page
+// has no ?property= of its own, and written by PropertySwitcher on change.
+export const ACTIVE_PROPERTY_COOKIE = "jigzack_active_property";
+
 export type PropertyOption = {
     profileId: string;
     label: string;

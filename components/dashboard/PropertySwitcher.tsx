@@ -1,10 +1,12 @@
 'use client';
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { PropertyOption } from "@/lib/dashboard/propertyLinks";
+import { ACTIVE_PROPERTY_COOKIE, type PropertyOption } from "@/lib/dashboard/propertyLinks";
 
 // Shown only for a customer with more than one property linked to their
-// login. Picking one reloads the current page for that property instead.
+// login. Picking one reloads the current page for that property, and is
+// remembered (via a cookie) so switching to Payments or Schedule next keeps
+// showing the same property instead of resetting to their own.
 export default function PropertySwitcher({ properties, activeProfileId }: { properties: PropertyOption[]; activeProfileId: string }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -13,6 +15,8 @@ export default function PropertySwitcher({ properties, activeProfileId }: { prop
     if (properties.length <= 1) return null;
 
     const change = (value: string) => {
+        document.cookie = `${ACTIVE_PROPERTY_COOKIE}=${value}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`;
+
         const params = new URLSearchParams(searchParams.toString());
 
         if (value === properties[0].profileId) params.delete("property");

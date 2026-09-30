@@ -1,3 +1,4 @@
+import { cookies } from "next/headers";
 import { CalendarClock, CalendarDays, CheckCircle2, ChevronDown, Clock3, MapPin, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, resolveBilling } from "@/lib/customer/billing";
@@ -8,7 +9,7 @@ import StatusBadge from "@/components/dashboard/StatusBadge";
 import ServicePhotos, { type ServicePhoto } from "@/components/dashboard/ServicePhotos";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
-import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
+import { ACTIVE_PROPERTY_COOKIE, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
     id: string;
@@ -51,7 +52,8 @@ function monthHeading(value: string | null) {
 }
 
 export default async function CustomerSchedulePage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
-    const { property: requestedProperty } = await searchParams;
+    const { property: queryProperty } = await searchParams;
+    const requestedProperty = queryProperty ?? (await cookies()).get(ACTIVE_PROPERTY_COOKIE)?.value;
     const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
 
     const myProperties = await loadMyProperties(supabase, profile.id, { full_name: ownCustomer?.full_name ?? null, address: ownCustomer?.address ?? null });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { CalendarCheck, CalendarClock, CreditCard, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
@@ -13,7 +14,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
-import { loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
+import { ACTIVE_PROPERTY_COOKIE, loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
     id: string;
@@ -41,7 +42,10 @@ function DetailList({ items }: { items: { label: string; value: React.ReactNode 
 }
 
 export default async function CustomerPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
-    const { property: requestedProperty } = await searchParams;
+    const { property: queryProperty } = await searchParams;
+    // Falls back to the last property picked from the switcher, so leaving
+    // this page for another one and coming back keeps showing the same one.
+    const requestedProperty = queryProperty ?? (await cookies()).get(ACTIVE_PROPERTY_COOKIE)?.value;
     const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
 
     // Empty for everyone except a customer an admin invited to manage more
