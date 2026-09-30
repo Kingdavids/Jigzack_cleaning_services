@@ -77,12 +77,7 @@ export default async function RegistrationFeePage() {
                         We have your payment report. An admin will confirm it soon, and your dashboard opens as soon as they do.
                     </div>
                 ) : (
-                    <>
-                        <p className="mt-6 text-sm leading-6 text-white/60">
-                            After you pay, tap the button below. You can add the name on the transfer and a receipt, but you do not have to.
-                        </p>
-                        <RegistrationFeeForm />
-                    </>
+                    <RegistrationFeeForm />
                 )}
 
                 {reported && (
