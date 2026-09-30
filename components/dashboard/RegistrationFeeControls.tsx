@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { toast } from "sonner";
 import { setRegistrationFee } from "@/app/admin/customer-actions";
 
@@ -45,7 +46,17 @@ export default function RegistrationFeeControls({
     };
 
     if (paid) {
-        return <p className="text-sm text-emerald-300">{paidText}</p>;
+        return (
+            <div className="space-y-1">
+                <p className="text-sm text-emerald-300">{paidText}</p>
+                <Link
+                    href={`/admin/receipts/registration/${profileId}`}
+                    className="inline-block text-sm font-semibold text-amber-300 underline underline-offset-2"
+                >
+                    View receipt
+                </Link>
+            </div>
+        );
     }
 
     return (
@@ -58,10 +69,10 @@ export default function RegistrationFeeControls({
                     {reportedNote && <p className="mt-1 text-white/75">Their note: {reportedNote}</p>}
                     {receiptUrl ? (
                         <a href={receiptUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block font-semibold text-amber-300 underline underline-offset-2">
-                            View receipt
+                            View transfer proof
                         </a>
                     ) : (
-                        <p className="mt-1 text-white/45">No receipt attached.</p>
+                        <p className="mt-1 text-white/45">No transfer proof attached.</p>
                     )}
                 </div>
             ) : (

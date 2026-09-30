@@ -73,9 +73,17 @@ export default async function AdminPaymentsPage() {
     // A customer in Recently deleted keeps their invoices in the database for the
     // record, but they no longer belong on the working Payments list.
     const notDeleted = (p: PaymentRow) => !p.customer_id || !hidden.has(p.customer_id);
-    const unpaidList = ((unpaidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
-    const paidList = ((paidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
-    const payments = [...unpaidList, ...paidList];
+    const rawUnpaid = ((unpaidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
+    const rawPaid = ((paidResult.data ?? []) as unknown as PaymentRow[]).filter(notDeleted);
+
+    // A part payment already has money against it, so it reads with the settled
+    // invoices below (still flagged, and sorted to the top there) instead of
+    // crowding "Needs attention" with invoices nobody has paid anything on yet.
+    const unpaidList = rawUnpaid.filter((p) => amountPaid(p) === 0);
+    const partPaidList = rawUnpaid.filter((p) => amountPaid(p) > 0);
+    const paidList = [...rawPaid, ...partPaidList];
+
+    const payments = [...rawUnpaid, ...rawPaid];
     const canBulk = isOwner(profile);
     const canAct = isFullAdmin(profile);
     const installmentsByInvoice = groupInstallments(await loadInstallmentsChunked(supabase, payments.map((p) => p.id)));
@@ -103,8 +111,13 @@ export default async function AdminPaymentsPage() {
     const unpaidGroups = groupBy(unpaidList).sort(
         (a, b) => Number(b.reported > 0) - Number(a.reported > 0) || b.owed - a.owed || a.name.localeCompare(b.name)
     );
-    const paidGroups = groupBy(paidList).sort((a, b) => a.name.localeCompare(b.name));
+    // Part-paid customers (still owing something) come first, so they are not
+    // buried under invoices that are fully settled and need nothing further.
+    const paidGroups = groupBy(paidList).sort(
+        (a, b) => Number(b.owed > 0) - Number(a.owed > 0) || a.name.localeCompare(b.name)
+    );
     const paidTotal = paidList.reduce((sum, invoice) => sum + invoiceTotal(invoice), 0);
+    const partPaidCount = partPaidList.length;
 
     // One-off registration fees still to be settled: approved customers who are
     // not tenants (tenants are waived) and have not been marked as paid.
@@ -134,8 +147,8 @@ export default async function AdminPaymentsPage() {
 
     // Receipts are private, so each one opens through a link that expires in an hour.
     const receiptPaths = [
-        // Only unpaid invoices can have a reported transfer waiting to be checked.
-        ...unpaidList.map((p) => p.transfer_receipt_path),
+        // Only an invoice that isn't fully paid can have a reported transfer waiting to be checked.
+        ...rawUnpaid.map((p) => p.transfer_receipt_path),
         ...feeRows.map((f) => f.registration_fee_receipt_path),
     ].filter((p): p is string => Boolean(p));
     const signed = receiptPaths.length
@@ -356,7 +369,7 @@ export default async function AdminPaymentsPage() {
                 >
                     <SectionCard
                         title="Needs attention"
-                        description="Invoices not fully paid, grouped by customer. Customers who say they have paid come first, then whoever owes the most."
+                        description="Invoices with nothing paid on them yet, grouped by customer. Customers who say they have paid come first, then whoever owes the most. A part payment moves to Paid below, still flagged there."
                     >
                         {unpaidGroups.length === 0 ? (
                             <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -396,15 +409,23 @@ export default async function AdminPaymentsPage() {
                         <SectionCard
                             title="Paid"
                             collapsible
+                            defaultOpen={partPaidCount > 0}
                             badge={
-                                <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-300">
-                                    {paidList.length} invoice{paidList.length === 1 ? "" : "s"} · {naira(paidTotal)}
-                                </span>
+                                <div className="flex flex-wrap justify-end gap-2">
+                                    {partPaidCount > 0 && (
+                                        <span className="rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1 text-xs font-bold text-amber-300">
+                                            {partPaidCount} part paid
+                                        </span>
+                                    )}
+                                    <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-300">
+                                        {paidList.length} invoice{paidList.length === 1 ? "" : "s"} · {naira(paidTotal)}
+                                    </span>
+                                </div>
                             }
                             description={
                                 paidList.length >= PAID_LIMIT
-                                    ? `The latest ${PAID_LIMIT} paid invoices, grouped by customer. Search to find one.`
-                                    : "Invoices that are settled, grouped by customer. Open one to see its receipts."
+                                    ? `The latest ${PAID_LIMIT} settled or part-paid invoices, grouped by customer. Search to find one.`
+                                    : "Settled invoices and part payments, grouped by customer. A part payment is sorted to the top, still showing what's owed."
                             }
                         >
                             {paidGroups.length === 0 ? (
@@ -415,13 +436,18 @@ export default async function AdminPaymentsPage() {
                                         <CustomerGroup
                                             key={group.key}
                                             name={group.name}
-                                            defaultOpen={false}
+                                            defaultOpen={group.owed > 0}
                                             header={
                                                 <div>
                                                     <p className="truncate text-lg font-bold">{group.name}</p>
                                                     <p className="mt-0.5 text-sm text-white/55">
-                                                        {group.items.length} paid invoice{group.items.length === 1 ? "" : "s"} ·{" "}
+                                                        {group.items.length} invoice{group.items.length === 1 ? "" : "s"} ·{" "}
                                                         <span className="font-semibold text-emerald-300">{naira(group.total)}</span>
+                                                        {group.owed > 0 && (
+                                                            <span className="ml-2 rounded-full bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+                                                                {naira(group.owed)} still owed
+                                                            </span>
+                                                        )}
                                                     </p>
                                                 </div>
                                             }
