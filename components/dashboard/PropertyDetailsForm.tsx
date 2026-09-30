@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { updateLinkedPropertyDetails } from "@/lib/property-actions";
-import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
+import { COMMERCIAL_FACILITIES, DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -39,6 +39,7 @@ export default function PropertyDetailsForm({
 }) {
     const router = useRouter();
     const [busy, setBusy] = useState(false);
+    const [propertyType, setPropertyType] = useState(defaults.property_type ?? "residential");
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -65,7 +66,12 @@ export default function PropertyDetailsForm({
                     <input name="fullName" defaultValue={defaults.full_name ?? ""} required className={inputClass} />
                 </Field>
                 <Field label="Property type">
-                    <select name="propertyType" defaultValue={defaults.property_type ?? "residential"} className={`${inputClass} bg-[#141518]`}>
+                    <select
+                        name="propertyType"
+                        value={propertyType}
+                        onChange={(e) => setPropertyType(e.target.value)}
+                        className={`${inputClass} bg-[#141518]`}
+                    >
                         <option value="residential">Residential</option>
                         <option value="commercial">Commercial</option>
                     </select>
@@ -92,6 +98,16 @@ export default function PropertyDetailsForm({
                 </Field>
             </div>
 
+            {propertyType === "commercial" && (
+                <div className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.07] p-4 text-sm leading-relaxed text-white/85">
+                    <p className="font-semibold text-amber-200">Commercial facilities are inspected first</p>
+                    <p className="mt-1">
+                        We visit and survey the site before we give a quote, because the right price depends on the amount and type of waste.
+                        Once saved, our team will contact you to arrange the visit.
+                    </p>
+                </div>
+            )}
+
             <div>
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/45">
                     Units on this property (drives its monthly invoice)
@@ -109,7 +125,43 @@ export default function PropertyDetailsForm({
                             />
                         </Field>
                     ))}
+                    <Field label="Other domestic">
+                        <input
+                            name="domesticOthers"
+                            defaultValue={String(defaults.facility_details?.domesticOthers ?? "")}
+                            placeholder="Any other property type"
+                            className={inputClass}
+                        />
+                    </Field>
                 </div>
+            </div>
+
+            <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/45">
+                    Commercial facilities (for business or mixed-use properties, where applicable)
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {COMMERCIAL_FACILITIES.map((facility) => (
+                        <Field key={facility.key} label={facility.label}>
+                            <input
+                                name={facility.key}
+                                type="number"
+                                min="0"
+                                defaultValue={facilityCount(defaults.facility_details, facility.key) || ""}
+                                placeholder="0"
+                                className={inputClass}
+                            />
+                        </Field>
+                    ))}
+                </div>
+                <Field label="Other commercial notes">
+                    <input
+                        name="commercialOthers"
+                        defaultValue={String(defaults.facility_details?.commercialOthers ?? "")}
+                        placeholder="Any additional business or facility details"
+                        className={inputClass}
+                    />
+                </Field>
                 <p className="mt-2 text-xs text-white/40">
                     A commercial property is priced after we visit and survey the site, the same as any commercial signup.
                 </p>

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { DOMESTIC_FACILITIES } from "@/lib/customer/facilities";
+import { ALL_FACILITIES, FACILITY_TEXT_LABELS } from "@/lib/customer/facilities";
 
 export type PropertyDetailsResult = { success: boolean; error?: string; message?: string };
 
@@ -34,9 +34,13 @@ export async function updateLinkedPropertyDetails(linkedProfileId: string, formD
     }
 
     const facilityDetails: Record<string, string> = {};
-    for (const facility of DOMESTIC_FACILITIES) {
+    for (const facility of ALL_FACILITIES) {
         const raw = String(formData.get(facility.key) ?? "").trim();
         if (raw) facilityDetails[facility.key] = raw;
+    }
+    for (const key of Object.keys(FACILITY_TEXT_LABELS)) {
+        const raw = String(formData.get(key) ?? "").trim();
+        if (raw) facilityDetails[key] = raw;
     }
 
     const { error } = await supabase.rpc("update_linked_property_details", {
