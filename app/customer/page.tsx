@@ -12,6 +12,8 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import StatCard from "@/components/dashboard/StatCard";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
+import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
+import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
     id: string;
@@ -38,9 +40,18 @@ function DetailList({ items }: { items: { label: string; value: React.ReactNode 
     );
 }
 
-export default async function CustomerPage() {
-    const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
-    const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, profile.id, customer);
+export default async function CustomerPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
+    const { property: requestedProperty } = await searchParams;
+    const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
+
+    // Empty for everyone except a customer an admin invited to manage more
+    // than one property; switching just changes which one this page shows.
+    const myProperties = await loadMyProperties(supabase, profile.id, { full_name: ownCustomer?.full_name ?? null, address: ownCustomer?.address ?? null });
+    const { activeProfileId, isLinked } = await resolveActiveProperty(supabase, profile.id, requestedProperty);
+
+    const customer = isLinked ? (await supabase.from("customers").select("*").eq("profile_id", activeProfileId).maybeSingle()).data : ownCustomer;
+
+    const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, activeProfileId, customer);
 
     const [tasks, invoices] = await Promise.all([
         isTenant
@@ -48,7 +59,7 @@ export default async function CustomerPage() {
             : supabase
                 .from("tasks")
                 .select("id, title, status, scheduled_date, zone, employee_id, completed_at")
-                .eq("customer_id", profile.id)
+                .eq("customer_id", activeProfileId)
                 .order("scheduled_date", { ascending: true })
                 .limit(200)
                 .then((r) => (r.data ?? []) as TaskRow[]),
@@ -74,7 +85,7 @@ export default async function CustomerPage() {
     // What is left to pay across all invoices, after any part payments.
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
-    const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, profile.id));
+    const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, activeProfileId));
 
     // An estate's own units, so a discount reads against their real per-unit
     // priced total rather than the older count-based one.
@@ -94,6 +105,24 @@ export default async function CustomerPage() {
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
+                {myProperties.length > 1 && (
+                    <div className="flex justify-end">
+                        <PropertySwitcher properties={myProperties} activeProfileId={activeProfileId} />
+                    </div>
+                )}
+
+                {myProperties.filter((p) => p.needsDetails).map((p) => (
+                    <div key={p.profileId} className="rounded-xl border border-amber-300/25 bg-amber-300/[0.06] px-4 py-3 text-sm text-amber-100">
+                        <p className="font-semibold">You&apos;ve been invited to add another property</p>
+                        <p className="mt-1 text-amber-100/80">
+                            Fill in its address and details, and it bills separately from your other property.
+                        </p>
+                        <Link href={`/customer/properties/${p.profileId}`} className="mt-2 inline-block font-semibold underline underline-offset-2">
+                            Add the property
+                        </Link>
+                    </div>
+                ))}
+
                 {isTenant && (
                     <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3 text-sm text-sky-200">
                         You&apos;re set up as a tenant. Use Messages to raise a complaint, and Payments to view or

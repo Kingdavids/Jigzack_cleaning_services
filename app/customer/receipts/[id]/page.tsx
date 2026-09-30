@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { resolveBilling } from "@/lib/customer/billing";
 import { loadPrepayment, loadReceipt } from "@/lib/customer/documents";
 import PrepaymentReceiptDocument from "@/components/dashboard/PrepaymentReceiptDocument";
 import ReceiptDocument from "@/components/dashboard/ReceiptDocument";
@@ -20,19 +19,15 @@ export default async function CustomerReceiptPage({
 
     const supabase = await createClient();
 
-    const { data: customer } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("profile_id", profile.id)
-        .single();
-
-    const { billingProfileId, billingCustomer } = await resolveBilling(supabase, profile.id, customer);
+    // Row security alone decides whether this receipt belongs to them: their
+    // own, their estate's as a tenant, or a property linked to their login. A
+    // receipt for someone else's payment simply comes back empty.
 
     // An advance payment has its own receipt.
     const prepayment = await loadPrepayment(supabase, id);
 
     if (prepayment) {
-        if (prepayment.customer_id !== profile.id) redirect("/customer/payments");
+        const { data: billingCustomer } = await supabase.from("customers").select("*").eq("profile_id", prepayment.customer_id).maybeSingle();
 
         return (
             <PrepaymentReceiptDocument
@@ -46,7 +41,7 @@ export default async function CustomerReceiptPage({
 
     const found = await loadReceipt(supabase, id);
 
-    if (!found || found.payment.customer_id !== billingProfileId) {
+    if (!found) {
         redirect("/customer/payments");
     }
 
@@ -57,6 +52,8 @@ export default async function CustomerReceiptPage({
     if (!installment && (payment.status !== "paid" || installments.length > 0)) {
         redirect(`/customer/invoices/${payment.id}`);
     }
+
+    const { data: billingCustomer } = await supabase.from("customers").select("*").eq("profile_id", payment.customer_id).maybeSingle();
 
     return (
         <ReceiptDocument

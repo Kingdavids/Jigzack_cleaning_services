@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient } from "@/utils/supabase/server";
@@ -10,7 +11,7 @@ import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { RECEIPT_BUCKET } from "@/lib/expenses";
 import { removeUnreferencedAttachments } from "@/lib/message-attachments";
 
-export type BulkResult = { success: boolean; error?: string; deleted?: number };
+export type BulkResult = { success: boolean; error?: string; deleted?: number; message?: string };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_AT_ONCE = 200;
@@ -554,4 +555,118 @@ export async function deleteEmployeeForever(profileId: string, confirmName: stri
     revalidatePath("/admin");
 
     return { success: true };
+}
+
+// ---------------------------------------------------------------------------
+// Multiple properties, one login: full admin or owner, either can invite.
+// The property's login is a system email the customer never sees; they
+// always sign in with their own email and switch between properties from
+// their dashboard. Nothing here changes how a single-property customer works.
+// ---------------------------------------------------------------------------
+export async function inviteAdditionalProperty(primaryProfileId: string): Promise<BulkResult> {
+    const actor = await requireFullAdmin();
+    const supabase = await createClient();
+
+    if (!primaryProfileId || !UUID.test(primaryProfileId)) return { success: false, error: "Invalid request." };
+
+    const { data: primaryCustomer } = await supabase
+        .from("customers")
+        .select("full_name, email, phone, whatsapp_number, is_estate, unit_id")
+        .eq("profile_id", primaryProfileId)
+        .maybeSingle();
+
+    if (!primaryCustomer) return { success: false, error: "Could not find that customer." };
+    if (primaryCustomer.is_estate) return { success: false, error: "An estate already bills its units together; this isn't for them." };
+    if (primaryCustomer.unit_id) return { success: false, error: "A tenant can't add another property this way." };
+
+    const { data: alreadyLinked } = await supabase.from("property_links").select("id").eq("linked_profile_id", primaryProfileId).maybeSingle();
+    if (alreadyLinked) return { success: false, error: "This account is already a linked property of another customer." };
+
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+
+    if (!serviceKey || !url) {
+        return {
+            success: false,
+            error: "This needs SUPABASE_SERVICE_ROLE_KEY set on the server. Add it in Railway's environment variables first.",
+        };
+    }
+
+    const admin = createServiceClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+    // A login the customer never signs in with directly; it only exists so
+    // the property has its own row everything else (invoices, tasks) can key off.
+    const placeholderEmail = `property.${randomUUID()}@placeholder.jigzackcleaningservices.com`;
+    const placeholderPassword = `${randomUUID()}${randomUUID()}`;
+
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+        email: placeholderEmail,
+        password: placeholderPassword,
+        email_confirm: true,
+        user_metadata: { full_name: `${primaryCustomer.full_name} (additional property)` },
+    });
+
+    if (createError || !created?.user) {
+        console.error("inviteAdditionalProperty createUser error:", createError?.message);
+        return { success: false, error: "Could not create the property login. Please try again." };
+    }
+
+    const linkedProfileId = created.user.id;
+
+    // handle_new_user() made them a pending customer; this isn't a real
+    // application awaiting review, so it's approved right away.
+    const { error: approveError } = await admin.from("profiles").update({ status: "approved" }).eq("id", linkedProfileId);
+
+    if (approveError) {
+        console.error("inviteAdditionalProperty approve error:", approveError.message);
+        await admin.auth.admin.deleteUser(linkedProfileId);
+        return { success: false, error: "Could not set up the property login. Please try again." };
+    }
+
+    // A placeholder customer record, already billable, waiting for the real
+    // address and property details. No registration fee: this is an
+    // already-vetted customer's second property, not a new signup.
+    const { error: customerError } = await admin.from("customers").insert({
+        profile_id: linkedProfileId,
+        full_name: `${primaryCustomer.full_name} — additional property`,
+        email: primaryCustomer.email,
+        phone: primaryCustomer.phone,
+        whatsapp_number: primaryCustomer.whatsapp_number,
+        status: "active",
+        registration_fee_paid: true,
+    });
+
+    if (customerError) {
+        console.error("inviteAdditionalProperty customer error:", customerError.message);
+        await admin.auth.admin.deleteUser(linkedProfileId);
+        return { success: false, error: "Could not set up the property record. Please try again." };
+    }
+
+    const { error: linkError } = await admin.from("property_links").insert({
+        primary_profile_id: primaryProfileId,
+        linked_profile_id: linkedProfileId,
+        created_by: actor.id,
+    });
+
+    if (linkError) {
+        console.error("inviteAdditionalProperty link error:", linkError.message);
+        await admin.auth.admin.deleteUser(linkedProfileId);
+
+        return {
+            success: false,
+            error: /property_links/.test(linkError.message)
+                ? "Not switched on yet. Run supabase/property-links-2026-09.sql in Supabase first."
+                : "Could not link the property. Please try again.",
+        };
+    }
+
+    await logActivity(supabase, actor, "property_invited", `Invited ${primaryCustomer.full_name} to add another property`, {
+        type: "profile",
+        id: primaryProfileId,
+    });
+
+    revalidatePath(`/admin/customers/${primaryProfileId}`);
+    revalidatePath("/customer");
+
+    return { success: true, message: "Invited. They'll see \"Add another property\" next time they open their dashboard." };
 }

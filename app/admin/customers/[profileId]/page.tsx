@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import CustomerAccountControls from "@/components/dashboard/CustomerAccountControls";
+import InvitePropertyButton from "@/components/dashboard/InvitePropertyButton";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
@@ -96,6 +97,23 @@ export default async function AdminCustomerDetailPage({
     const vacancyList = describeFacilities(customer.vacancies).counted;
     const frequency = customerFrequency(customer);
     const tenantUnit = unit as unknown as { label: string; estate: { full_name: string | null } | null } | null;
+
+    // Other properties this customer manages from this one login, and whether
+    // this account is itself a property someone else manages. Empty until
+    // property-links-2026-09.sql has run.
+    const [ownedLinksResult, linkedAsResult] = await Promise.all([
+        supabase.from("property_links").select("linked_profile_id, created_at").eq("primary_profile_id", profileId),
+        supabase.from("property_links").select("primary_profile_id").eq("linked_profile_id", profileId).maybeSingle(),
+    ]);
+
+    const ownedPropertyIds = (ownedLinksResult.data ?? []).map((row) => row.linked_profile_id as string);
+    const ownedProperties = ownedPropertyIds.length
+        ? ((await supabase.from("customers").select("profile_id, full_name, address, status").in("profile_id", ownedPropertyIds)).data ?? [])
+        : [];
+    const managedByProfileId = (linkedAsResult.data as { primary_profile_id?: string } | null)?.primary_profile_id ?? null;
+    const managedByCustomer = managedByProfileId
+        ? (await supabase.from("customers").select("full_name").eq("profile_id", managedByProfileId).maybeSingle()).data
+        : null;
 
     // An estate's own units, if it has any, so its total reflects their own
     // prices once every one of them has a type (see loadEstateUnits).
@@ -216,6 +234,38 @@ export default async function AdminCustomerDetailPage({
                             daysLeft={daysLeft((customer as { deleted_at?: string | null }).deleted_at ?? null)}
                             isOwner={isOwner(profile)}
                         />
+                    </SectionCard>
+                )}
+
+                {isFullAdmin(profile) && !customer.is_estate && !customer.unit_id && (
+                    <SectionCard
+                        title="Multiple properties"
+                        description="Let this customer manage more than one billed property from this same login."
+                    >
+                        {managedByCustomer ? (
+                            <p className="text-sm text-white/60">
+                                This is itself a property managed from{" "}
+                                <span className="font-semibold text-white">{managedByCustomer.full_name}</span>&apos;s login.
+                            </p>
+                        ) : (
+                            <div className="space-y-4">
+                                {ownedProperties.length > 0 && (
+                                    <div className="space-y-2">
+                                        {ownedProperties.map((p) => (
+                                            <Link
+                                                key={p.profile_id}
+                                                href={`/admin/customers/${p.profile_id}`}
+                                                className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm hover:border-white/20"
+                                            >
+                                                <span>{p.full_name}</span>
+                                                <span className="text-xs text-white/40">{p.address || "No address yet"}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                )}
+                                <InvitePropertyButton profileId={profileId} name={customer.full_name} />
+                            </div>
+                        )}
                     </SectionCard>
                 )}
 

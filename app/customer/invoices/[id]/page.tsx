@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { resolveBilling } from "@/lib/customer/billing";
 import { loadInstallments } from "@/lib/billing/balance";
 import InvoiceDocument from "@/components/dashboard/InvoiceDocument";
 
@@ -19,24 +18,15 @@ export default async function CustomerInvoicePage({
 
     const supabase = await createClient();
 
-    const { data: customer } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("profile_id", profile.id)
-        .single();
+    // Row security alone decides whether this invoice belongs to them: their
+    // own, their estate's as a tenant, or a property linked to their login.
+    const { data: invoice } = await supabase.from("payments").select("*").eq("id", id).maybeSingle();
 
-    const { billingProfileId, billingCustomer } = await resolveBilling(supabase, profile.id, customer);
-
-    const { data: invoice } = await supabase
-        .from("payments")
-        .select("*")
-        .eq("id", id)
-        .eq("customer_id", billingProfileId)
-        .single();
-
-    if (!invoice) {
+    if (!invoice || !invoice.customer_id) {
         redirect("/customer/payments");
     }
+
+    const { data: billingCustomer } = await supabase.from("customers").select("*").eq("profile_id", invoice.customer_id).maybeSingle();
 
     const installments = await loadInstallments(supabase, [invoice.id]);
 

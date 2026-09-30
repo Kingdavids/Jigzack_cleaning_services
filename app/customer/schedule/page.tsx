@@ -7,6 +7,8 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ServicePhotos, { type ServicePhoto } from "@/components/dashboard/ServicePhotos";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
+import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
+import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
     id: string;
@@ -48,9 +50,16 @@ function monthHeading(value: string | null) {
     return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-export default async function CustomerSchedulePage() {
-    const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
-    const { isTenant } = await resolveBilling(supabase, profile.id, customer);
+export default async function CustomerSchedulePage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
+    const { property: requestedProperty } = await searchParams;
+    const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
+
+    const myProperties = await loadMyProperties(supabase, profile.id, { full_name: ownCustomer?.full_name ?? null, address: ownCustomer?.address ?? null });
+    const { activeProfileId, isLinked } = await resolveActiveProperty(supabase, profile.id, requestedProperty);
+
+    const customer = isLinked ? (await supabase.from("customers").select("*").eq("profile_id", activeProfileId).maybeSingle()).data : ownCustomer;
+
+    const { isTenant } = await resolveBilling(supabase, activeProfileId, customer);
 
     const [tasks, uploads] = await Promise.all([
         isTenant
@@ -58,7 +67,7 @@ export default async function CustomerSchedulePage() {
             : supabase
                 .from("tasks")
                 .select("id, title, status, scheduled_date, zone, employee_id, started_at, completed_at, created_at")
-                .eq("customer_id", profile.id)
+                .eq("customer_id", activeProfileId)
                 .order("scheduled_date", { ascending: true })
                 .limit(300)
                 .then((r) => (r.data ?? []) as TaskRow[]),
@@ -67,7 +76,7 @@ export default async function CustomerSchedulePage() {
             : supabase
                 .from("uploads")
                 .select("id, task_id, image_url, photo_type")
-                .eq("customer_id", profile.id)
+                .eq("customer_id", activeProfileId)
                 .order("created_at", { ascending: true })
                 .limit(600)
                 .then((r) => (r.data ?? []) as UploadRow[]),
@@ -112,6 +121,12 @@ export default async function CustomerSchedulePage() {
             unreadCount={unreadCount}
         >
             <div className="space-y-6">
+                {myProperties.length > 1 && (
+                    <div className="flex justify-end">
+                        <PropertySwitcher properties={myProperties} activeProfileId={activeProfileId} />
+                    </div>
+                )}
+
                 {isTenant ? (
                     <div className="rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3 text-sm text-sky-200">
                         Pickups for your estate are scheduled and managed by the estate. Use Messages to raise any

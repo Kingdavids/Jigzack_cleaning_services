@@ -9,10 +9,19 @@ import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/
 import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
+import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
+import { loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
-export default async function CustomerPaymentsPage() {
-    const { profile, supabase, unreadCount, customer } = await requireDashboardAccess("customer");
-    const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, profile.id, customer);
+export default async function CustomerPaymentsPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
+    const { property: requestedProperty } = await searchParams;
+    const { profile, supabase, unreadCount, customer: ownCustomer } = await requireDashboardAccess("customer");
+
+    const myProperties = await loadMyProperties(supabase, profile.id, { full_name: ownCustomer?.full_name ?? null, address: ownCustomer?.address ?? null });
+    const { activeProfileId, isLinked } = await resolveActiveProperty(supabase, profile.id, requestedProperty);
+
+    const customer = isLinked ? (await supabase.from("customers").select("*").eq("profile_id", activeProfileId).maybeSingle()).data : ownCustomer;
+
+    const { billingProfileId, billingCustomer, isTenant } = await resolveBilling(supabase, activeProfileId, customer);
 
     // An estate's own units, so a discount reads against their real per-unit
     // priced total rather than the older count-based one.
@@ -30,7 +39,7 @@ export default async function CustomerPaymentsPage() {
     const invoices = (invoicesData ?? []) as InvoiceRow[];
 
     // Months paid for in advance. Empty before the prepayments SQL has been run.
-    const prepayments = isTenant ? [] : await loadPrepayments(supabase, profile.id);
+    const prepayments = isTenant ? [] : await loadPrepayments(supabase, activeProfileId);
     const paidUpTo = prepaidUntil(prepayments);
 
     const installments = await loadInstallments(supabase, invoices.map((invoice) => invoice.id));
@@ -63,6 +72,12 @@ export default async function CustomerPaymentsPage() {
                         : "View or print any invoice, and a receipt for every payment you've made."
                 }
             >
+                {myProperties.length > 1 && (
+                    <div className="mb-5 flex justify-end">
+                        <PropertySwitcher properties={myProperties} activeProfileId={activeProfileId} />
+                    </div>
+                )}
+
                 {isTenant && (
                     <div className="mb-4 rounded-xl border border-sky-400/20 bg-sky-400/[0.06] px-4 py-3 text-sm text-sky-200">
                         You&apos;re viewing your estate&apos;s shared utility bill.
@@ -121,7 +136,7 @@ export default async function CustomerPaymentsPage() {
 
                 <InvoiceList
                     invoices={invoices}
-                    canReport={!isTenant}
+                    canReport={!isTenant && !isLinked}
                     installments={Object.fromEntries(byInvoice)}
                 />
             </SectionCard>

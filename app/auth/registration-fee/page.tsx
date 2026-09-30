@@ -57,9 +57,9 @@ export default async function RegistrationFeePage() {
                 <h1 className="mt-6 text-2xl font-black tracking-tight">Activate your account</h1>
 
                 <p className="mt-3 text-sm leading-6 text-white/60">
-                    Hi {customer.full_name ?? profile.full_name ?? "there"}, a one-off registration fee of{" "}
-                    <span className="font-bold text-white">₦{REGISTRATION_FEE_NGN.toLocaleString()}</span> completes your signup and
-                    unlocks your customer dashboard.
+                    Hi {customer.full_name ?? profile.full_name ?? "there"}, new customers pay a one-off registration fee of{" "}
+                    <span className="font-bold text-white">₦{REGISTRATION_FEE_NGN.toLocaleString()}</span> to unlock their dashboard.
+                    Already with Jigzack before this app? Choose that below, no fee needed.
                 </p>
 
                 <div className="mt-6 rounded-xl border border-white/10 bg-black/25 p-4 text-left">

@@ -850,9 +850,20 @@ export async function setUserApproval(
             if (isCommercial) notes.push("Commercial facility: arrange a site visit before quoting. The approval email tells them so.");
 
             // An existing customer who was already with Jigzack before the app
-            // does not pay the registration fee. Marking it paid opens their
-            // dashboard on first login.
+            // does not pay the registration fee. Recorded on their profile too
+            // (registration-fee-waiver-2026-09.sql), so it still applies the
+            // moment their customer record is created even if that has not
+            // happened yet, in whichever order those two things occur.
             if (waiveFee) {
+                const { error: profileWaiveError } = await supabase
+                    .from("profiles")
+                    .update({ registration_fee_waived: true })
+                    .eq("id", userId);
+
+                if (profileWaiveError && !/registration_fee_waived/.test(profileWaiveError.message)) {
+                    console.error("setUserApproval profile waive error:", profileWaiveError.message);
+                }
+
                 const { data: waived, error: waiveError } = await supabase
                     .from("customers")
                     .update({
@@ -864,8 +875,9 @@ export async function setUserApproval(
                     .select("id");
 
                 if (!waiveError && (!waived || waived.length === 0)) {
-                    // No customer record yet, so there is nothing to mark. They finish the property form first.
-                    notes.push("They have not filled in their property form yet, so the fee waiver could not be saved. After they finish it, mark the fee as paid from Payments.");
+                    // No customer record yet: the waiver applies automatically the
+                    // moment they finish their property form, no follow-up needed.
+                    notes.push("They have not filled in their property form yet. The fee waiver applies automatically once they do.");
                 } else if (waiveError) {
                     console.error("setUserApproval waive error:", waiveError.message);
                     notes.push("Could not waive the registration fee. Confirm it from their customer page.");
