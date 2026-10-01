@@ -30,6 +30,8 @@ import {
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 import { removeUnreferencedAttachments, saveMessageAttachment } from "@/lib/message-attachments";
 import { emailEachRecipient } from "@/lib/broadcast-email";
+import { sentInvoiceEmail } from "@/lib/billing-email";
+import { SITE } from "@/lib/seo";
 
 async function requireAdmin() {
     const profile = await getUserProfile();
@@ -1612,6 +1614,50 @@ export async function updateInvoice(
     revalidatePath("/customer");
 
     return { success: true };
+}
+
+// Emails the customer this invoice as it stands now, for example after it was
+// corrected. Says "updated" when they were already sent an earlier version.
+export async function sendInvoiceToCustomer(paymentId: string): Promise<TaskChangeResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!paymentId) return { success: false, error: "Missing invoice." };
+
+    const { data: invoice } = await supabase
+        .from("payments")
+        .select("*, customer:profiles!payments_customer_id_fkey(full_name, email)")
+        .eq("id", paymentId)
+        .maybeSingle();
+
+    if (!invoice) return { success: false, error: "Could not find that invoice." };
+    if (invoice.status === "paid") return { success: false, error: "This invoice is already paid." };
+
+    const customer = invoice.customer as { full_name: string | null; email: string | null } | null;
+    if (!customer?.email) return { success: false, error: "This customer has no email address on file." };
+
+    const month = (invoice.invoice_month as string | null) ?? "this month";
+    const updated = Boolean(invoice.invoice_emailed_at);
+    const message = sentInvoiceEmail({
+        name: customer.full_name,
+        month,
+        total: naira(balanceOf(invoice)),
+        link: `${SITE.url}/customer/invoices/${invoice.id}`,
+        updated,
+    });
+
+    const delivered = await sendEmail({ to: [customer.email], subject: message.subject, html: message.html, replyTo: SITE.email });
+    if (!delivered) return { success: false, error: "The email could not be sent. Please try again." };
+
+    // Recorded as sent, so the automatic "new invoice" email does not go out as well.
+    await supabase.from("payments").update({ invoice_emailed_at: new Date().toISOString() }).eq("id", invoice.id);
+
+    await logActivity(supabase, actor, "invoice_sent", `Sent the ${month} invoice to ${customer.full_name ?? "a customer"}`, {
+        type: "profile",
+        id: invoice.customer_id as string,
+    });
+
+    return { success: true, message: `${updated ? "Updated invoice" : "Invoice"} sent to ${customer.email}.` };
 }
 
 export type ArrearsResult = { success: boolean; error?: string; message?: string };

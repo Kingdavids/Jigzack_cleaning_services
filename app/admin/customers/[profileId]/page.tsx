@@ -559,10 +559,10 @@ export default async function AdminCustomerDetailPage({
                             Generate this month&apos;s invoice
                         </BillingActionButton>
                         <Link
-                            href={`/admin/invoices/preview/${profileId}`}
+                            href={thisMonthInvoice ? `/admin/invoices/${thisMonthInvoice.id}` : `/admin/invoices/preview/${profileId}`}
                             className="text-sm font-semibold text-amber-300 underline underline-offset-2"
                         >
-                            Preview before generating
+                            {thisMonthInvoice ? "Preview this month's invoice" : "Preview before generating"}
                         </Link>
                     </div>
 
@@ -576,7 +576,7 @@ export default async function AdminCustomerDetailPage({
                                     {shownInvoices.map((invoice) => (
                                         <AdminInvoiceCard
                                             key={invoice.id}
-                                            payment={invoice}
+                                            payment={{ ...invoice, customer: { full_name: customer.full_name } }}
                                             installments={installmentsByInvoice.get(invoice.id) ?? []}
                                             canAct={isFullAdmin(profile)}
                                             showCustomer={false}

@@ -9,6 +9,7 @@ import VoidPaymentButton from "@/components/dashboard/VoidPaymentButton";
 import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
 import { BulkCheckbox } from "@/components/dashboard/BulkSelect";
+import SendInvoiceButton from "@/components/dashboard/SendInvoiceButton";
 
 export type AdminInvoiceRow = {
     id: string;
@@ -30,6 +31,8 @@ export type AdminInvoiceRow = {
     transfer_reported_at?: string | null;
     transfer_note?: string | null;
     transfer_receipt_path?: string | null;
+    // When the customer was last emailed this invoice.
+    invoice_emailed_at?: string | null;
 };
 
 // One invoice as admins work with it: totals, payments received, a reported
@@ -92,6 +95,18 @@ export default function AdminInvoiceCard({
                 <Link href={`/admin/invoices/${payment.id}`} className="font-semibold text-amber-300 underline underline-offset-2">
                     Preview invoice
                 </Link>
+                {canAct && payment.status !== "paid" && (
+                    <SendInvoiceButton
+                        paymentId={payment.id}
+                        customerName={payment.customer?.full_name ?? "The customer"}
+                        month={month}
+                        amountText={naira(balance)}
+                        alreadySent={Boolean(payment.invoice_emailed_at)}
+                    />
+                )}
+                {payment.invoice_emailed_at && (
+                    <span className="text-white/45">Emailed {formatDate(payment.invoice_emailed_at)}</span>
+                )}
                 {payment.status === "paid" && installments.length === 0 && (
                     <Link href={`/admin/receipts/${payment.id}`} className="font-semibold text-amber-300 underline underline-offset-2">
                         Preview receipt
