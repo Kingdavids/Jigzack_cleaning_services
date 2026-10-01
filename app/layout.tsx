@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import { AuthProvider } from "@/components/context/AuthProvider";
 import { Toaster } from "sonner";
+import { ThemeProvider } from "next-themes";
 import SiteChrome from "@/components/SiteChrome";
 import JsonLd from "@/components/JsonLd";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
@@ -17,8 +18,11 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const viewport: Viewport = {
-    themeColor: "#020617",
-    colorScheme: "dark",
+    themeColor: [
+        { media: "(prefers-color-scheme: dark)", color: "#020617" },
+        { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
+    ],
+    colorScheme: "dark light",
 };
 
 export const metadata: Metadata = {
@@ -72,14 +76,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
     return (
-        <html lang="en-NG" className={jakarta.variable}>
+        // next-themes sets data-theme on <html> before the page shows, so the
+        // server and browser markup differ there on purpose.
+        <html lang="en-NG" className={jakarta.variable} suppressHydrationWarning>
         <body className="bg-slate-950 text-white">
         <JsonLd data={[organizationJsonLd(), websiteJsonLd()]} />
         <RegisterServiceWorker />
-        <AuthProvider>
-            <SiteChrome>{children}</SiteChrome>
-            <Toaster />
-        </AuthProvider>
+        {/* Follows the device's light or dark setting until the person picks one. */}
+        <ThemeProvider attribute="data-theme" defaultTheme="system" enableSystem disableTransitionOnChange>
+            <AuthProvider>
+                <SiteChrome>{children}</SiteChrome>
+                <Toaster />
+            </AuthProvider>
+        </ThemeProvider>
         </body>
         </html>
     );

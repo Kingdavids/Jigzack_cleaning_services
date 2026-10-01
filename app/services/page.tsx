@@ -23,7 +23,7 @@ export default function ServicesPage() {
                     ]),
                 ]}
             />
-            <section className="relative px-6 md:px-10 py-20 overflow-hidden">
+            <section className="keep-dark relative px-6 md:px-10 py-20 overflow-hidden">
                 <div
                     className="absolute inset-0 opacity-25 animate-serviceBg"
                     style={{

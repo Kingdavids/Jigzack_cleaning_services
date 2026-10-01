@@ -159,7 +159,7 @@ export default function UploadsGallery({ uploads, canDelete = false }: { uploads
                                         disabled={deletingId === photo.id}
                                         onClick={() => removePhoto(photo.id)}
                                         aria-label="Delete photo"
-                                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-red-600/90 text-white opacity-100 transition hover:bg-red-500 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                                        className="keep-dark absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-red-600/90 text-white opacity-100 transition hover:bg-red-500 disabled:opacity-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                                     >
                                         <Trash2 className="h-3.5 w-3.5" />
                                     </button>

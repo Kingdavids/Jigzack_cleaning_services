@@ -39,7 +39,7 @@ export default function AboutPage() {
                     ]),
                 ]}
             />
-            <section className="relative px-6 md:px-10 py-24 overflow-hidden">
+            <section className="keep-dark relative px-6 md:px-10 py-24 overflow-hidden">
                 <div
                     className="absolute inset-0 opacity-30 animate-teamBg"
                     style={{

@@ -163,7 +163,7 @@ export default function TaskPhotoManager({
                             type="button"
                             onClick={() => handleDelete(photo.id)}
                             aria-label="Remove photo"
-                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                            className="keep-dark absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/70 text-white opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
                         >
                             <X size={12} />
                         </button>

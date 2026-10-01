@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Menu } from "lucide-react";
+import ThemeToggle from "@/components/ThemeToggle";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { playNotificationSound } from "@/lib/notification-sound";
@@ -249,6 +250,8 @@ export default function Topbar({
                                 </span>
                             </div>
                         )}
+
+                        <ThemeToggle className="h-11 w-11 shrink-0" />
 
                         {!legacy && <NotificationBell profileId={profileId} onUnavailable={useLegacy} />}
 

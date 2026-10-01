@@ -81,7 +81,7 @@ export default function CustomerAccountControls({
                 <button
                     disabled={busy || !matches}
                     onClick={action}
-                    className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="keep-dark rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                     {busy ? "Working..." : label}
                 </button>

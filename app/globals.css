@@ -526,3 +526,82 @@ select optgroup {
   background-color: #141518;
   color: #ffffff;
 }
+
+/* ------------------------------------------------------------------------
+   Light theme
+   The app is built dark: "white" text and white tints on near-black pages.
+   In the light theme "white" becomes a dark ink and the dark page colours
+   become light ones, so every page turns light without rewriting it.
+   next-themes sets data-theme on <html>: the device's setting until the
+   person picks one with the theme button.
+
+   Two kinds of area stay exactly as designed:
+   - .keep-dark: text on photos, the photo viewer, and solid red buttons.
+   - .doc-page: invoices and receipts, which are already light.
+   ------------------------------------------------------------------------ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-white: #15171c;
+  --color-slate-950: #f4f4f1;
+}
+
+:root[data-theme="light"] :is(.keep-dark, .doc-page) {
+  --color-white: #fff;
+  --color-slate-950: oklch(12.9% 0.042 264.695);
+}
+
+:root[data-theme="light"] .keep-dark {
+  color-scheme: dark;
+}
+
+/* The near-black backgrounds used for pages, the sidebar and menus. */
+:root[data-theme="light"] .bg-\[\#0a0a0b\]:not(:is(.keep-dark, .doc-page) *) {
+  background-color: #f4f4f1;
+}
+
+:root[data-theme="light"] :is(.bg-\[\#141518\], .bg-\[\#101010\], .bg-\[\#0d0d0f\]):not(:is(.keep-dark, .doc-page) *) {
+  background-color: #ffffff;
+}
+
+:root[data-theme="light"] .bg-\[\#06060a\]:not(:is(.keep-dark, .doc-page) *) {
+  background-color: #eaeae5;
+}
+
+:root[data-theme="light"] .bg-\[\#0a0a0b\]\/90:not(:is(.keep-dark, .doc-page) *) {
+  background-color: rgb(244 244 241 / 0.9);
+}
+
+:root[data-theme="light"] .bg-\[\#0b0b10\]\/95:not(:is(.keep-dark, .doc-page) *) {
+  background-color: rgb(255 255 255 / 0.95);
+}
+
+/* Inset panels: a dark wash on a dark page becomes a faint grey on a light one. */
+:root[data-theme="light"] :is(.bg-black\/10, .bg-black\/20, .bg-black\/25, .bg-black\/30):not(:is(.keep-dark, .doc-page) *) {
+  background-color: rgb(21 23 28 / 0.04);
+}
+
+/* Pale accent text is unreadable on white, so it takes a deeper shade. */
+:root[data-theme="light"] :is(
+  .text-amber-50, .text-amber-100, .text-amber-200,
+  .hover\:text-amber-200:hover
+):not(:is(.keep-dark, .doc-page) *) { color: #92400e; }
+:root[data-theme="light"] :is(
+  .text-amber-300, .hover\:text-amber-300:hover, .group:hover .group-hover\:text-amber-300,
+  .text-yellow-300, .text-orange-300
+):not(:is(.keep-dark, .doc-page) *) { color: #b45309; }
+:root[data-theme="light"] :is(.text-emerald-100, .text-emerald-200):not(:is(.keep-dark, .doc-page) *) { color: #065f46; }
+:root[data-theme="light"] :is(.text-emerald-300, .text-emerald-400, .text-green-300):not(:is(.keep-dark, .doc-page) *) { color: #047857; }
+:root[data-theme="light"] :is(.text-red-100, .text-red-200, .hover\:text-red-200:hover):not(:is(.keep-dark, .doc-page) *) { color: #991b1b; }
+:root[data-theme="light"] :is(.text-red-300, .hover\:text-red-300:hover, .text-red-400):not(:is(.keep-dark, .doc-page) *) { color: #b91c1c; }
+:root[data-theme="light"] .text-sky-200:not(:is(.keep-dark, .doc-page) *) { color: #075985; }
+:root[data-theme="light"] .text-sky-300:not(:is(.keep-dark, .doc-page) *) { color: #0369a1; }
+:root[data-theme="light"] .text-zinc-300:not(:is(.keep-dark, .doc-page) *) { color: #52525b; }
+
+:root[data-theme="light"] :is(select, input[type="date"], input[type="month"], input[type="time"]):not(:is(.keep-dark, .doc-page) *) {
+  color-scheme: light;
+}
+
+:root[data-theme="light"] :is(select option, select optgroup) {
+  background-color: #ffffff;
+  color: #15171c;
+}

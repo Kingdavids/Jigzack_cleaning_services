@@ -70,7 +70,7 @@ export default function PhotoLightbox({
             role="dialog"
             aria-modal="true"
             aria-label={heading ? `${heading} photo preview` : "Photo preview"}
-            className="fixed inset-0 z-[100] flex flex-col bg-black/95"
+            className="keep-dark fixed inset-0 z-[100] flex flex-col bg-black/95"
             onClick={close}
         >
             <div className="flex items-center justify-between gap-3 px-4 py-3" onClick={(e) => e.stopPropagation()}>

@@ -58,7 +58,7 @@ export default function ClearMessagesCard() {
                         <button
                             disabled={busy || typed.trim() !== "DELETE"}
                             onClick={clear}
-                            className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="keep-dark rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                             {busy ? "Deleting..." : "Delete all messages"}
                         </button>

@@ -70,7 +70,7 @@ export default function ConfirmDialog({
                         onClick={onConfirm}
                         disabled={busy}
                         className={`h-12 rounded-xl px-5 text-sm font-bold transition disabled:opacity-60 sm:h-11 ${
-                            tone === "danger" ? "bg-red-500 text-white hover:bg-red-400" : "bg-emerald-500 text-black hover:bg-emerald-400"
+                            tone === "danger" ? "keep-dark bg-red-500 text-white hover:bg-red-400" : "bg-emerald-500 text-black hover:bg-emerald-400"
                         }`}
                     >
                         {busy ? "Working…" : confirmLabel}

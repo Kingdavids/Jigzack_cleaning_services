@@ -158,7 +158,7 @@ export default function ApprovalsList({
                                     <button
                                         disabled={loadingId === user.id}
                                         onClick={() => updateStatus(user.id, "declined")}
-                                        className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50"
+                                        className="keep-dark rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white hover:bg-red-400 disabled:opacity-50"
                                     >
                                         Confirm decline
                                     </button>

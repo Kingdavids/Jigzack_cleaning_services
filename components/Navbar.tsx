@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const NAV_LINKS = [
     { href: '/', label: 'Home' },
@@ -42,24 +43,25 @@ export default function Navbar() {
                         ))}
                     </nav>
 
-                    <div className="hidden shrink-0 items-center md:flex">
+                    <div className="flex shrink-0 items-center gap-3">
+                        <ThemeToggle />
                         <Link
                             href="/auth"
-                            className="rounded-xl bg-amber-500 px-5 py-2 font-semibold text-black shadow-lg transition hover:bg-amber-300"
+                            className="hidden rounded-xl bg-amber-500 px-5 py-2 font-semibold text-black shadow-lg transition hover:bg-amber-300 md:inline-block"
                         >
                             Get started
                         </Link>
-                    </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setOpen((v) => !v)}
-                        aria-label={open ? "Close menu" : "Open menu"}
-                        aria-expanded={open}
-                        className="shrink-0 rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 md:hidden"
-                    >
-                        {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setOpen((v) => !v)}
+                            aria-label={open ? "Close menu" : "Open menu"}
+                            aria-expanded={open}
+                            className="shrink-0 rounded-lg border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 md:hidden"
+                        >
+                            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                        </button>
+                    </div>
                 </div>
             </div>
 
