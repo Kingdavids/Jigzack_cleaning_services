@@ -3481,3 +3481,28 @@ end
 $$;
 
 select 'done' as result;
+
+-- ============================================================
+-- (also in supabase/non-customer-invoices-2026-10.sql for the live project)
+-- ============================================================
+-- no customer_id; who it is for (name, phone, address and so on) is kept on
+-- the invoice itself. Only admins can see or change these, as with every
+-- invoice. Safe to run more than once. Run it in the Supabase SQL editor.
+
+alter table public.payments
+    add column if not exists bill_to jsonb;
+
+select 'done' as result;
+
+-- ============================================================
+-- (also in supabase/invoice-months-2026-10.sql for the live project)
+-- ============================================================
+-- once (for example October, November and December 2026). The automatic
+-- monthly invoice skips any month already covered, so a customer is never
+-- billed twice for it. Safe to run more than once. Run it in the Supabase SQL
+-- editor.
+
+alter table public.payments
+    add column if not exists covered_months text[];
+
+select 'done' as result;

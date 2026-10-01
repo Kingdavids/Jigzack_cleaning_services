@@ -161,6 +161,45 @@ export type InvoiceActionState = { success: boolean; error?: string } | null;
 
 export type NewInvoiceState = { success: boolean; error?: string; invoiceId?: string } | null;
 
+// What InvoiceBuilder submits: the priced lines, arrears, the months covered
+// and the property's unit counts.
+function readBuiltInvoice(formData: FormData):
+    | { error: string }
+    | { items: LineItem[]; amount: number; arrears: number; invoiceMonth: string | null; coveredMonths: string[]; propertyDetails: Record<string, string> } {
+    let items: LineItem[] = [];
+    let coveredMonths: string[] = [];
+    let propertyDetails: Record<string, string> = {};
+
+    try {
+        items = normalizeLineItems(JSON.parse(String(formData.get("lineItems") || "[]")));
+        const months = JSON.parse(String(formData.get("coveredMonths") || "[]"));
+        coveredMonths = Array.isArray(months) ? months.map(String).filter(Boolean).slice(0, 24) : [];
+        const details = JSON.parse(String(formData.get("propertyDetails") || "{}"));
+        propertyDetails = details && typeof details === "object" ? Object.fromEntries(Object.entries(details).map(([k, v]) => [k, String(v)])) : {};
+    } catch {
+        return { error: "The invoice details couldn't be read. Please try again." };
+    }
+
+    items = items.filter((item) => item.label && item.quantity > 0);
+    if (items.length === 0) return { error: "Add the property's units, or another charge, so there is something to bill." };
+
+    const amount = round2(itemsTotal(items));
+    if (amount <= 0) return { error: "The charges must add up to more than zero." };
+
+    const arrearsInput = Number(formData.get("arrears") || 0);
+    const arrears = Number.isFinite(arrearsInput) && arrearsInput > 0 ? round2(arrearsInput) : 0;
+    const invoiceMonth = String(formData.get("invoiceMonth") ?? "").trim().slice(0, 60) || null;
+
+    return { items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails };
+}
+
+// Why an invoice insert failed, in words an admin can act on.
+function invoiceInsertError(message: string | undefined) {
+    if (/covered_months/.test(message ?? "")) return "Not switched on yet. Run supabase/invoice-months-2026-10.sql in Supabase first.";
+    if (/bill_to/.test(message ?? "")) return "Not switched on yet. Run supabase/non-customer-invoices-2026-10.sql in Supabase first.";
+    return "Could not create the invoice. Please try again.";
+}
+
 // An invoice for someone who is not registered on the app. Their details are
 // kept on the invoice itself (payments.bill_to); an admin prints, downloads or
 // shares it with them, since they have no dashboard to see it in.
@@ -187,22 +226,10 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
     if (!billTo.address) return { success: false, error: "Enter the address the service is for." };
     if (billTo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) return { success: false, error: "That email address doesn't look right." };
 
-    let items: LineItem[] = [];
-    try {
-        items = normalizeLineItems(JSON.parse(String(formData.get("lineItems") || "[]")));
-    } catch {
-        return { success: false, error: "The line items couldn't be read." };
-    }
+    const built = readBuiltInvoice(formData);
+    if ("error" in built) return { success: false, error: built.error };
 
-    items = items.filter((item) => item.label && item.quantity > 0);
-    if (items.length === 0) return { success: false, error: "Add at least one item with a name and quantity." };
-
-    const amount = round2(itemsTotal(items));
-    if (amount <= 0) return { success: false, error: "The items must add up to more than zero." };
-
-    const arrearsInput = Number(formData.get("arrears") || 0);
-    const arrears = Number.isFinite(arrearsInput) && arrearsInput > 0 ? round2(arrearsInput) : 0;
-    const invoiceMonth = text("invoiceMonth", 40);
+    const { items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails } = built;
 
     // A double click or a retried request is the same invoice, not a second one.
     const { data: recent } = await supabase
@@ -220,7 +247,9 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
         .from("payments")
         .insert({
             customer_id: null,
-            bill_to: billTo,
+            // The unit counts go with their details, so the invoice lists them as it does for a customer.
+            bill_to: { ...billTo, facility_details: propertyDetails },
+            covered_months: coveredMonths.length > 0 ? coveredMonths : null,
             amount,
             arrears,
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
@@ -234,12 +263,7 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
 
     if (error || !data) {
         console.error("createNonCustomerInvoice error:", error?.message);
-        return {
-            success: false,
-            error: /bill_to/.test(error?.message ?? "")
-                ? "Not switched on yet. Run supabase/non-customer-invoices-2026-10.sql in Supabase first."
-                : "Could not create the invoice. Please try again.",
-        };
+        return { success: false, error: invoiceInsertError(error?.message) };
     }
 
     await logActivity(supabase, actor, "invoice_created", `Created an invoice for ${billTo.full_name} (not registered)`);
@@ -249,22 +273,19 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
     return { success: true, invoiceId: data.id as string };
 }
 
-export async function createInvoice(
-    _prevState: InvoiceActionState,
-    formData: FormData
-): Promise<InvoiceActionState> {
+export async function createInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
     const customerId = String(formData.get("customerId") || "");
-    const amount = Number(formData.get("amount") || 0);
-    const description = String(formData.get("description") || "").trim() || null;
-    const invoiceMonth = String(formData.get("invoiceMonth") || "").trim() || null;
+    if (!customerId) return { success: false, error: "Choose a customer." };
 
-    if (!customerId || !amount || amount <= 0) {
-        return { success: false, error: "Choose a customer and enter an amount greater than zero." };
-    }
+    const built = readBuiltInvoice(formData);
+    if ("error" in built) return { success: false, error: built.error };
 
+    const { items, amount, arrears, invoiceMonth, coveredMonths } = built;
+
+    // A double click or a retried request is the same invoice, not a second one.
     const { data: duplicateInvoice } = await supabase
         .from("payments")
         .select("id")
@@ -273,28 +294,38 @@ export async function createInvoice(
         .gte("created_at", duplicateSince())
         .limit(1);
 
-    if (duplicateInvoice && duplicateInvoice.length > 0) {
-        return { success: true };
+    if (duplicateInvoice && duplicateInvoice.length > 0) return { success: true, invoiceId: duplicateInvoice[0].id as string };
+
+    const { data, error } = await supabase
+        .from("payments")
+        .insert({
+            customer_id: customerId,
+            amount,
+            arrears,
+            units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
+            line_items: items,
+            description: String(formData.get("description") || "").trim().slice(0, 200) || `Waste management service${invoiceMonth ? `, ${invoiceMonth}` : ""}`,
+            invoice_month: invoiceMonth,
+            // The automatic monthly invoice skips these months, so they are never billed twice.
+            covered_months: coveredMonths.length > 0 ? coveredMonths : null,
+            auto_generated: false,
+        })
+        .select("id")
+        .single();
+
+    if (error || !data) {
+        console.error("createInvoice insert error:", error?.message);
+        return { success: false, error: invoiceInsertError(error?.message) };
     }
 
-    const { error } = await supabase.from("payments").insert({
-        customer_id: customerId,
-        amount,
-        description,
-        invoice_month: invoiceMonth,
-    });
-
-    if (error) {
-        console.error("createInvoice insert error:", error.message);
-        return { success: false, error: "Could not create invoice. Please try again." };
-    }
-
-    await logActivity(supabase, actor, "invoice_created", "Created a one-off invoice");
+    await logActivity(supabase, actor, "invoice_created", `Created an invoice${invoiceMonth ? ` for ${invoiceMonth}` : ""}`, { type: "profile", id: customerId });
     revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath(`/admin/customers/${customerId}`);
     revalidatePath("/customer");
     revalidatePath("/customer/payments");
 
-    return { success: true };
+    return { success: true, invoiceId: data.id as string };
 }
 
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];

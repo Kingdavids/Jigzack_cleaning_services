@@ -100,6 +100,29 @@ export function monthLabel(date: Date = new Date()) {
     return date.toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
+// The months from a "YYYY-MM" start: monthsFrom("2026-10", 3) is
+// ["October 2026", "November 2026", "December 2026"].
+export function monthsFrom(start: string, count: number): string[] {
+    const [y, m] = start.split("-").map(Number);
+    if (!y || !m || count < 1) return [];
+
+    return Array.from({ length: Math.min(count, 24) }, (_, i) =>
+        new Date(Date.UTC(y, m - 1 + i, 15)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
+    );
+}
+
+// "October 2026", "October – December 2026" or "December 2026 – February 2027".
+export function monthRangeLabel(months: string[]): string {
+    if (months.length === 0) return "";
+    if (months.length === 1) return months[0];
+
+    const first = months[0];
+    const last = months[months.length - 1];
+    const [firstName, firstYear] = first.split(" ");
+
+    return firstYear === last.split(" ")[1] ? `${firstName} – ${last}` : `${first} – ${last}`;
+}
+
 // The day of the month (Lagos time) each month's invoice is created. Until
 // then the current invoice is still last month's: on 5 October it is
 // September's, and from 20 October it is October's.

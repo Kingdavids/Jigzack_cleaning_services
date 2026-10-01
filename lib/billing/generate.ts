@@ -326,12 +326,14 @@ export async function generateInvoiceFor(
     const items = chargeItems(customer, units);
     if (items.length === 0) return "no-pricing";
 
-    const { data: existing } = await supabase
-        .from("payments")
-        .select("id")
-        .eq("customer_id", customer.profile_id)
-        .eq("invoice_month", month)
-        .limit(1);
+    // An invoice for this month already, or one made by hand covering several
+    // months including this one. Before the covered_months column exists, only
+    // the month itself is checked.
+    const byMonth = supabase.from("payments").select("id").eq("customer_id", customer.profile_id);
+    const covered = await byMonth.or(`invoice_month.eq."${month}",covered_months.cs.{"${month}"}`).limit(1);
+    const { data: existing } = covered.error
+        ? await supabase.from("payments").select("id").eq("customer_id", customer.profile_id).eq("invoice_month", month).limit(1)
+        : covered;
 
     if (existing && existing.length > 0) return "exists";
 

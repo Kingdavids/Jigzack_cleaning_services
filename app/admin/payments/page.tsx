@@ -1,14 +1,15 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createInvoice, generateAllInvoices } from "../actions";
+import { generateAllInvoices } from "../actions";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
 import { monthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
-import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
+import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
+import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
@@ -36,6 +37,29 @@ export default async function AdminPaymentsPage() {
 
     const hidden = await deletedProfileIds(supabase);
     const customerOptions = (directoryData ?? []).filter((c) => !hidden.has(c.id));
+
+    // Each customer's billable units (vacant ones left out), so a one-off
+    // invoice can start from their property details.
+    const { data: propertyRows } = customerOptions.length
+        ? await supabase.from("customers").select("profile_id, facility_details, vacancies").in("profile_id", customerOptions.map((c) => c.id))
+        : { data: [] };
+    const propertyByProfile = new Map(
+        ((propertyRows ?? []) as { profile_id: string; facility_details: FacilityDetails; vacancies: FacilityDetails }[]).map((row) => [row.profile_id, row])
+    );
+    const invoiceCustomers: InvoiceCustomerOption[] = customerOptions.map((c) => {
+        const property = propertyByProfile.get(c.id);
+        const counts: Record<string, number> = {};
+
+        for (const f of DOMESTIC_FACILITIES) {
+            const billable = facilityCount(property?.facility_details, f.key) - facilityCount(property?.vacancies, f.key);
+            if (billable > 0) counts[f.key] = billable;
+        }
+
+        return { id: c.id, full_name: c.full_name, counts };
+    });
+
+    // One-off invoices start from the current month, Lagos time ("YYYY-MM").
+    const startMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(0, 7);
 
     // "*" picks up the transfer and part payment columns once they exist, so the
     // page works before and after the SQL files have been run. Unpaid and paid are
@@ -331,47 +355,12 @@ export default async function AdminPaymentsPage() {
                     </div>
                 </BulkSelectProvider>
 
-                <SectionCard title="Create a one-off invoice" description="For anything outside the monthly charge.">
-                    <CreateInvoiceForm action={createInvoice}>
-                        <select
-                            name="customerId"
-                            required
-                            defaultValue=""
-                            className="h-11 w-full rounded-xl border border-white/10 bg-[#141518] px-3 text-sm text-white outline-none"
-                        >
-                            <option value="" disabled>
-                                Select customer
-                            </option>
-                            {customerOptions.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.full_name}
-                                </option>
-                            ))}
-                        </select>
-
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <input
-                                type="number"
-                                name="amount"
-                                placeholder="Amount (₦)"
-                                required
-                                min="0"
-                                step="0.01"
-                                className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
-                            />
-                            <input
-                                name="invoiceMonth"
-                                placeholder="e.g. March 2026"
-                                className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
-                            />
-                        </div>
-
-                        <input
-                            name="description"
-                            placeholder="Description"
-                            className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
-                        />
-                    </CreateInvoiceForm>
+                <SectionCard
+                    title="Create a one-off invoice"
+                    description="For anything outside the automatic monthly charge, including several months at once. Months it covers are skipped by the automatic invoice."
+                    collapsible
+                >
+                    <OneOffInvoiceForm customers={invoiceCustomers} defaultStartMonth={startMonth} />
                 </SectionCard>
 
                 <SectionCard
@@ -379,7 +368,7 @@ export default async function AdminPaymentsPage() {
                     description="For a one-off job or a client without an account. Fill in their details and the charges; the invoice opens ready to print, download or share with them."
                     collapsible
                 >
-                    <NonCustomerInvoiceForm defaultMonth={monthLabel()} />
+                    <NonCustomerInvoiceForm defaultStartMonth={startMonth} />
                 </SectionCard>
             </div>
         </DashboardShell>
