@@ -8,7 +8,7 @@ import { escapeHtml, sendEmail } from "@/lib/send-email";
 
 // Called once a day by the GitHub Actions workflow in .github/workflows.
 // Pickups are topped up every day (existing dates are skipped). Monthly
-// invoices are created on INVOICE_DAY (the 20th), Lagos time, for that same
+// invoices are created on INVOICE_DAY (the 25th), Lagos time, for that same
 // month, and never twice for a month.
 // There is no signed-in user here, so it runs with the service key, and the
 // shared secret is the only thing that lets a request in.

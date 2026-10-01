@@ -99,15 +99,11 @@ export default function InvoiceBuilder({
 
             <fieldset className="space-y-3">
                 <legend className="mb-2 text-sm font-semibold">Months covered</legend>
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                     <MonthRangePicker start={range.start} end={range.end} onChange={setRange} />
-                    <div className="text-sm">
-                        <p className="text-white/50">Covers</p>
-                        <p className="text-lg font-bold">{period}</p>
-                        <p className="text-white/50">
-                            {n} month{n === 1 ? "" : "s"}
-                        </p>
-                    </div>
+                    <p className="text-sm text-white/60 lg:pb-3">
+                        Covers <span className="font-bold text-white">{period}</span> · {n} month{n === 1 ? "" : "s"}
+                    </p>
                 </div>
             </fieldset>
 

@@ -1834,7 +1834,7 @@ export async function setCustomerArrears(profileId: string, arrears: number): Pr
     };
 }
 
-// The current invoice (last month's until the 20th), if it is still untouched
+// The current invoice (last month's until the 25th), if it is still untouched
 // and unpaid, takes the arrears right away instead of waiting for the next one.
 async function syncArrearsToOpenInvoice(supabase: Awaited<ReturnType<typeof createClient>>, profileId: string, amount: number) {
     const { data: open } = await supabase

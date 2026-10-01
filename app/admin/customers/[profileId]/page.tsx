@@ -165,10 +165,10 @@ export default async function AdminCustomerDetailPage({
     );
 
     // The current invoice as it actually stands, which can differ from the
-    // standard monthly charge once it has been edited. It changes on the 20th:
+    // standard monthly charge once it has been edited. It changes on the 25th:
     // until then it is last month's. Falls back to their latest invoice.
     const currentInvoice = allInvoices.find((i) => i.invoice_month === billingMonthLabel()) ?? allInvoices[0] ?? null;
-    // The month an invoice made now is for (last month's until the 20th), and
+    // The month an invoice made now is for (last month's until the 25th), and
     // whether it has been made already.
     const billingMonth = billingMonthLabel();
     const billingMonthInvoice = allInvoices.find((i) => i.invoice_month === billingMonth) ?? null;

@@ -107,7 +107,7 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
     // What is left to pay across all invoices, after any part payments.
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
 
-    // The current invoice changes on the 20th: until then it is last month's.
+    // The current invoice changes on the 25th: until then it is last month's.
     // A new customer may only have one for a different month, so fall back to their latest.
     const newestFirst = [...invoices].sort((a, b) => b.created_at.localeCompare(a.created_at));
     const currentInvoice = newestFirst.find((i) => i.invoice_month === billingMonthLabel()) ?? newestFirst[0] ?? null;

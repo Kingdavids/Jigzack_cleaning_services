@@ -1,7 +1,7 @@
 name: Daily billing
 
 # Keeps pickups scheduled four weeks ahead and creates the monthly invoices on
-# the 20th. The work happens in app/api/cron/billing; this only rings its doorbell.
+# the 25th. The work happens in app/api/cron/billing; this only rings its doorbell.
 # Add the CRON_SECRET repository secret (same value as in Railway) for it to work.
 
 on:

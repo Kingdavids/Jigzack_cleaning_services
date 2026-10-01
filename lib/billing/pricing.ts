@@ -125,8 +125,8 @@ export function monthRangeLabel(months: string[]): string {
 
 // The day of the month (Lagos time) each month's invoice is created. Until
 // then the current invoice is still last month's: on 5 October it is
-// September's, and from 20 October it is October's.
-export const INVOICE_DAY = 20;
+// September's, and from 25 October it is October's.
+export const INVOICE_DAY = 25;
 
 // The month whose invoice is the current one right now (see INVOICE_DAY).
 export function billingMonthLabel(now: Date = new Date()) {
