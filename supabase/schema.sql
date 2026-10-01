@@ -3460,3 +3460,24 @@ revoke execute on function public.report_invoice_transfer(uuid, text, text) from
 grant execute on function public.report_invoice_transfer(uuid, text, text) to authenticated;
 
 select 'done' as result;
+
+-- ============================================================
+-- Live updates for invoices
+-- (also in supabase/payments-realtime-2026-10.sql for the live project)
+-- ============================================================
+-- records a payment, or a customer reports a transfer. Each person still only
+-- receives changes to invoices they are allowed to read. Safe to run more than
+-- once. Run it in the Supabase SQL editor.
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'payments'
+    ) then
+        alter publication supabase_realtime add table public.payments;
+    end if;
+end
+$$;
+
+select 'done' as result;

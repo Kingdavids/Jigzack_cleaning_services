@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ export default function InvoiceEditor({
         auto_generated: boolean;
     };
 }) {
+    const router = useRouter();
     const [state, formAction] = useActionState<InvoiceActionState, FormData>(action, null);
     const [items, setItems] = useState<LineItem[]>(
         invoice.line_items.length > 0
@@ -47,9 +49,12 @@ export default function InvoiceEditor({
 
     useEffect(() => {
         if (!state) return;
-        if (state.success) toast.success("Invoice saved");
-        else if (state.error) toast.error(state.error);
-    }, [state]);
+        if (state.success) {
+            toast.success("Invoice saved");
+            // Totals and balances elsewhere on the page follow the saved invoice.
+            router.refresh();
+        } else if (state.error) toast.error(state.error);
+    }, [state, router]);
 
     const total = useMemo(() => itemsTotal(items), [items]);
 

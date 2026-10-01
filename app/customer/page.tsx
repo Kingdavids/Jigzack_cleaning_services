@@ -14,6 +14,7 @@ import StatCard from "@/components/dashboard/StatCard";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { ACTIVE_PROPERTY_COOKIE, loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 type TaskRow = {
@@ -113,6 +114,8 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
             subtitle="Here's what's happening with your account."
             unreadCount={unreadCount}
         >
+            {/* Pickups and invoices change on the admin side; this keeps the figures here in step. */}
+            <LiveRefresh tables={["tasks", "payments"]} />
             <div className="space-y-6">
                 {combinedOutstanding !== null && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm">

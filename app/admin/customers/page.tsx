@@ -15,6 +15,7 @@ import ConfirmEmailButton from "@/components/dashboard/ConfirmEmailButton";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 import type { EstateUnit } from "@/lib/billing/pricing";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
 type CustomerRow = {
     id: string;
@@ -165,6 +166,8 @@ export default async function AdminCustomersPage({
             subtitle="Every customer's details, property, schedule and billing."
             unreadCount={unreadCount}
         >
+            {/* What each customer owes follows invoice edits and payments on the Payments page. */}
+            <LiveRefresh tables={["payments"]} />
             <SectionCard title="Customers" description="Open a customer to see and edit everything on file.">
                 <form className="mb-5 flex gap-2" action="/admin/customers">
                     <div className="relative flex-1">

@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Receipt } from "lucide-react";
 import { formatDate } from "@/lib/customer/billing";
 import PropertySwitcher from "@/components/dashboard/PropertySwitcher";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { ACTIVE_PROPERTY_COOKIE, loadCombinedOutstanding, loadMyProperties, resolveActiveProperty } from "@/lib/dashboard/propertyLinks";
 
 export default async function CustomerPaymentsPage({ searchParams }: { searchParams: Promise<{ property?: string }> }) {
@@ -71,6 +72,8 @@ export default async function CustomerPaymentsPage({ searchParams }: { searchPar
             subtitle="Every invoice, its status, and a receipt for each payment you've made."
             unreadCount={unreadCount}
         >
+            {/* An admin editing an invoice or recording a payment shows up here straight away. */}
+            <LiveRefresh tables={["payments"]} />
             <SectionCard
                 title="Invoices"
                 description={

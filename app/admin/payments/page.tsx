@@ -1,21 +1,16 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createInvoice, generateAllInvoices, updateInvoice } from "../actions";
-import { formatDate, invoiceNumber, naira, receiptNumber } from "@/lib/customer/billing";
+import { createInvoice, generateAllInvoices } from "../actions";
+import { formatDate, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
-import { monthLabel, normalizeLineItems } from "@/lib/billing/pricing";
+import { monthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
-import StatusBadge from "@/components/dashboard/StatusBadge";
 import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
-import RecordPaymentControl from "@/components/dashboard/RecordPaymentControl";
-import VoidPaymentButton from "@/components/dashboard/VoidPaymentButton";
-import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
-import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
-import Link from "next/link";
+import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
-import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
+import { BulkSelectProvider } from "@/components/dashboard/BulkSelect";
 import { deleteInvoices } from "../cleanup-actions";
 import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
@@ -25,27 +20,7 @@ type ProfileRef = { full_name: string | null } | null;
 
 const PAID_LIMIT = 300;
 
-type PaymentRow = {
-    id: string;
-    customer_id?: string | null;
-    amount: number;
-    arrears: number | null;
-    status: string;
-    description: string | null;
-    invoice_month: string | null;
-    created_at: string;
-    paid_at: string | null;
-    payment_method: string | null;
-    payment_reference: string | null;
-    amount_paid?: number | string | null;
-    line_items: unknown;
-    auto_generated: boolean;
-    customer: ProfileRef;
-    // What the customer reported when they said they paid by transfer.
-    transfer_reported_at?: string | null;
-    transfer_note?: string | null;
-    transfer_receipt_path?: string | null;
-};
+type PaymentRow = AdminInvoiceRow & { customer: ProfileRef };
 
 export default async function AdminPaymentsPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -156,124 +131,16 @@ export default async function AdminPaymentsPage() {
         : [];
     const receiptUrl = new Map(signed.map((s) => [s.path, s.signedUrl]));
 
-    const renderInvoice = (payment: PaymentRow) => {
-                                const total = invoiceTotal(payment);
-                                const paid = amountPaid(payment);
-                                const balance = balanceOf(payment);
-                                const partPaid = payment.status !== "paid" && paid > 0;
-                                const installments = installmentsByInvoice.get(payment.id) ?? [];
-
-                                return (
-                                    <div
-                                        key={payment.id}
-                                        className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${canBulk ? "pl-12" : ""}`}
-                                    >
-                                        <div className="absolute left-4 top-6">
-                                            <BulkCheckbox id={payment.id} label="Select invoice" />
-                                        </div>
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div>
-                                                <p className="font-bold">{payment.customer?.full_name ?? "Unknown customer"}</p>
-                                                <p className="text-xs text-white/50">
-                                                    {payment.invoice_month ?? formatDate(payment.created_at)} ·{" "}
-                                                    {invoiceNumber(payment.id)}
-                                                    {payment.auto_generated ? " · auto-generated" : ""}
-                                                </p>
-                                            </div>
-
-                                            <div className="text-right">
-                                                <p className="font-bold text-amber-300">{naira(total)}</p>
-                                                {partPaid && (
-                                                    <p className="text-xs text-white/50">
-                                                        {naira(paid)} paid, {naira(balance)} owed
-                                                    </p>
-                                                )}
-                                                <StatusBadge status={partPaid ? "part_paid" : payment.status} />
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/10 pt-3 text-xs">
-                                            <Link
-                                                href={`/admin/invoices/${payment.id}`}
-                                                className="font-semibold text-amber-300 underline underline-offset-2"
-                                            >
-                                                Preview invoice
-                                            </Link>
-                                            {payment.status === "paid" && installments.length === 0 && (
-                                                <Link
-                                                    href={`/admin/receipts/${payment.id}`}
-                                                    className="font-semibold text-amber-300 underline underline-offset-2"
-                                                >
-                                                    Preview receipt
-                                                </Link>
-                                            )}
-                                            {payment.status === "paid" && installments.length === 0 && (
-                                                <span className="text-white/45">
-                                                    Paid {formatDate(payment.paid_at ?? payment.created_at)}
-                                                    {payment.payment_method ? ` via ${payment.payment_method}` : ""}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {installments.length > 0 && (
-                                            <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                                                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-white/45">Payments received</p>
-                                                <ul className="mt-2 space-y-2">
-                                                    {installments.map((item, index) => (
-                                                        <li key={item.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                                                            <span className="font-semibold text-white">{naira(Number(item.amount))}</span>
-                                                            <span className="text-white/55">
-                                                                {formatDate(item.paid_at)}
-                                                                {item.method ? ` · ${item.method}` : ""}
-                                                                {item.reference ? ` · ref ${item.reference}` : ""}
-                                                            </span>
-                                                            <span className="text-white/45">{naira(Number(item.balance_after))} owed after</span>
-                                                            <Link
-                                                                href={`/admin/receipts/${item.id}`}
-                                                                className="font-semibold text-amber-300 underline underline-offset-2"
-                                                            >
-                                                                Preview receipt {receiptNumber(item.id)}
-                                                            </Link>
-                                                            {canAct && (
-                                                                <VoidPaymentButton
-                                                                    installmentId={item.id}
-                                                                    label={`payment ${index + 1} (${naira(Number(item.amount))})`}
-                                                                />
-                                                            )}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        )}
-
-                                        {payment.status !== "paid" && (
-                                            <>
-                                                {payment.transfer_reported_at && (
-                                                    <InvoiceTransferReview
-                                                        paymentId={payment.id}
-                                                        reportedAt={formatDate(payment.transfer_reported_at)}
-                                                        note={payment.transfer_note ?? null}
-                                                        receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
-                                                    />
-                                                )}
-                                                <InvoiceEditor
-                                                    action={updateInvoice}
-                                                    invoice={{
-                                                        id: payment.id,
-                                                        invoice_month: payment.invoice_month,
-                                                        description: payment.description,
-                                                        arrears: Number(payment.arrears ?? 0),
-                                                        amount: Number(payment.amount),
-                                                        line_items: normalizeLineItems(payment.line_items),
-                                                        auto_generated: payment.auto_generated,
-                                                    }}
-                                                />
-                                                {canAct && <RecordPaymentControl key={`${payment.id}-${balance}`} paymentId={payment.id} balance={balance} />}
-                                            </>
-                                        )}
-                                    </div>
-                                );
-    };
+    const renderInvoice = (payment: PaymentRow) => (
+        <AdminInvoiceCard
+            key={payment.id}
+            payment={payment}
+            installments={installmentsByInvoice.get(payment.id) ?? []}
+            canAct={canAct}
+            bulk={canBulk}
+            receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
+        />
+    );
 
     return (
         <DashboardShell

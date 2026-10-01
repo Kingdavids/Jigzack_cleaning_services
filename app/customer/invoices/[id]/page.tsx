@@ -3,6 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { loadInstallments } from "@/lib/billing/balance";
 import InvoiceDocument from "@/components/dashboard/InvoiceDocument";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
 export default async function CustomerInvoicePage({
                                                       params,
@@ -31,12 +32,15 @@ export default async function CustomerInvoicePage({
     const installments = await loadInstallments(supabase, [invoice.id]);
 
     return (
-        <InvoiceDocument
-            invoice={invoice}
-            customer={billingCustomer}
-            fallbackName={profile.full_name}
-            installments={installments}
-            basePath="/customer"
-        />
+        <>
+            <LiveRefresh tables={["payments"]} />
+            <InvoiceDocument
+                invoice={invoice}
+                customer={billingCustomer}
+                fallbackName={profile.full_name}
+                installments={installments}
+                basePath="/customer"
+            />
+        </>
     );
 }

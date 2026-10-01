@@ -31,7 +31,10 @@ import { loadCombinedOutstanding } from "@/lib/dashboard/propertyLinks";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
-import { amountPaid, balanceOf, invoiceTotal } from "@/lib/billing/balance";
+import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
+import { monthLabel } from "@/lib/billing/pricing";
+import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
     return (
@@ -143,7 +146,27 @@ export default async function AdminCustomerDetailPage({
     // the same figure chargeItems uses to generate it.
     const netMonthly = itemsTotal(chargeItems(customer as unknown as BillableCustomer, estateUnits));
 
-    const allInvoices = invoices ?? [];
+    const allInvoices = (invoices ?? []) as AdminInvoiceRow[];
+
+    // Shown as the same cards as the Payments page: everything still owed, then
+    // the most recent settled ones.
+    const RECENT_PAID = 6;
+    const openInvoices = allInvoices.filter((i) => i.status !== "paid");
+    const shownInvoices = [...openInvoices, ...allInvoices.filter((i) => i.status === "paid").slice(0, RECENT_PAID)];
+    const hiddenPaid = allInvoices.length - shownInvoices.length;
+    const installmentsByInvoice = groupInstallments(await loadInstallments(supabase, shownInvoices.map((i) => i.id)));
+
+    // Receipts customers uploaded for a transfer are private, so each opens through a link that expires in an hour.
+    const transferPaths = openInvoices.map((i) => i.transfer_receipt_path).filter((path): path is string => Boolean(path));
+    const transferLinks = new Map(
+        (transferPaths.length ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrls(transferPaths, 3600)).data ?? [] : []).map(
+            (link) => [link.path, link.signedUrl]
+        )
+    );
+
+    // This month's invoice as it actually stands, which can differ from the
+    // standard monthly charge once it has been edited on the Payments page.
+    const thisMonthInvoice = allInvoices.find((i) => i.invoice_month === monthLabel()) ?? null;
 
     // Months paid for in advance. Empty before the prepayments SQL has been run.
     const prepayments = await loadPrepayments(supabase, profileId);
@@ -160,6 +183,8 @@ export default async function AdminCustomerDetailPage({
             subtitle="Everything on file for this customer."
             unreadCount={unreadCount}
         >
+            {/* Invoices edited or paid on the Payments page show up here straight away. */}
+            <LiveRefresh tables={["payments", "tasks"]} />
             <div className="space-y-6">
                 <Link
                     href="/admin/customers"
@@ -430,6 +455,36 @@ export default async function AdminCustomerDetailPage({
                             </p>
                         )}
 
+                        {thisMonthInvoice && (
+                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.12em] text-white/40">{thisMonthInvoice.invoice_month} invoice</p>
+                                    <p className="mt-0.5">
+                                        <span className="font-bold text-amber-300">{naira(invoiceTotal(thisMonthInvoice))}</span>
+                                        {Number(thisMonthInvoice.arrears ?? 0) > 0 && (
+                                            <span className="text-white/50">
+                                                {" "}
+                                                ({naira(Number(thisMonthInvoice.amount))} + {naira(Number(thisMonthInvoice.arrears))} arrears)
+                                            </span>
+                                        )}
+                                    </p>
+                                    {Math.abs(Number(thisMonthInvoice.amount) - netMonthly) >= 0.01 && (
+                                        <p className="mt-1 text-xs text-white/50">
+                                            Edited, so it differs from the monthly charge above. New invoices still use the monthly charge.
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <StatusBadge
+                                        status={thisMonthInvoice.status !== "paid" && amountPaid(thisMonthInvoice) > 0 ? "part_paid" : thisMonthInvoice.status}
+                                    />
+                                    <a href="#invoices" className="text-xs font-semibold text-amber-300 underline underline-offset-2">
+                                        See or edit it
+                                    </a>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="mt-6 border-t border-white/10 pt-6">
                             {isFullAdmin(profile) ? (
                                 <DiscountControl profileId={profileId} customName={customer.full_name ?? "this customer"} current={currentDiscount} />
@@ -511,40 +566,27 @@ export default async function AdminCustomerDetailPage({
                         </Link>
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-2">
-                        <div>
-                            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/40">Recent invoices</p>
-                            {allInvoices.length === 0 ? (
+                    <div className="space-y-6">
+                        <div id="invoices" className="scroll-mt-24">
+                            <p className="mb-2 text-xs uppercase tracking-[0.12em] text-white/40">Invoices</p>
+                            {shownInvoices.length === 0 ? (
                                 <p className="text-sm text-white/40">No invoices yet.</p>
                             ) : (
-                                <div className="space-y-2">
-                                    {allInvoices.slice(0, 6).map((invoice) => {
-                                        const partPaid = invoice.status !== "paid" && amountPaid(invoice) > 0;
-
-                                        return (
-                                            <div key={invoice.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm">
-                                                <span>
-                                                    {invoice.invoice_month ?? formatDate(invoice.created_at)}
-                                                    <Link
-                                                        href={`/admin/invoices/${invoice.id}`}
-                                                        className="ml-3 text-xs font-semibold text-amber-300 underline underline-offset-2"
-                                                    >
-                                                        Preview
-                                                    </Link>
-                                                </span>
-                                                <span className="flex items-center gap-3">
-                                                    <span className="font-semibold text-amber-300">
-                                                        {naira(partPaid ? balanceOf(invoice) : invoiceTotal(invoice))}
-                                                    </span>
-                                                    <StatusBadge status={partPaid ? "part_paid" : invoice.status ?? "pending"} />
-                                                </span>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="space-y-3">
+                                    {shownInvoices.map((invoice) => (
+                                        <AdminInvoiceCard
+                                            key={invoice.id}
+                                            payment={invoice}
+                                            installments={installmentsByInvoice.get(invoice.id) ?? []}
+                                            canAct={isFullAdmin(profile)}
+                                            showCustomer={false}
+                                            receiptUrl={invoice.transfer_receipt_path ? transferLinks.get(invoice.transfer_receipt_path) ?? null : null}
+                                        />
+                                    ))}
                                 </div>
                             )}
                             <Link href="/admin/payments" className="mt-3 inline-block text-xs text-amber-300 hover:text-amber-200">
-                                Edit invoices on the Payments page
+                                {hiddenPaid > 0 ? `${hiddenPaid} older paid invoice${hiddenPaid === 1 ? "" : "s"} on the Payments page` : "All invoices on the Payments page"}
                             </Link>
                         </div>
 
