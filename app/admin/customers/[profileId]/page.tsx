@@ -449,7 +449,7 @@ export default async function AdminCustomerDetailPage({
                                 />
                             ) : (
                                 <p className="text-sm text-white/70">
-                                    Arrears:{" "}
+                                    Arrears waiting to be charged:{" "}
                                     <span className="font-semibold text-amber-300">
                                         {naira(Number((customer as { arrears?: number | string | null }).arrears ?? 0))}
                                     </span>

@@ -12,10 +12,9 @@ const parseAmount = (text: string) => {
     return cleaned === "" || !/^\d*\.?\d{0,2}$/.test(cleaned) ? NaN : Number(cleaned);
 };
 
-// One arrears figure per customer, the same one shown and editable from an
-// invoice on the Payments page, so the two can never disagree. It lands on
-// the current invoice right away if it is still untouched and unpaid, then
-// carries onto every invoice generated after that until it is changed again.
+// Money a customer owed from before, charged once: on the current invoice
+// right away if that is still untouched and unpaid, otherwise on their next
+// invoice. What is shown here is only what is still waiting to be charged.
 export default function CustomerArrearsControl({
                                                     profileId,
                                                     customName,
@@ -53,12 +52,12 @@ export default function CustomerArrearsControl({
     return (
         <div className="space-y-3">
             <div>
-                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Arrears</p>
+                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Arrears waiting to be charged</p>
                 <p className="mt-0.5 text-2xl font-bold text-amber-300">{current > 0 ? naira(current) : "None"}</p>
                 <p className="mt-1 text-sm text-white/55">
                     {current > 0
-                        ? "Added on top of their current and every future invoice, until changed or cleared."
-                        : "Added on top of their current and every future invoice, until cleared."}
+                        ? "Goes onto their next invoice, once. Arrears already on an invoice are shown on that invoice in Payments."
+                        : "Arrears are charged once, on one invoice. Any already charged are shown on that invoice in Payments."}
                 </p>
             </div>
 
@@ -104,9 +103,9 @@ export default function CustomerArrearsControl({
                     <p>{customName}&apos;s arrears go back to zero.</p>
                 ) : (
                     <p>
-                        {customName}&apos;s arrears become <span className="font-bold text-white">{naira(pending ?? 0)}</span>. It lands on their
-                        current invoice right away if it&apos;s still untouched and unpaid, and every invoice after that until it&apos;s changed
-                        again. It also shows up in &quot;Preview before generating&quot;.
+                        <span className="font-bold text-white">{naira(pending ?? 0)}</span> is charged to {customName} once. It goes onto this
+                        month&apos;s invoice right away if that is still untouched, unpaid and has no arrears on it yet; otherwise onto their next
+                        invoice. It also shows up in &quot;Preview before generating&quot;.
                     </p>
                 )}
             </ConfirmDialog>

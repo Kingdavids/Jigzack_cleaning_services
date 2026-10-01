@@ -298,6 +298,15 @@ export async function generateScheduleFor(supabase: SupabaseServerClient, custom
     };
 }
 
+// customers.arrears is money owed from before, waiting to be put on an
+// invoice. Once it is on one it is owed there, so the waiting figure goes back
+// to zero; otherwise every later invoice would charge it again. Only cleared
+// if it is still the amount that landed, so a change made meanwhile survives.
+export async function clearPendingArrears(supabase: SupabaseServerClient, profileId: string, landed: number) {
+    const { error } = await supabase.from("customers").update({ arrears: 0 }).eq("profile_id", profileId).eq("arrears", landed);
+    if (error) console.error("clearPendingArrears error:", error.message);
+}
+
 export type InvoiceOutcome = "created" | "exists" | "no-pricing" | "prepaid" | "error";
 
 // One invoice per customer per month, computed from their property details
@@ -326,13 +335,13 @@ export async function generateInvoiceFor(
 
     if (existing && existing.length > 0) return "exists";
 
-    // The customer's current arrears (set from their Billing section, or from
-    // this same field on an earlier invoice) carries onto this one too, the
-    // same single number everywhere until it is changed.
+    // Arrears waiting from their Billing section land on this invoice, once.
+    const arrears = Number(customer.arrears ?? 0) || 0;
+
     const { error } = await supabase.from("payments").insert({
         customer_id: customer.profile_id,
         amount: itemsTotal(items),
-        arrears: Number(customer.arrears ?? 0) || 0,
+        arrears,
         units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
         description: `Waste management service charge, ${month}`,
         invoice_month: month,
@@ -344,6 +353,8 @@ export async function generateInvoiceFor(
         console.error("generateInvoiceFor insert error:", error.message);
         return "error";
     }
+
+    if (arrears > 0) await clearPendingArrears(supabase, customer.profile_id, arrears);
 
     return "created";
 }
@@ -380,11 +391,15 @@ export async function recalculateOpenInvoice(
     const ids = (open ?? []).filter((row) => amountPaid(row) === 0).map((row) => row.id as string);
     if (ids.length === 0) return false;
 
+    // The invoice keeps the arrears already on it. Only arrears still waiting
+    // in the customer's Billing section are put on (and then cleared there).
+    const pending = Number(customer.arrears ?? 0) || 0;
+
     const { data, error } = await supabase
         .from("payments")
         .update({
             amount: itemsTotal(items),
-            arrears: Number(customer.arrears ?? 0) || 0,
+            ...(pending > 0 ? { arrears: pending } : {}),
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             line_items: items,
         })
@@ -395,6 +410,8 @@ export async function recalculateOpenInvoice(
         console.error("recalculateOpenInvoice error:", error.message);
         return false;
     }
+
+    if (pending > 0 && data && data.length > 0) await clearPendingArrears(supabase, customer.profile_id, pending);
 
     return Boolean(data && data.length > 0);
 }
