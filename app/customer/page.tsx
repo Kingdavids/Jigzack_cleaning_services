@@ -4,6 +4,8 @@ import { CalendarCheck, CalendarClock, CreditCard, Repeat } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { formatDate, naira, resolveBilling } from "@/lib/customer/billing";
 import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
+import { billingMonthLabel, INVOICE_DAY } from "@/lib/billing/pricing";
+import { invoiceNumber } from "@/lib/customer/billing";
 import { taskDisplayStatus } from "@/lib/tasks";
 import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { discountInfo, loadEstateUnits, type DiscountableCustomer } from "@/lib/billing/generate";
@@ -75,8 +77,18 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
                 .then((r) => (r.data ?? []) as TaskRow[]),
         loadWithPaid(
             (select) => supabase.from("payments").select(select).eq("customer_id", billingProfileId).limit(200),
-            "amount, arrears, status"
-        ) as Promise<{ amount: number | string | null; arrears: number | string | null; status: string | null; amount_paid?: number | string | null }[]>,
+            "id, amount, arrears, status, invoice_month, created_at"
+        ) as Promise<
+            {
+                id: string;
+                amount: number | string | null;
+                arrears: number | string | null;
+                status: string | null;
+                invoice_month: string | null;
+                created_at: string;
+                amount_paid?: number | string | null;
+            }[]
+        >,
     ]);
 
     const today = todayKey();
@@ -94,6 +106,24 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
 
     // What is left to pay across all invoices, after any part payments.
     const outstanding = invoices.reduce((sum, i) => sum + balanceOf(i), 0);
+
+    // The current invoice changes on the 20th: until then it is last month's.
+    // A new customer may only have one for a different month, so fall back to their latest.
+    const newestFirst = [...invoices].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    const currentInvoice = newestFirst.find((i) => i.invoice_month === billingMonthLabel()) ?? newestFirst[0] ?? null;
+    // Every other invoice still owing, so the total below is everything to pay.
+    const earlierUnpaid = currentInvoice
+        ? invoices
+              .filter((i) => i.id !== currentInvoice.id && balanceOf(i) > 0)
+              .sort((a, b) => a.created_at.localeCompare(b.created_at))
+        : [];
+    const allEarlier = currentInvoice ? earlierUnpaid.every((i) => i.created_at < currentInvoice.created_at) : true;
+    const toPayNow = (currentInvoice ? balanceOf(currentInvoice) : 0) + earlierUnpaid.reduce((sum, i) => sum + balanceOf(i), 0);
+
+    // When the next monthly invoice is due to appear.
+    const lagosDate = today.split("-").map(Number);
+    const nextInvoiceOn = new Date(Date.UTC(lagosDate[0], lagosDate[1] - (lagosDate[2] < INVOICE_DAY ? 1 : 0), INVOICE_DAY));
+    const nextInvoiceText = `Your ${nextInvoiceOn.toLocaleString("en-US", { month: "long", timeZone: "UTC" })} invoice will be ready on ${nextInvoiceOn.toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "UTC" })}.`;
 
     const paidUpTo = isTenant ? null : prepaidUntil(await loadPrepayments(supabase, activeProfileId));
 
@@ -211,6 +241,64 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
                         />
                     </Link>
                 </div>
+
+                <SectionCard
+                    id="bill"
+                    title={currentInvoice ? `Your current invoice: ${currentInvoice.invoice_month ?? formatDate(currentInvoice.created_at)}` : "Your current invoice"}
+                    description={nextInvoiceText}
+                >
+                    {!currentInvoice ? (
+                        <p className="text-sm text-white/60">You don&apos;t have an invoice yet.</p>
+                    ) : (
+                        <div className="space-y-3">
+                            <div className="overflow-hidden rounded-xl border border-white/10">
+                                {earlierUnpaid.length > 0 && (
+                                    <p className="bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-white/45">
+                                        {allEarlier ? "Earlier invoices not yet paid" : "Other invoices not yet paid"}
+                                    </p>
+                                )}
+                                {earlierUnpaid.map((invoice) => (
+                                    <Link
+                                        key={invoice.id}
+                                        href={`/customer/invoices/${invoice.id}`}
+                                        className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2.5 text-sm first:border-t-0 hover:bg-white/[0.04]"
+                                    >
+                                        <span>
+                                            {invoice.invoice_month ?? formatDate(invoice.created_at)}
+                                            <span className="ml-2 text-xs text-white/40">{invoiceNumber(invoice.id)}</span>
+                                        </span>
+                                        <span className="font-semibold text-amber-300">{naira(balanceOf(invoice))}</span>
+                                    </Link>
+                                ))}
+                                <Link
+                                    href={`/customer/invoices/${currentInvoice.id}`}
+                                    className="flex items-center justify-between gap-3 border-t border-white/10 px-4 py-2.5 text-sm first:border-t-0 hover:bg-white/[0.04]"
+                                >
+                                    <span>
+                                        {currentInvoice.invoice_month ?? formatDate(currentInvoice.created_at)} (current)
+                                        <span className="ml-2 text-xs text-white/40">{invoiceNumber(currentInvoice.id)}</span>
+                                    </span>
+                                    <span className="flex items-center gap-3">
+                                        <span className="font-semibold text-amber-300">{naira(balanceOf(currentInvoice))}</span>
+                                        <StatusBadge status={currentInvoice.status ?? "pending"} />
+                                    </span>
+                                </Link>
+                                <div className="flex items-center justify-between gap-3 border-t border-white/20 bg-white/[0.04] px-4 py-3">
+                                    <span className="font-semibold">
+                                        {earlierUnpaid.length > 0 ? "Total to pay now (all unpaid invoices)" : "Total to pay now"}
+                                    </span>
+                                    <span className="text-lg font-bold text-amber-300">{naira(toPayNow)}</span>
+                                </div>
+                            </div>
+                            <Link
+                                href={`/customer/invoices/${currentInvoice.id}`}
+                                className="inline-block rounded-xl bg-amber-400 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-amber-300"
+                            >
+                                View invoice
+                            </Link>
+                        </div>
+                    )}
+                </SectionCard>
 
                 <SectionCard
                     id="details"

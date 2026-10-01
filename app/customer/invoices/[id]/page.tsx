@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { loadInstallments } from "@/lib/billing/balance";
+import { loadInstallments, loadUnpaidInvoices } from "@/lib/billing/balance";
 import InvoiceDocument from "@/components/dashboard/InvoiceDocument";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
@@ -30,6 +30,10 @@ export default async function CustomerInvoicePage({
     const { data: billingCustomer } = await supabase.from("customers").select("*").eq("profile_id", invoice.customer_id).maybeSingle();
 
     const installments = await loadInstallments(supabase, [invoice.id]);
+    // Older invoices still owing, so the invoice shows the full amount to pay.
+    const earlierUnpaid = (await loadUnpaidInvoices(supabase, invoice.customer_id)).filter(
+        (other) => other.id !== invoice.id && other.created_at < invoice.created_at
+    );
 
     return (
         <>
@@ -40,6 +44,7 @@ export default async function CustomerInvoicePage({
                 fallbackName={profile.full_name}
                 installments={installments}
                 basePath="/customer"
+                earlierUnpaid={earlierUnpaid}
             />
         </>
     );

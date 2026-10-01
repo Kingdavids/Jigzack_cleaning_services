@@ -28,25 +28,6 @@ export function newInvoiceEmail({ name, month, total, link }: Details) {
     };
 }
 
-// Sent by an admin, for example after correcting an invoice, so the customer
-// has the invoice as it stands now.
-export function sentInvoiceEmail({ name, month, total, link, updated }: Details & { updated: boolean }) {
-    return {
-        subject: updated ? `Your updated Jigzack invoice for ${month}` : `Your Jigzack invoice for ${month}`,
-        html: wrap(
-            `<p>Hi ${escapeHtml(name?.trim() || "there")},</p>
-             <p>${
-                 updated
-                     ? `We have updated your invoice for <strong>${escapeHtml(month)}</strong>. Please use this one; it replaces what we sent before.`
-                     : `Here is your invoice for <strong>${escapeHtml(month)}</strong>.`
-             } The amount due is <strong>${escapeHtml(total)}</strong>.</p>
-             <p>You can view, print or download it in your dashboard. The payment details are on the invoice.</p>`,
-            link,
-            "View your invoice"
-        ),
-    };
-}
-
 export function reminderEmail({ name, month, total, link, number }: Details & { number: 1 | 2 }) {
     const opening =
         number === 1

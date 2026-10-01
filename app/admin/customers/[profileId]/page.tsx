@@ -32,7 +32,7 @@ import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
-import { monthLabel } from "@/lib/billing/pricing";
+import { billingMonthLabel, INVOICE_DAY, monthLabel } from "@/lib/billing/pricing";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
@@ -164,9 +164,13 @@ export default async function AdminCustomerDetailPage({
         )
     );
 
-    // This month's invoice as it actually stands, which can differ from the
-    // standard monthly charge once it has been edited on the Payments page.
-    const thisMonthInvoice = allInvoices.find((i) => i.invoice_month === monthLabel()) ?? null;
+    // The current invoice as it actually stands, which can differ from the
+    // standard monthly charge once it has been edited. It changes on the 20th:
+    // until then it is last month's. Falls back to their latest invoice.
+    const currentInvoice = allInvoices.find((i) => i.invoice_month === billingMonthLabel()) ?? allInvoices[0] ?? null;
+    // This calendar month's invoice, if it has been made yet (normally on the 20th).
+    const calendarInvoice = allInvoices.find((i) => i.invoice_month === monthLabel()) ?? null;
+    const beforeInvoiceDay = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(8, 10)) < INVOICE_DAY;
 
     // Months paid for in advance. Empty before the prepayments SQL has been run.
     const prepayments = await loadPrepayments(supabase, profileId);
@@ -455,20 +459,20 @@ export default async function AdminCustomerDetailPage({
                             </p>
                         )}
 
-                        {thisMonthInvoice && (
+                        {currentInvoice && (
                             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
                                 <div>
-                                    <p className="text-xs uppercase tracking-[0.12em] text-white/40">{thisMonthInvoice.invoice_month} invoice</p>
+                                    <p className="text-xs uppercase tracking-[0.12em] text-white/40">Current invoice: {currentInvoice.invoice_month}</p>
                                     <p className="mt-0.5">
-                                        <span className="font-bold text-amber-300">{naira(invoiceTotal(thisMonthInvoice))}</span>
-                                        {Number(thisMonthInvoice.arrears ?? 0) > 0 && (
+                                        <span className="font-bold text-amber-300">{naira(invoiceTotal(currentInvoice))}</span>
+                                        {Number(currentInvoice.arrears ?? 0) > 0 && (
                                             <span className="text-white/50">
                                                 {" "}
-                                                ({naira(Number(thisMonthInvoice.amount))} + {naira(Number(thisMonthInvoice.arrears))} arrears)
+                                                ({naira(Number(currentInvoice.amount))} + {naira(Number(currentInvoice.arrears))} arrears)
                                             </span>
                                         )}
                                     </p>
-                                    {Math.abs(Number(thisMonthInvoice.amount) - netMonthly) >= 0.01 && (
+                                    {Math.abs(Number(currentInvoice.amount) - netMonthly) >= 0.01 && (
                                         <p className="mt-1 text-xs text-white/50">
                                             Edited, so it differs from the monthly charge above. New invoices still use the monthly charge.
                                         </p>
@@ -476,7 +480,7 @@ export default async function AdminCustomerDetailPage({
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <StatusBadge
-                                        status={thisMonthInvoice.status !== "paid" && amountPaid(thisMonthInvoice) > 0 ? "part_paid" : thisMonthInvoice.status}
+                                        status={currentInvoice.status !== "paid" && amountPaid(currentInvoice) > 0 ? "part_paid" : currentInvoice.status}
                                     />
                                     <a href="#invoices" className="text-xs font-semibold text-amber-300 underline underline-offset-2">
                                         See or edit it
@@ -556,14 +560,26 @@ export default async function AdminCustomerDetailPage({
                             Extend schedule (next 4 weeks)
                         </BillingActionButton>
                         <BillingActionButton run={generateCustomerBilling.bind(null, profileId, "invoice")} variant="secondary">
-                            Generate this month&apos;s invoice
+                            {calendarInvoice
+                                ? `${monthLabel()} invoice already made`
+                                : `Generate ${monthLabel()} invoice${beforeInvoiceDay ? ` now (normally on the ${INVOICE_DAY}th)` : ""}`}
                         </BillingActionButton>
-                        <Link
-                            href={thisMonthInvoice ? `/admin/invoices/${thisMonthInvoice.id}` : `/admin/invoices/preview/${profileId}`}
-                            className="text-sm font-semibold text-amber-300 underline underline-offset-2"
-                        >
-                            {thisMonthInvoice ? "Preview this month's invoice" : "Preview before generating"}
-                        </Link>
+                        {currentInvoice && (
+                            <Link
+                                href={`/admin/invoices/${currentInvoice.id}`}
+                                className="text-sm font-semibold text-amber-300 underline underline-offset-2"
+                            >
+                                Preview current invoice ({currentInvoice.invoice_month})
+                            </Link>
+                        )}
+                        {!calendarInvoice && (
+                            <Link
+                                href={`/admin/invoices/preview/${profileId}`}
+                                className="text-sm font-semibold text-amber-300 underline underline-offset-2"
+                            >
+                                Preview {monthLabel()} invoice before it&apos;s made
+                            </Link>
+                        )}
                     </div>
 
                     <div className="space-y-6">

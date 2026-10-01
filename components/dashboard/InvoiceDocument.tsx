@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { formatDate, invoiceNumber, naira, receiptNumber } from "@/lib/customer/billing";
 import { normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
-import { amountPaid, balanceOf, invoiceTotal, type Installment } from "@/lib/billing/balance";
+import { amountPaid, balanceOf, invoiceTotal, type Installment, type UnpaidInvoice } from "@/lib/billing/balance";
 import DocumentActions from "@/components/dashboard/DocumentActions";
 import { DocumentHeader, PaymentDetailsBlock, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
 
@@ -29,6 +29,7 @@ export default function InvoiceDocument({
                                             installments,
                                             basePath,
                                             previewFor,
+                                            earlierUnpaid = [],
                                         }: {
     invoice: InvoiceRecord;
     customer: PropertyProps;
@@ -37,6 +38,9 @@ export default function InvoiceDocument({
     basePath: "/customer" | "/admin";
     // Set on the admin side: who the customer is, shown in a "preview" strip.
     previewFor?: string | null;
+    // Older invoices on the same account that still have money owing. Listed
+    // under this invoice's own figures so the total to pay is clear.
+    earlierUnpaid?: UnpaidInvoice[];
 }) {
     const amount = Number(invoice.amount ?? 0);
     const arrears = Number(invoice.arrears ?? 0);
@@ -60,6 +64,9 @@ export default function InvoiceDocument({
     // Invoices settled before part payments existed have no payment rows, but
     // still have a single receipt of their own.
     const legacyReceipt = status === "paid" && installments.length === 0;
+
+    const earlierTotal = earlierUnpaid.reduce((sum, item) => sum + item.balance, 0);
+    const hasEarlier = earlierUnpaid.length > 0;
 
     return (
         <div className="doc-page min-h-screen bg-neutral-100 px-4 py-6 text-black print:bg-white">
@@ -156,12 +163,51 @@ export default function InvoiceDocument({
                                     </div>
                                 </>
                             )}
-                            <div className="flex justify-between text-base font-bold">
-                                <span>{paid > 0 ? "Balance due" : "Total due"}</span>
+                            <div className={`flex justify-between font-bold ${hasEarlier ? "text-sm" : "text-base"}`}>
+                                <span>{hasEarlier ? "Due on this invoice" : paid > 0 ? "Balance due" : "Total due"}</span>
                                 <span>{naira(paid > 0 ? balance : total)}</span>
                             </div>
                         </div>
                     </div>
+
+                    {hasEarlier && (
+                        <div className="overflow-x-auto rounded-lg border border-black/15">
+                            <p className="bg-white/60 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-black/55">
+                                Earlier invoices not yet paid
+                            </p>
+                            <table className="min-w-full text-left text-xs">
+                                <thead className="bg-white/40">
+                                <tr>
+                                    <th className="px-3 py-1.5">Month</th>
+                                    <th className="px-3 py-1.5">Invoice</th>
+                                    <th className="px-3 py-1.5 text-right">Still owed</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {earlierUnpaid.map((item) => (
+                                    <tr key={item.id} className="border-t border-black/10">
+                                        <td className="px-3 py-1.5">{item.month}</td>
+                                        <td className="px-3 py-1.5">
+                                            <Link href={`${basePath}/invoices/${item.id}`} className="underline underline-offset-2">
+                                                {invoiceNumber(item.id)}
+                                            </Link>
+                                        </td>
+                                        <td className="px-3 py-1.5 text-right">{naira(item.balance)}</td>
+                                    </tr>
+                                ))}
+                                <tr className="border-t border-black/10">
+                                    <td className="px-3 py-1.5">{month}</td>
+                                    <td className="px-3 py-1.5">{number} (this invoice)</td>
+                                    <td className="px-3 py-1.5 text-right">{naira(balance)}</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                            <div className="flex justify-between border-t border-black/20 bg-white/60 px-3 py-2 text-base font-bold">
+                                <span>Total to pay now (all unpaid invoices)</span>
+                                <span>{naira(earlierTotal + balance)}</span>
+                            </div>
+                        </div>
+                    )}
 
                     {installments.length > 0 && (
                         <div className="overflow-x-auto rounded-lg border border-black/15">

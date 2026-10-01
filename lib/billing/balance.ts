@@ -40,6 +40,20 @@ export async function loadWithPaid(
     return (second.data ?? []) as unknown[];
 }
 
+export type UnpaidInvoice = { id: string; month: string; created_at: string; balance: number };
+
+// Every invoice a billing account still owes something on, oldest first.
+export async function loadUnpaidInvoices(supabase: SupabaseClient, customerId: string): Promise<UnpaidInvoice[]> {
+    const rows = (await loadWithPaid(
+        (select) => supabase.from("payments").select(select).eq("customer_id", customerId).neq("status", "paid").order("created_at", { ascending: true }),
+        "id, amount, arrears, status, invoice_month, created_at"
+    )) as (Payable & { id: string; invoice_month: string | null; created_at: string })[];
+
+    return rows
+        .map((row) => ({ id: row.id, month: row.invoice_month ?? row.created_at.slice(0, 10), created_at: row.created_at, balance: balanceOf(row) }))
+        .filter((row) => row.balance > 0);
+}
+
 export type Installment = {
     id: string;
     payment_id: string;

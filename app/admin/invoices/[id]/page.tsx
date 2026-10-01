@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
-import { loadInstallments } from "@/lib/billing/balance";
+import { loadInstallments, loadUnpaidInvoices } from "@/lib/billing/balance";
 import InvoiceDocument from "@/components/dashboard/InvoiceDocument";
 
 // What the customer sees for this invoice, opened from the admin side. It is
@@ -28,6 +28,9 @@ export default async function AdminInvoicePreviewPage({
 
     const { data: customer } = await supabase.from("customers").select("*").eq("profile_id", invoice.customer_id).maybeSingle();
     const installments = await loadInstallments(supabase, [invoice.id]);
+    const earlierUnpaid = invoice.customer_id
+        ? (await loadUnpaidInvoices(supabase, invoice.customer_id)).filter((other) => other.id !== invoice.id && other.created_at < invoice.created_at)
+        : [];
 
     return (
         <InvoiceDocument
@@ -37,6 +40,7 @@ export default async function AdminInvoicePreviewPage({
             installments={installments}
             basePath="/admin"
             previewFor={customer?.full_name ?? null}
+            earlierUnpaid={earlierUnpaid}
         />
     );
 }

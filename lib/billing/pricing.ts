@@ -100,6 +100,19 @@ export function monthLabel(date: Date = new Date()) {
     return date.toLocaleString("en-US", { month: "long", year: "numeric" });
 }
 
+// The day of the month (Lagos time) each month's invoice is created. Until
+// then the current invoice is still last month's: on 5 October it is
+// September's, and from 20 October it is October's.
+export const INVOICE_DAY = 20;
+
+// The month whose invoice is the current one right now (see INVOICE_DAY).
+export function billingMonthLabel(now: Date = new Date()) {
+    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);
+    const monthIndex = d < INVOICE_DAY ? m - 2 : m - 1;
+
+    return new Date(Date.UTC(y, monthIndex, 15)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 export function normalizeLineItems(raw: unknown): LineItem[] {
     if (!Array.isArray(raw)) return [];
 
