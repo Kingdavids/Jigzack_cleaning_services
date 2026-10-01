@@ -4,6 +4,7 @@ import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { loadPrepayment, loadReceipt } from "@/lib/customer/documents";
 import PrepaymentReceiptDocument from "@/components/dashboard/PrepaymentReceiptDocument";
 import ReceiptDocument from "@/components/dashboard/ReceiptDocument";
+import { billToOf } from "@/lib/billing/billTo";
 
 // What the customer sees for this receipt, opened from the admin side. It is
 // the same document, read only.
@@ -48,7 +49,11 @@ export default async function AdminReceiptPreviewPage({
         redirect(`/admin/invoices/${payment.id}`);
     }
 
-    const { data: customer } = await supabase.from("customers").select("*").eq("profile_id", payment.customer_id).maybeSingle();
+    // Someone not registered on the app has their details on the invoice itself.
+    const { data: registered } = payment.customer_id
+        ? await supabase.from("customers").select("*").eq("profile_id", payment.customer_id).maybeSingle()
+        : { data: null };
+    const customer = registered ?? billToOf(payment);
 
     return (
         <ReceiptDocument

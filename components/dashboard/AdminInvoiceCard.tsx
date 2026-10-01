@@ -9,6 +9,7 @@ import VoidPaymentButton from "@/components/dashboard/VoidPaymentButton";
 import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
 import { BulkCheckbox } from "@/components/dashboard/BulkSelect";
+import { billToOf } from "@/lib/billing/billTo";
 
 export type AdminInvoiceRow = {
     id: string;
@@ -32,6 +33,8 @@ export type AdminInvoiceRow = {
     transfer_receipt_path?: string | null;
     // When the customer was last emailed this invoice.
     invoice_emailed_at?: string | null;
+    // Who it is for when they are not registered on the app.
+    bill_to?: unknown;
 };
 
 // One invoice as admins work with it: totals, payments received, a reported
@@ -61,6 +64,8 @@ export default function AdminInvoiceCard({
     const balance = balanceOf(payment);
     const partPaid = payment.status !== "paid" && paid > 0;
     const month = payment.invoice_month ?? formatDate(payment.created_at);
+    const billTo = billToOf(payment);
+    const name = payment.customer?.full_name ?? billTo?.full_name ?? "Unknown customer";
 
     return (
         <div className={`relative rounded-3xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-white/20 ${bulk ? "pl-12" : ""}`}>
@@ -71,11 +76,12 @@ export default function AdminInvoiceCard({
             )}
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <p className="font-bold">{showCustomer ? payment.customer?.full_name ?? "Unknown customer" : month}</p>
+                    <p className="font-bold">{showCustomer ? name : month}</p>
                     <p className="text-xs text-white/50">
                         {showCustomer ? `${month} · ` : ""}
                         {invoiceNumber(payment.id)}
                         {payment.auto_generated ? " · auto-generated" : ""}
+                        {billTo ? " · not registered on the app" : ""}
                     </p>
                 </div>
 

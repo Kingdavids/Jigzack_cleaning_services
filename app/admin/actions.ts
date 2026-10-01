@@ -159,6 +159,96 @@ export async function createTask(
 
 export type InvoiceActionState = { success: boolean; error?: string } | null;
 
+export type NewInvoiceState = { success: boolean; error?: string; invoiceId?: string } | null;
+
+// An invoice for someone who is not registered on the app. Their details are
+// kept on the invoice itself (payments.bill_to); an admin prints, downloads or
+// shares it with them, since they have no dashboard to see it in.
+export async function createNonCustomerInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
+
+    const billTo = {
+        full_name: text("fullName", 120),
+        phone: text("phone", 40),
+        whatsapp_number: text("whatsapp", 40),
+        email: text("email", 160),
+        address: text("address", 300),
+        landmark: text("landmark", 160),
+        lga: text("lga", 80),
+        state: text("state", 80),
+        property_type: text("propertyType", 40),
+    };
+
+    if (!billTo.full_name) return { success: false, error: "Enter the name of the person or business being billed." };
+    if (!billTo.phone && !billTo.email) return { success: false, error: "Enter a phone number or an email address for them." };
+    if (!billTo.address) return { success: false, error: "Enter the address the service is for." };
+    if (billTo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) return { success: false, error: "That email address doesn't look right." };
+
+    let items: LineItem[] = [];
+    try {
+        items = normalizeLineItems(JSON.parse(String(formData.get("lineItems") || "[]")));
+    } catch {
+        return { success: false, error: "The line items couldn't be read." };
+    }
+
+    items = items.filter((item) => item.label && item.quantity > 0);
+    if (items.length === 0) return { success: false, error: "Add at least one item with a name and quantity." };
+
+    const amount = round2(itemsTotal(items));
+    if (amount <= 0) return { success: false, error: "The items must add up to more than zero." };
+
+    const arrearsInput = Number(formData.get("arrears") || 0);
+    const arrears = Number.isFinite(arrearsInput) && arrearsInput > 0 ? round2(arrearsInput) : 0;
+    const invoiceMonth = text("invoiceMonth", 40);
+
+    // A double click or a retried request is the same invoice, not a second one.
+    const { data: recent } = await supabase
+        .from("payments")
+        .select("id, bill_to")
+        .is("customer_id", null)
+        .eq("amount", amount)
+        .gte("created_at", duplicateSince())
+        .limit(5);
+
+    const repeat = (recent ?? []).find((row) => (row.bill_to as { full_name?: string } | null)?.full_name === billTo.full_name);
+    if (repeat) return { success: true, invoiceId: repeat.id as string };
+
+    const { data, error } = await supabase
+        .from("payments")
+        .insert({
+            customer_id: null,
+            bill_to: billTo,
+            amount,
+            arrears,
+            units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
+            line_items: items,
+            description: text("description", 200) ?? `Waste management service${invoiceMonth ? `, ${invoiceMonth}` : ""}`,
+            invoice_month: invoiceMonth,
+            auto_generated: false,
+        })
+        .select("id")
+        .single();
+
+    if (error || !data) {
+        console.error("createNonCustomerInvoice error:", error?.message);
+        return {
+            success: false,
+            error: /bill_to/.test(error?.message ?? "")
+                ? "Not switched on yet. Run supabase/non-customer-invoices-2026-10.sql in Supabase first."
+                : "Could not create the invoice. Please try again.",
+        };
+    }
+
+    await logActivity(supabase, actor, "invoice_created", `Created an invoice for ${billTo.full_name} (not registered)`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+
+    return { success: true, invoiceId: data.id as string };
+}
+
 export async function createInvoice(
     _prevState: InvoiceActionState,
     formData: FormData

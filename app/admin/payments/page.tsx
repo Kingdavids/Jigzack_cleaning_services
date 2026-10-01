@@ -8,6 +8,8 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import CreateInvoiceForm from "@/components/dashboard/CreateInvoiceForm";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
+import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
+import { billToOf } from "@/lib/billing/billTo";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { BulkSelectProvider } from "@/components/dashboard/BulkSelect";
@@ -69,8 +71,9 @@ export default async function AdminPaymentsPage() {
         const map = new Map<string, InvoiceGroup>();
 
         for (const invoice of list) {
-            const name = invoice.customer?.full_name ?? "Unknown customer";
-            const key = invoice.customer_id ?? name;
+            const billTo = billToOf(invoice);
+            const name = invoice.customer?.full_name ?? (billTo ? `${billTo.full_name} (not registered)` : "Unknown customer");
+            const key = invoice.customer_id ?? `bill-to:${name}`;
             const group = map.get(key) ?? { key, name, items: [], owed: 0, total: 0, reported: 0 };
 
             group.items.push(invoice);
@@ -369,6 +372,14 @@ export default async function AdminPaymentsPage() {
                             className="h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30"
                         />
                     </CreateInvoiceForm>
+                </SectionCard>
+
+                <SectionCard
+                    title="Invoice someone who isn't registered"
+                    description="For a one-off job or a client without an account. Fill in their details and the charges; the invoice opens ready to print, download or share with them."
+                    collapsible
+                >
+                    <NonCustomerInvoiceForm defaultMonth={monthLabel()} />
                 </SectionCard>
             </div>
         </DashboardShell>
