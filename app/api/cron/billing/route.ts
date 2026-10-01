@@ -8,11 +8,15 @@ import { escapeHtml, sendEmail } from "@/lib/send-email";
 
 // Called once a day by the GitHub Actions workflow in .github/workflows.
 // Pickups are topped up every day (existing dates are skipped). Monthly
-// invoices are created on the 1st, Lagos time, and never twice for a month.
+// invoices are created on the 25th, Lagos time, for that same month, and
+// never twice for a month.
 // There is no signed-in user here, so it runs with the service key, and the
 // shared secret is the only thing that lets a request in.
 
 export const dynamic = "force-dynamic";
+
+// The day of the month invoices go out, two digits.
+const INVOICE_DAY = "25";
 
 function sameSecret(given: string, expected: string) {
     // Hash first so the comparison is fixed length and timing safe.
@@ -39,11 +43,11 @@ export async function POST(request: NextRequest) {
     const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
     const lagosDay = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
-    const isFirstOfMonth = lagosDay.endsWith("-01");
+    const isInvoiceDay = lagosDay.endsWith(`-${INVOICE_DAY}`);
     const forceInvoices = request.nextUrl.searchParams.get("invoices") === "force";
 
     const schedules = await runScheduleGeneration(supabase);
-    const invoices = isFirstOfMonth || forceInvoices ? await runInvoiceGeneration(supabase) : null;
+    const invoices = isInvoiceDay || forceInvoices ? await runInvoiceGeneration(supabase) : null;
 
     // Invoice and reminder emails to customers go out after the invoices exist.
     const emails = await runBillingEmails(supabase);
