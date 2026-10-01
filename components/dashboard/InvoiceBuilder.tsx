@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { DOMESTIC_FACILITIES } from "@/lib/customer/facilities";
 import { itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } from "@/lib/billing/pricing";
+import MonthRangePicker, { monthSpan } from "@/components/dashboard/MonthRangePicker";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -27,12 +28,11 @@ export default function InvoiceBuilder({
 }) {
     const [counts, setCounts] = useState<Record<string, number>>(initialCounts);
     const [prices, setPrices] = useState<Record<string, number>>({ ...UNIT_PRICES });
-    const [startMonth, setStartMonth] = useState(defaultStartMonth);
-    const [monthCount, setMonthCount] = useState(1);
+    const [range, setRange] = useState({ start: defaultStartMonth, end: defaultStartMonth });
     const [others, setOthers] = useState<LineItem[]>([]);
     const [arrears, setArrears] = useState(0);
 
-    const months = useMemo(() => monthsFrom(startMonth, monthCount), [startMonth, monthCount]);
+    const months = useMemo(() => monthsFrom(range.start, monthSpan(range.start, range.end)), [range]);
     const period = monthRangeLabel(months);
     const n = months.length || 1;
 
@@ -99,22 +99,15 @@ export default function InvoiceBuilder({
 
             <fieldset className="space-y-3">
                 <legend className="mb-2 text-sm font-semibold">Months covered</legend>
-                <div className="grid gap-3 sm:grid-cols-[12rem_10rem_1fr] sm:items-end">
-                    <label className="block">
-                        <span className={labelClass}>From</span>
-                        <input type="month" value={startMonth} onChange={(e) => setStartMonth(e.target.value)} required className={inputClass} />
-                    </label>
-                    <label className="block">
-                        <span className={labelClass}>Number of months</span>
-                        <select value={monthCount} onChange={(e) => setMonthCount(Number(e.target.value))} className={`${inputClass} bg-[#141518]`}>
-                            {Array.from({ length: 12 }, (_, i) => i + 1).map((count) => (
-                                <option key={count} value={count}>
-                                    {count} month{count === 1 ? "" : "s"}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                    <p className="pb-3 text-sm text-white/60">{period ? `Covers ${period}` : "Pick the first month"}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <MonthRangePicker start={range.start} end={range.end} onChange={setRange} />
+                    <div className="text-sm">
+                        <p className="text-white/50">Covers</p>
+                        <p className="text-lg font-bold">{period}</p>
+                        <p className="text-white/50">
+                            {n} month{n === 1 ? "" : "s"}
+                        </p>
+                    </div>
                 </div>
             </fieldset>
 

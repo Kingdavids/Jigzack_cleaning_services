@@ -11,6 +11,7 @@ import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceFor
 import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
 import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
+import MoveToCustomerControl from "@/components/dashboard/MoveToCustomerControl";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { BulkSelectProvider } from "@/components/dashboard/BulkSelect";
@@ -41,11 +42,20 @@ export default async function AdminPaymentsPage() {
     // Each customer's billable units (vacant ones left out), so a one-off
     // invoice can start from their property details.
     const { data: propertyRows } = customerOptions.length
-        ? await supabase.from("customers").select("profile_id, facility_details, vacancies").in("profile_id", customerOptions.map((c) => c.id))
+        ? await supabase
+              .from("customers")
+              .select("profile_id, facility_details, vacancies, phone, whatsapp_number, email")
+              .in("profile_id", customerOptions.map((c) => c.id))
         : { data: [] };
-    const propertyByProfile = new Map(
-        ((propertyRows ?? []) as { profile_id: string; facility_details: FacilityDetails; vacancies: FacilityDetails }[]).map((row) => [row.profile_id, row])
-    );
+    type PropertyRow = {
+        profile_id: string;
+        facility_details: FacilityDetails;
+        vacancies: FacilityDetails;
+        phone: string | null;
+        whatsapp_number: string | null;
+        email: string | null;
+    };
+    const propertyByProfile = new Map(((propertyRows ?? []) as PropertyRow[]).map((row) => [row.profile_id, row]));
     const invoiceCustomers: InvoiceCustomerOption[] = customerOptions.map((c) => {
         const property = propertyByProfile.get(c.id);
         const counts: Record<string, number> = {};
@@ -80,11 +90,80 @@ export default async function AdminPaymentsPage() {
     // A part payment already has money against it, so it reads with the settled
     // invoices below (still flagged, and sorted to the top there) instead of
     // crowding "Needs attention" with invoices nobody has paid anything on yet.
-    const unpaidList = rawUnpaid.filter((p) => amountPaid(p) === 0);
-    const partPaidList = rawUnpaid.filter((p) => amountPaid(p) > 0);
-    const paidList = [...rawPaid, ...partPaidList];
+    // Invoices for people not registered on the app have their own section, so
+    // they are kept out of the customer lists here.
+    const isUnregistered = (p: PaymentRow) => !p.customer_id && billToOf(p) !== null;
+    const unpaidList = rawUnpaid.filter((p) => !isUnregistered(p) && amountPaid(p) === 0);
+    const partPaidList = rawUnpaid.filter((p) => !isUnregistered(p) && amountPaid(p) > 0);
+    const paidList = [...rawPaid.filter((p) => !isUnregistered(p)), ...partPaidList];
 
     const payments = [...rawUnpaid, ...rawPaid];
+
+    // The not registered, one group per person: matched on email, then phone,
+    // then name, so a second invoice for the same person lands in their group.
+    const digits = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "").slice(-10);
+    type PersonGroup = {
+        key: string;
+        name: string;
+        contact: string;
+        email: string | null;
+        phones: string[];
+        items: PaymentRow[];
+        billed: number;
+        paid: number;
+        owed: number;
+    };
+    const people = new Map<string, PersonGroup>();
+
+    for (const invoice of [...rawUnpaid, ...rawPaid].filter(isUnregistered)) {
+        const billTo = billToOf(invoice)!;
+        const key = billTo.email?.toLowerCase() || digits(billTo.phone) || billTo.full_name.trim().toLowerCase();
+        const group = people.get(key) ?? {
+            key,
+            name: billTo.full_name,
+            contact: [billTo.phone, billTo.email, billTo.address].filter(Boolean).join(" · "),
+            email: billTo.email?.toLowerCase() ?? null,
+            phones: [digits(billTo.phone), digits(billTo.whatsapp_number)].filter(Boolean),
+            items: [],
+            billed: 0,
+            paid: 0,
+            owed: 0,
+        };
+
+        group.items.push(invoice);
+        group.billed += invoiceTotal(invoice);
+        group.paid += amountPaid(invoice);
+        group.owed += balanceOf(invoice);
+        people.set(key, group);
+    }
+
+    // Whoever owes most first; unpaid invoices before settled ones inside each group.
+    const personGroups = [...people.values()].sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name));
+    for (const group of personGroups) group.items.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid"));
+
+    const unregisteredTotals = personGroups.reduce(
+        (sum, g) => ({ billed: sum.billed + g.billed, paid: sum.paid + g.paid, owed: sum.owed + g.owed }),
+        { billed: 0, paid: 0, owed: 0 }
+    );
+
+    // A registered customer with the same email or phone has probably signed up since.
+    const suggestMatch = (group: PersonGroup) => {
+        for (const c of customerOptions) {
+            const row = propertyByProfile.get(c.id);
+            if (!row) continue;
+
+            if (group.email && row.email?.toLowerCase() === group.email) {
+                return { id: c.id, full_name: c.full_name, reason: "same email address" };
+            }
+
+            const theirs = [digits(row.phone), digits(row.whatsapp_number)].filter(Boolean);
+            if (group.phones.some((phone) => theirs.includes(phone))) {
+                return { id: c.id, full_name: c.full_name, reason: "same phone number" };
+            }
+        }
+
+        return null;
+    };
     const canBulk = isOwner(profile);
     const canAct = isFullAdmin(profile);
     const installmentsByInvoice = groupInstallments(await loadInstallmentsChunked(supabase, payments.map((p) => p.id)));
@@ -350,6 +429,81 @@ export default async function AdminPaymentsPage() {
                                         </CustomerGroup>
                                     ))}
                                 </GroupFilter>
+                            )}
+                        </SectionCard>
+                    </div>
+
+                    <div className="mt-6">
+                        <SectionCard
+                            title="Not registered"
+                            collapsible
+                            defaultOpen={unregisteredTotals.owed > 0}
+                            badge={
+                                personGroups.length > 0 ? (
+                                    <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-3 py-1 text-xs font-bold text-sky-300">
+                                        {personGroups.length} {personGroups.length === 1 ? "person" : "people"} · {naira(unregisteredTotals.owed)} owed
+                                    </span>
+                                ) : null
+                            }
+                            description="Invoices for people without an account. Record their payments here as usual. Once they register, move their invoices to their customer account."
+                        >
+                            {personGroups.length === 0 ? (
+                                <p className="text-sm text-white/55">No invoices for unregistered people. Create one below.</p>
+                            ) : (
+                                <>
+                                    <div className="mb-5 grid gap-3 sm:grid-cols-3">
+                                        {[
+                                            { label: "Total billed", value: naira(unregisteredTotals.billed), tone: "text-white" },
+                                            { label: "Paid", value: naira(unregisteredTotals.paid), tone: "text-emerald-300" },
+                                            { label: "Still owed", value: naira(unregisteredTotals.owed), tone: "text-amber-300" },
+                                        ].map((item) => (
+                                            <div key={item.label} className="rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                                                <p className="text-xs uppercase tracking-[0.15em] text-white/40">{item.label}</p>
+                                                <p className={`mt-1 text-xl font-bold ${item.tone}`}>{item.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <GroupFilter placeholder="Search by name">
+                                        {personGroups.map((group) => {
+                                            const match = suggestMatch(group);
+
+                                            return (
+                                                <CustomerGroup
+                                                    key={group.key}
+                                                    name={group.name}
+                                                    defaultOpen={personGroups.length <= 4}
+                                                    header={
+                                                        <div>
+                                                            <p className="truncate text-lg font-bold">{group.name}</p>
+                                                            <p className="mt-0.5 text-sm text-white/55">
+                                                                {group.items.length} invoice{group.items.length === 1 ? "" : "s"} ·{" "}
+                                                                <span className="font-semibold text-amber-300">{naira(group.owed)} owed</span> ·{" "}
+                                                                <span className="text-emerald-300">{naira(group.paid)} paid</span>
+                                                                {match && (
+                                                                    <span className="ml-2 rounded-full bg-sky-400/15 px-2 py-0.5 text-[11px] font-bold text-sky-300">
+                                                                        may have registered
+                                                                    </span>
+                                                                )}
+                                                            </p>
+                                                            {group.contact && <p className="mt-0.5 truncate text-xs text-white/40">{group.contact}</p>}
+                                                        </div>
+                                                    }
+                                                >
+                                                    {canAct && (
+                                                        <MoveToCustomerControl
+                                                            personName={group.name}
+                                                            invoiceIds={group.items.map((i) => i.id)}
+                                                            customers={customerOptions.map((c) => ({ id: c.id, full_name: c.full_name }))}
+                                                            suggested={match}
+                                                        />
+                                                    )}
+                                                    {group.items.map(renderInvoice)}
+                                                </CustomerGroup>
+                                            );
+                                        })}
+                                    </GroupFilter>
+                                </>
                             )}
                         </SectionCard>
                     </div>

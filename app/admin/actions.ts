@@ -273,6 +273,48 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
     return { success: true, invoiceId: data.id as string };
 }
 
+// Someone billed before they had an account has now registered: their
+// invoices (with every payment and receipt on them) move onto that customer,
+// so they show in the customer's record and in the customer's own dashboard.
+// Their details stay on each invoice as a record of who it was first made out to.
+export async function moveInvoicesToCustomer(invoiceIds: string[], customerId: string): Promise<TaskChangeResult> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const ids = [...new Set((invoiceIds ?? []).filter(Boolean))].slice(0, 500);
+    if (ids.length === 0 || !customerId) return { success: false, error: "Choose the customer to move these invoices to." };
+
+    const { data: customer } = await supabase.from("profiles").select("id, full_name, role, status").eq("id", customerId).maybeSingle();
+    if (!customer || customer.role !== "customer" || customer.status !== "approved") {
+        return { success: false, error: "Choose an approved customer." };
+    }
+
+    // Only invoices that still belong to nobody, so one already moved is never taken from someone else.
+    const { data, error } = await supabase.from("payments").update({ customer_id: customerId }).in("id", ids).is("customer_id", null).select("id");
+
+    if (error) {
+        console.error("moveInvoicesToCustomer error:", error.message);
+        return { success: false, error: "Could not move the invoices. Please try again." };
+    }
+
+    const moved = data?.length ?? 0;
+    if (moved === 0) return { success: false, error: "These invoices have already been moved." };
+
+    await logActivity(supabase, actor, "invoices_moved", `Moved ${moved} invoice${moved === 1 ? "" : "s"} to ${customer.full_name ?? "a customer"}`, {
+        type: "profile",
+        id: customerId,
+    });
+
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${customerId}`);
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return { success: true, message: `${moved} invoice${moved === 1 ? "" : "s"} moved to ${customer.full_name ?? "the customer"}.` };
+}
+
 export async function createInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {
     const actor = await requireAdmin();
     const supabase = await createClient();
