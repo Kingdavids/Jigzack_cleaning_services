@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 import { runBillingEmails } from "@/lib/billing/notify";
-import { INVOICE_DAY, monthLabel } from "@/lib/billing/pricing";
+import { billingMonthLabel, INVOICE_DAY } from "@/lib/billing/pricing";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 
 // Called once a day by the GitHub Actions workflow in .github/workflows.
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
         if (invoices) {
             lines.push(
-                `<p>Invoices for ${escapeHtml(monthLabel())}: <strong>${invoices.created}</strong> created, ${invoices.exists} already existed` +
+                `<p>Invoices for ${escapeHtml(billingMonthLabel())}: <strong>${invoices.created}</strong> created, ${invoices.exists} already existed` +
                     (invoices["no-pricing"] > 0 ? `, ${invoices["no-pricing"]} skipped because no priced property types are recorded` : "") +
                     (invoices.prepaid > 0 ? `, ${invoices.prepaid} skipped because they paid in advance` : "") +
                     (invoices.error > 0 ? `, <strong>${invoices.error} failed</strong>` : "") +

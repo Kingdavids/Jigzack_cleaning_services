@@ -32,7 +32,7 @@ import { loadPrepayments, prepaidUntil } from "@/lib/billing/prepaid";
 import { chargeItems, discountInfo, loadEstateUnits, type BillableCustomer, type DiscountableCustomer } from "@/lib/billing/generate";
 import { buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments } from "@/lib/billing/balance";
-import { billingMonthLabel, INVOICE_DAY, monthLabel } from "@/lib/billing/pricing";
+import { billingMonthLabel } from "@/lib/billing/pricing";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 
@@ -168,9 +168,10 @@ export default async function AdminCustomerDetailPage({
     // standard monthly charge once it has been edited. It changes on the 20th:
     // until then it is last month's. Falls back to their latest invoice.
     const currentInvoice = allInvoices.find((i) => i.invoice_month === billingMonthLabel()) ?? allInvoices[0] ?? null;
-    // This calendar month's invoice, if it has been made yet (normally on the 20th).
-    const calendarInvoice = allInvoices.find((i) => i.invoice_month === monthLabel()) ?? null;
-    const beforeInvoiceDay = Number(new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(8, 10)) < INVOICE_DAY;
+    // The month an invoice made now is for (last month's until the 20th), and
+    // whether it has been made already.
+    const billingMonth = billingMonthLabel();
+    const billingMonthInvoice = allInvoices.find((i) => i.invoice_month === billingMonth) ?? null;
 
     // Months paid for in advance. Empty before the prepayments SQL has been run.
     const prepayments = await loadPrepayments(supabase, profileId);
@@ -560,9 +561,7 @@ export default async function AdminCustomerDetailPage({
                             Extend schedule (next 4 weeks)
                         </BillingActionButton>
                         <BillingActionButton run={generateCustomerBilling.bind(null, profileId, "invoice")} variant="secondary">
-                            {calendarInvoice
-                                ? `${monthLabel()} invoice already made`
-                                : `Generate ${monthLabel()} invoice${beforeInvoiceDay ? ` now (normally on the ${INVOICE_DAY}th)` : ""}`}
+                            {billingMonthInvoice ? `${billingMonth} invoice already made` : `Generate ${billingMonth} invoice`}
                         </BillingActionButton>
                         {currentInvoice && (
                             <Link
@@ -572,12 +571,12 @@ export default async function AdminCustomerDetailPage({
                                 Preview current invoice ({currentInvoice.invoice_month})
                             </Link>
                         )}
-                        {!calendarInvoice && (
+                        {!billingMonthInvoice && (
                             <Link
                                 href={`/admin/invoices/preview/${profileId}`}
                                 className="text-sm font-semibold text-amber-300 underline underline-offset-2"
                             >
-                                Preview {monthLabel()} invoice before it&apos;s made
+                                Preview {billingMonth} invoice before it&apos;s made
                             </Link>
                         )}
                     </div>

@@ -3,7 +3,7 @@ import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import InvoiceDocument from "@/components/dashboard/InvoiceDocument";
 import { chargeItems, loadEstateUnits, type BillableCustomer } from "@/lib/billing/generate";
-import { itemsTotal, monthLabel } from "@/lib/billing/pricing";
+import { billingMonthLabel, itemsTotal } from "@/lib/billing/pricing";
 
 // What this month's invoice would look like if generated right now, worked
 // out live from the customer's current details. Once it has been generated,
@@ -32,7 +32,7 @@ export default async function AdminInvoicePreviewForCustomerPage({
         .from("payments")
         .select("id")
         .eq("customer_id", profileId)
-        .eq("invoice_month", monthLabel())
+        .eq("invoice_month", billingMonthLabel())
         .order("created_at", { ascending: false })
         .limit(1);
 
@@ -40,7 +40,7 @@ export default async function AdminInvoicePreviewForCustomerPage({
 
     const units = customer.is_estate ? await loadEstateUnits(supabase, profileId) : undefined;
     const items = chargeItems(customer as unknown as BillableCustomer, units);
-    const month = monthLabel();
+    const month = billingMonthLabel();
 
     const invoice = {
         id: "preview",

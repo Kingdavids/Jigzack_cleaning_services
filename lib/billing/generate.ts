@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FacilityDetails } from "@/lib/customer/facilities";
-import { buildLineItems, itemsTotal, monthLabel, unitLineItems, unitsCoverBilling, type EstateUnit, type LineItem } from "@/lib/billing/pricing";
+import { billingMonthLabel, buildLineItems, itemsTotal, unitLineItems, unitsCoverBilling, type EstateUnit, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid } from "@/lib/billing/balance";
 import { isMonthPrepaid } from "@/lib/billing/prepaid";
 import {
@@ -315,7 +315,7 @@ export type InvoiceOutcome = "created" | "exists" | "no-pricing" | "prepaid" | "
 export async function generateInvoiceFor(
     supabase: SupabaseServerClient,
     customer: BillableCustomer,
-    month: string = monthLabel()
+    month: string = billingMonthLabel()
 ): Promise<InvoiceOutcome> {
     if (!customer.profile_id) return "error";
 
@@ -367,7 +367,7 @@ export async function generateInvoiceFor(
 export async function recalculateOpenInvoice(
     supabase: SupabaseServerClient,
     customer: BillableCustomer,
-    month: string = monthLabel()
+    month: string = billingMonthLabel()
 ) {
     if (!customer.profile_id) return false;
 

@@ -10,7 +10,7 @@ import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
-import { billingMonthLabel, itemsTotal, monthLabel, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
+import { billingMonthLabel, itemsTotal, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
 import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
 import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
@@ -1438,14 +1438,14 @@ export async function generateAllInvoices(): Promise<GenerateResult> {
 
     const tally = await runInvoiceGeneration(supabase);
 
-    await logActivity(supabase, actor, "invoices_generated", `Generated ${monthLabel()} invoices: ${tally.created} created`);
+    await logActivity(supabase, actor, "invoices_generated", `Generated ${billingMonthLabel()} invoices: ${tally.created} created`);
     revalidatePath("/admin/payments");
     revalidatePath("/customer/payments");
 
     return {
         success: true,
         message:
-            `${tally.created} invoices created for ${monthLabel()}, ${tally.exists} already existed` +
+            `${tally.created} invoices created for ${billingMonthLabel()}, ${tally.exists} already existed` +
             (tally["no-pricing"] > 0 ? `, ${tally["no-pricing"]} skipped (no priced property types, add manually)` : "") +
             (tally.prepaid > 0 ? `, ${tally.prepaid} skipped (paid in advance)` : "") +
             (tally.error > 0 ? `, ${tally.error} failed` : "") +
@@ -1558,9 +1558,9 @@ export async function generateCustomerBilling(
 
     const outcome = await generateInvoiceFor(supabase, billable);
     const messages: Record<string, string> = {
-        created: `Invoice created for ${monthLabel()}.`,
-        exists: `An invoice for ${monthLabel()} already exists.`,
-        prepaid: `${monthLabel()} was paid in advance, so no invoice is needed.`,
+        created: `Invoice created for ${billingMonthLabel()}.`,
+        exists: `An invoice for ${billingMonthLabel()} already exists.`,
+        prepaid: `${billingMonthLabel()} was paid in advance, so no invoice is needed.`,
         "no-pricing": "No priced property types are recorded for this customer. Add an invoice manually.",
         error: "Could not create the invoice.",
     };

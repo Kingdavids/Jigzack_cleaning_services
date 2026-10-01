@@ -2,7 +2,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { generateAllInvoices } from "../actions";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
-import { monthLabel } from "@/lib/billing/pricing";
+import { billingMonthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
@@ -328,9 +328,9 @@ export default async function AdminPaymentsPage() {
 
                 <SectionCard
                     title="Monthly invoices"
-                    description={`Creates a ${monthLabel()} invoice for every active customer that doesn't have one yet: flat ₦5,000, mini flat ₦5,000, shop ₦2,000, duplex ₦8,000, bungalow ₦7,000, terrace ₦10,000, minus any vacant units.`}
+                    description={`Creates a ${billingMonthLabel()} invoice for every active customer that doesn't have one yet: flat ₦5,000, mini flat ₦5,000, shop ₦2,000, duplex ₦8,000, bungalow ₦7,000, terrace ₦10,000, minus any vacant units.`}
                 >
-                    <BillingActionButton run={generateAllInvoices}>Generate {monthLabel()} invoices</BillingActionButton>
+                    <BillingActionButton run={generateAllInvoices}>Generate {billingMonthLabel()} invoices</BillingActionButton>
                 </SectionCard>
 
                 <BulkSelectProvider
