@@ -24,6 +24,30 @@ function SaveButton() {
 const inputClass =
     "h-9 w-full rounded-lg border border-white/10 bg-white/8 px-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
 
+const labelClass = "mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/40";
+
+const naira = (value: number) => `₦${value.toLocaleString("en-NG", { maximumFractionDigits: 2 })}`;
+
+type Discount = { kind: "none" | "percent" | "amount"; value: number; reason: string };
+
+// A discount is saved as its own line with a negative price, labelled the same
+// way automatic invoices label one: "Discount (10%)" or "Discount (10%): reason".
+const isDiscountLine = (item: LineItem) => /^discount\b/i.test(item.label.trim()) && item.unit_price < 0;
+
+// Lifts an existing discount line back into the discount controls.
+function readDiscount(items: LineItem[]): Discount {
+    const line = items.find(isDiscountLine);
+    if (!line) return { kind: "none", value: 0, reason: "" };
+
+    const match = line.label.match(/^discount\s*(?:\(([\d.]+)%\))?\s*:?\s*(.*)$/i);
+    const percent = match?.[1] ? Number(match[1]) : NaN;
+    const reason = (match?.[2] ?? "").trim();
+
+    return Number.isFinite(percent) && percent > 0
+        ? { kind: "percent", value: percent, reason }
+        : { kind: "amount", value: Math.abs(lineTotal(line)), reason };
+}
+
 export default function InvoiceEditor({
                                            action,
                                            invoice,
@@ -41,11 +65,14 @@ export default function InvoiceEditor({
 }) {
     const router = useRouter();
     const [state, formAction] = useActionState<InvoiceActionState, FormData>(action, null);
-    const [items, setItems] = useState<LineItem[]>(
+    const startingItems =
         invoice.line_items.length > 0
             ? invoice.line_items
-            : [{ label: invoice.description ?? "Waste management service charge", quantity: 1, unit_price: invoice.amount }]
-    );
+            : [{ label: invoice.description ?? "Waste management service charge", quantity: 1, unit_price: invoice.amount }];
+    // Charges are edited as lines; a discount has its own controls below.
+    const [items, setItems] = useState<LineItem[]>(startingItems.filter((item) => !isDiscountLine(item)));
+    const [discount, setDiscount] = useState<Discount>(() => readDiscount(startingItems));
+    const [arrears, setArrears] = useState(invoice.arrears || 0);
 
     useEffect(() => {
         if (!state) return;
@@ -56,7 +83,25 @@ export default function InvoiceEditor({
         } else if (state.error) toast.error(state.error);
     }, [state, router]);
 
-    const total = useMemo(() => itemsTotal(items), [items]);
+    const charges = useMemo(() => itemsTotal(items), [items]);
+
+    // Never more than the charges, so the invoice can't go below zero.
+    const discountAmount =
+        discount.kind === "percent"
+            ? Math.round(Math.min(charges, (charges * Math.min(discount.value, 100)) / 100) * 100) / 100
+            : discount.kind === "amount"
+                ? Math.min(Math.max(discount.value, 0), Math.max(charges, 0))
+                : 0;
+    const discountPercent = charges > 0 ? Math.round((discountAmount / charges) * 1000) / 10 : 0;
+    const discountLine: LineItem | null =
+        discountAmount > 0
+            ? {
+                  label: `Discount (${discountPercent}%)${discount.reason.trim() ? `: ${discount.reason.trim()}` : ""}`,
+                  quantity: 1,
+                  unit_price: -discountAmount,
+              }
+            : null;
+    const savedItems = discountLine ? [...items, discountLine] : items;
 
     const update = (index: number, patch: Partial<LineItem>) =>
         setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -69,7 +114,7 @@ export default function InvoiceEditor({
 
             <form action={formAction} className="mt-4 space-y-4">
                 <input type="hidden" name="paymentId" value={invoice.id} />
-                <input type="hidden" name="lineItems" value={JSON.stringify(items)} />
+                <input type="hidden" name="lineItems" value={JSON.stringify(savedItems)} />
 
                 <div className="grid gap-3 sm:grid-cols-3">
                     <label className="block">
@@ -141,20 +186,89 @@ export default function InvoiceEditor({
                     </button>
                 </div>
 
+                <fieldset className="rounded-xl border border-white/10 bg-black/20 p-3">
+                    <legend className="px-1 text-xs font-semibold text-white/70">Discount</legend>
+                    <div className="grid gap-3 sm:grid-cols-[11rem_9rem_1fr]">
+                        <label className="block">
+                            <span className={labelClass}>Type</span>
+                            <select
+                                value={discount.kind}
+                                onChange={(e) => setDiscount((prev) => ({ ...prev, kind: e.target.value as Discount["kind"] }))}
+                                className={`${inputClass} bg-[#141518]`}
+                            >
+                                <option value="none">No discount</option>
+                                <option value="percent">Percentage (%)</option>
+                                <option value="amount">Fixed amount (₦)</option>
+                            </select>
+                        </label>
+                        {discount.kind !== "none" && (
+                            <>
+                                <label className="block">
+                                    <span className={labelClass}>{discount.kind === "percent" ? "Percent off" : "Amount off (₦)"}</span>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max={discount.kind === "percent" ? 100 : undefined}
+                                        step="0.01"
+                                        value={discount.value || ""}
+                                        onChange={(e) => setDiscount((prev) => ({ ...prev, value: Math.max(0, Number(e.target.value) || 0) }))}
+                                        placeholder="0"
+                                        className={inputClass}
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className={labelClass}>Reason (shown on the invoice)</span>
+                                    <input
+                                        value={discount.reason}
+                                        onChange={(e) => setDiscount((prev) => ({ ...prev, reason: e.target.value.slice(0, 80) }))}
+                                        placeholder="e.g. Loyal customer"
+                                        className={inputClass}
+                                    />
+                                </label>
+                            </>
+                        )}
+                    </div>
+                    {discount.kind !== "none" && discountAmount === 0 && charges > 0 && (
+                        <p className="mt-2 text-xs text-white/45">Enter how much to take off.</p>
+                    )}
+                </fieldset>
+
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <label className="block sm:w-48">
-                        <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/40">Arrears (₦)</span>
-                        <input name="arrears" type="number" min="0" defaultValue={invoice.arrears || ""} placeholder="0" className={inputClass} />
+                        <span className={labelClass}>Arrears (₦)</span>
+                        <input
+                            name="arrears"
+                            type="number"
+                            min="0"
+                            value={arrears || ""}
+                            onChange={(e) => setArrears(Math.max(0, Number(e.target.value) || 0))}
+                            placeholder="0"
+                            className={inputClass}
+                        />
                     </label>
 
-                    <div className="text-right text-sm">
-                        <p className="text-white/50">
-                            Charges: <strong className="text-white">₦{total.toLocaleString()}</strong>
-                            <span className="ml-2 text-xs text-white/35">
-                                ({items.map((i) => lineTotal(i)).filter(Boolean).length} priced lines)
-                            </span>
-                        </p>
-                    </div>
+                    <dl className="space-y-1 text-right text-sm sm:min-w-[16rem]">
+                        <div className="flex justify-between gap-4 text-white/50">
+                            <dt>Charges</dt>
+                            <dd className="text-white">{naira(charges)}</dd>
+                        </div>
+                        {discountAmount > 0 && (
+                            <div className="flex justify-between gap-4 text-white/50">
+                                <dt>Discount ({discountPercent}%)</dt>
+                                <dd className="text-emerald-300">−{naira(discountAmount)}</dd>
+                            </div>
+                        )}
+                        {arrears > 0 && (
+                            <div className="flex justify-between gap-4 text-white/50">
+                                <dt>Arrears</dt>
+                                <dd className="text-white">{naira(arrears)}</dd>
+                            </div>
+                        )}
+                        <div className="flex justify-between gap-4 border-t border-white/10 pt-1 font-bold">
+                            <dt>Total</dt>
+                            <dd className="text-amber-300">{naira(charges - discountAmount + arrears)}</dd>
+                        </div>
+                    </dl>
                 </div>
 
                 <SaveButton />
