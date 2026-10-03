@@ -5,6 +5,8 @@ import { Plus, Trash2 } from "lucide-react";
 import { DOMESTIC_FACILITIES } from "@/lib/customer/facilities";
 import { itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } from "@/lib/billing/pricing";
 import MonthRangePicker, { monthSpan } from "@/components/dashboard/MonthRangePicker";
+import DiscountFields from "@/components/dashboard/DiscountFields";
+import { applyDiscount, NO_DISCOUNT, type DiscountInput } from "@/lib/billing/discount-line";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -31,6 +33,7 @@ export default function InvoiceBuilder({
     const [range, setRange] = useState({ start: defaultStartMonth, end: defaultStartMonth });
     const [others, setOthers] = useState<LineItem[]>([]);
     const [arrears, setArrears] = useState(0);
+    const [discount, setDiscount] = useState<DiscountInput>(NO_DISCOUNT);
 
     const months = useMemo(() => monthsFrom(range.start, monthSpan(range.start, range.end)), [range]);
     const period = monthRangeLabel(months);
@@ -45,9 +48,12 @@ export default function InvoiceBuilder({
 
     const monthly = DOMESTIC_FACILITIES.reduce((sum, f) => sum + (counts[f.key] ?? 0) * (prices[f.key] ?? 0), 0);
     const othersTotal = itemsTotal(others.filter((o) => o.label));
-    const total = monthly * n + othersTotal + arrears;
+    // The discount comes off the charges (units for the months, plus other charges), never off arrears.
+    const charges = monthly * n + othersTotal;
+    const { amount: discountAmount, percent: discountPercent, line: discountLine } = applyDiscount(charges, discount);
+    const total = charges - discountAmount + arrears;
 
-    const lineItems = [...unitLines, ...others.filter((o) => o.label && o.quantity > 0)];
+    const lineItems = [...unitLines, ...others.filter((o) => o.label && o.quantity > 0), ...(discountLine ? [discountLine] : [])];
     const propertyDetails = Object.fromEntries(Object.entries(counts).filter(([, c]) => c > 0).map(([k, c]) => [k, String(c)]));
 
     const updateOther = (index: number, patch: Partial<LineItem>) =>
@@ -161,6 +167,8 @@ export default function InvoiceBuilder({
                 </button>
             </fieldset>
 
+            <DiscountFields value={discount} onChange={setDiscount} charges={charges} inputClass={inputClass} />
+
             <label className="block sm:w-48">
                 <span className={labelClass}>Arrears (₦)</span>
                 <input
@@ -192,6 +200,12 @@ export default function InvoiceBuilder({
                         <div className="flex justify-between gap-3">
                             <dt className="text-white/60">Other charges</dt>
                             <dd>{naira(othersTotal)}</dd>
+                        </div>
+                    )}
+                    {discountAmount > 0 && (
+                        <div className="flex justify-between gap-3">
+                            <dt className="text-white/60">Discount ({discountPercent}%)</dt>
+                            <dd className="text-emerald-300">−{naira(discountAmount)}</dd>
                         </div>
                     )}
                     {arrears > 0 && (
