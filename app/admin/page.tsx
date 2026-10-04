@@ -10,6 +10,7 @@ import OwnerOverview from "@/components/dashboard/OwnerOverview";
 import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from "@/lib/billing/balance";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import { billToOf } from "@/lib/billing/billTo";
 import {
     AlertTriangle,
     Briefcase,
@@ -45,6 +46,8 @@ type UnpaidRow = {
     invoice_month: string | null;
     created_at: string;
     customer: ProfileRef;
+    // Who it is for when they are not registered on the app.
+    bill_to?: unknown;
 };
 
 type PhotoRow = { id: string; image_url: string | null; photo_type: string | null; task_title: string | null };
@@ -356,7 +359,10 @@ export default async function AdminPage() {
                             <PanelRow
                                 key={invoice.id}
                                 href="/admin/payments"
-                                primary={invoice.customer?.full_name ?? "Unknown customer"}
+                                primary={
+                                    invoice.customer?.full_name ??
+                                    (billToOf(invoice) ? `${billToOf(invoice)!.full_name} (not registered)` : "Unknown customer")
+                                }
                                 secondary={invoice.invoice_month ?? formatDate(invoice.created_at)}
                                 aside={<span className="font-bold text-amber-300">{naira(invoiceTotal(invoice))}</span>}
                             />
