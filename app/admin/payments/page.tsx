@@ -9,7 +9,7 @@ import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
 import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
-import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
+import { ALL_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
 import MoveToCustomerControl from "@/components/dashboard/MoveToCustomerControl";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
@@ -60,7 +60,7 @@ export default async function AdminPaymentsPage() {
         const property = propertyByProfile.get(c.id);
         const counts: Record<string, number> = {};
 
-        for (const f of DOMESTIC_FACILITIES) {
+        for (const f of ALL_FACILITIES) {
             const billable = facilityCount(property?.facility_details, f.key) - facilityCount(property?.vacancies, f.key);
             if (billable > 0) counts[f.key] = billable;
         }
