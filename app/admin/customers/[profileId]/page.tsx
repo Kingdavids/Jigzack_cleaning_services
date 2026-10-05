@@ -35,6 +35,7 @@ import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallment
 import { billingMonthLabel } from "@/lib/billing/pricing";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
     return (
@@ -199,6 +200,23 @@ export default async function AdminCustomerDetailPage({
                     All customers
                 </Link>
 
+                {isSuspended(customer.status) && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-400/40 border-l-4 border-l-red-500 bg-red-500/10 px-5 py-4">
+                        <div className="flex items-start gap-3">
+                            <SuspendedTag className="mt-0.5" />
+                            <div>
+                                <p className="font-bold text-red-200">This account is suspended</p>
+                                <p className="mt-0.5 text-sm text-white/60">
+                                    They can&apos;t sign in, and they&apos;re left out of automatic invoices and schedules. Nothing has been deleted.
+                                </p>
+                            </div>
+                        </div>
+                        <a href="#account" className="text-sm font-semibold text-red-300 underline underline-offset-2">
+                            Reactivate
+                        </a>
+                    </div>
+                )}
+
                 <SectionCard title="Account" description="Status, codes and how they joined.">
                     <div className="mb-4 flex flex-wrap items-center gap-3">
                         <StatusBadge status={customer.status} />
@@ -261,7 +279,7 @@ export default async function AdminCustomerDetailPage({
                 )}
 
                 {isFullAdmin(profile) && (
-                    <SectionCard title="Suspend or delete" description="Pause this customer, or move them to Recently deleted.">
+                    <SectionCard id="account" title="Suspend or delete" description="Pause this customer, or move them to Recently deleted.">
                         <CustomerAccountControls
                             profileId={profileId}
                             fullName={customer.full_name}

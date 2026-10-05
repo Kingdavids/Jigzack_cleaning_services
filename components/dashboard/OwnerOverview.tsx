@@ -88,7 +88,7 @@ export default async function OwnerOverview({
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard icon={Users} label="Active customers" value={String(active.count ?? 0)} helper="Billed and scheduled" href="/admin/customers" />
                 <StatCard icon={UserPlus} label="New this month" value={String(fresh.count ?? 0)} helper="Joined since the 1st" href="/admin/customers" />
-                <StatCard icon={UserX} label="Suspended" value={String(suspended.count ?? 0)} helper="Paused, can be reactivated" href="/admin/customers" />
+                <StatCard icon={UserX} label="Suspended" value={String(suspended.count ?? 0)} helper="Paused, can be reactivated" href="/admin/customers?status=suspended" />
                 <StatCard
                     icon={CalendarCheck}
                     label="Pickups completed"

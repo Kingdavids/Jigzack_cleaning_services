@@ -8,6 +8,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
+import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
 import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
 import { ALL_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
@@ -33,7 +34,7 @@ export default async function AdminPaymentsPage() {
 
     const { data: directoryData } = await supabase
         .from("profiles")
-        .select("id, full_name, role")
+        .select("id, full_name, role, email")
         .eq("role", "customer")
         .eq("status", "approved")
         .order("full_name", { ascending: true });
@@ -46,7 +47,7 @@ export default async function AdminPaymentsPage() {
     const { data: propertyRows } = customerOptions.length
         ? await supabase
               .from("customers")
-              .select("profile_id, facility_details, vacancies, phone, whatsapp_number, email")
+              .select("profile_id, facility_details, vacancies, phone, whatsapp_number, email, status")
               .in("profile_id", customerOptions.map((c) => c.id))
         : { data: [] };
     type PropertyRow = {
@@ -56,8 +57,11 @@ export default async function AdminPaymentsPage() {
         phone: string | null;
         whatsapp_number: string | null;
         email: string | null;
+        status: string | null;
     };
     const propertyByProfile = new Map(((propertyRows ?? []) as PropertyRow[]).map((row) => [row.profile_id, row]));
+    // Suspended customers are tagged wherever their invoices appear.
+    const suspendedIds = new Set(((propertyRows ?? []) as PropertyRow[]).filter((row) => isSuspended(row.status)).map((row) => row.profile_id));
     const invoiceCustomers: InvoiceCustomerOption[] = customerOptions.map((c) => {
         const property = propertyByProfile.get(c.id);
         const counts: Record<string, number> = {};
@@ -167,6 +171,22 @@ export default async function AdminPaymentsPage() {
             }
         }
 
+        // Someone who signed up but hasn't filled in their property form yet
+        // has no customer record, only their login: match on that.
+        const sameName = (name: string | null) => Boolean(name) && name!.trim().toLowerCase() === group.details.full_name.trim().toLowerCase();
+
+        for (const c of customerOptions) {
+            if (group.email && (c.email as string | null)?.toLowerCase() === group.email) {
+                return { id: c.id, full_name: c.full_name, reason: "same sign-up email" };
+            }
+        }
+
+        for (const c of customerOptions) {
+            if (sameName(c.full_name)) {
+                return { id: c.id, full_name: c.full_name, reason: "same name, so check it is the same person" };
+            }
+        }
+
         return null;
     };
     const canBulk = isOwner(profile);
@@ -250,6 +270,7 @@ export default async function AdminPaymentsPage() {
             canAct={canAct}
             bulk={canBulk}
             receiptUrl={payment.transfer_receipt_path ? receiptUrl.get(payment.transfer_receipt_path) ?? null : null}
+            suspended={Boolean(payment.customer_id && suspendedIds.has(payment.customer_id))}
         />
     );
 
@@ -363,7 +384,10 @@ export default async function AdminPaymentsPage() {
                                         defaultOpen={group.reported > 0 || unpaidGroups.length <= 6}
                                         header={
                                             <div>
-                                                <p className="truncate text-lg font-bold">{group.name}</p>
+                                                <p className="flex flex-wrap items-center gap-2 text-lg font-bold">
+                                                    <span className="truncate">{group.name}</span>
+                                                    {suspendedIds.has(group.key) && <SuspendedTag />}
+                                                </p>
                                                 <p className="mt-0.5 text-sm text-white/55">
                                                     {group.items.length} unpaid invoice{group.items.length === 1 ? "" : "s"} ·{" "}
                                                     <span className="font-semibold text-amber-300">{naira(group.owed)} owed</span>
@@ -417,7 +441,10 @@ export default async function AdminPaymentsPage() {
                                             defaultOpen={group.owed > 0}
                                             header={
                                                 <div>
-                                                    <p className="truncate text-lg font-bold">{group.name}</p>
+                                                    <p className="flex flex-wrap items-center gap-2 text-lg font-bold">
+                                                        <span className="truncate">{group.name}</span>
+                                                        {suspendedIds.has(group.key) && <SuspendedTag />}
+                                                    </p>
                                                     <p className="mt-0.5 text-sm text-white/55">
                                                         {group.items.length} invoice{group.items.length === 1 ? "" : "s"} ·{" "}
                                                         <span className="font-semibold text-emerald-300">{naira(group.total)}</span>
@@ -438,7 +465,7 @@ export default async function AdminPaymentsPage() {
                         </SectionCard>
                     </div>
 
-                    <div className="mt-6">
+                    <div id="not-registered" className="mt-6 scroll-mt-24">
                         <SectionCard
                             title="Not registered"
                             collapsible

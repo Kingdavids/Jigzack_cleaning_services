@@ -10,6 +10,7 @@ import InvoiceEditor from "@/components/dashboard/InvoiceEditor";
 import InvoiceTransferReview from "@/components/dashboard/InvoiceTransferReview";
 import { BulkCheckbox } from "@/components/dashboard/BulkSelect";
 import { billToOf } from "@/lib/billing/billTo";
+import SuspendedTag from "@/components/dashboard/SuspendedTag";
 
 export type AdminInvoiceRow = {
     id: string;
@@ -48,6 +49,7 @@ export default function AdminInvoiceCard({
                                              bulk = false,
                                              receiptUrl = null,
                                              showCustomer = true,
+                                             suspended = false,
                                          }: {
     payment: AdminInvoiceRow;
     installments: Installment[];
@@ -58,6 +60,8 @@ export default function AdminInvoiceCard({
     receiptUrl?: string | null;
     // Off on a customer's own page, where their name is already the heading.
     showCustomer?: boolean;
+    // The customer's account is suspended.
+    suspended?: boolean;
 }) {
     const total = invoiceTotal(payment);
     const paid = amountPaid(payment);
@@ -76,7 +80,10 @@ export default function AdminInvoiceCard({
             )}
             <div className="flex items-center justify-between gap-4">
                 <div>
-                    <p className="font-bold">{showCustomer ? name : month}</p>
+                    <p className="flex flex-wrap items-center gap-2 font-bold">
+                        {showCustomer ? name : month}
+                        {suspended && showCustomer && <SuspendedTag />}
+                    </p>
                     <p className="text-xs text-white/50">
                         {showCustomer ? `${month} · ` : ""}
                         {invoiceNumber(payment.id)}

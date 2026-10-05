@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
     CheckCircle2,
@@ -207,6 +207,56 @@ export default function CustomerSetupPage() {
     const router = useRouter();
     const [form, setForm] = useState<FormState>(initialState);
     const [submitting, setSubmitting] = useState(false);
+    // Who the details were taken from, when an admin had already invoiced
+    // this person (by this email) before they signed up.
+    const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
+
+    // Start from what the admin already entered on their invoice, so they only
+    // check it and add what is missing. Quietly does nothing before the bridge
+    // SQL has been run, or when there is no such invoice.
+    useEffect(() => {
+        let cancelled = false;
+
+        (async () => {
+            const { data, error } = await createClient().rpc("my_unregistered_invoices");
+            const rows = (data ?? []) as { bill_to: Record<string, unknown> | null }[];
+            if (cancelled || error || rows.length === 0 || !rows[0].bill_to) return;
+
+            const billTo = rows[0].bill_to;
+            const text = (key: string) => (typeof billTo[key] === "string" ? (billTo[key] as string) : "");
+            const units = (billTo.facility_details ?? {}) as Record<string, unknown>;
+
+            setForm((prev) => {
+                const next: FormState = {
+                    ...prev,
+                    landlordName: prev.landlordName || text("full_name"),
+                    contactPhone: prev.contactPhone || text("phone"),
+                    whatsappNumber: prev.whatsappNumber || text("whatsapp_number"),
+                    email: prev.email || text("email"),
+                    propertyAddress: prev.propertyAddress || text("address"),
+                    landmark: prev.landmark || text("landmark"),
+                    lga: prev.lga || text("lga"),
+                    state: prev.state || text("state"),
+                    propertyType: text("property_type") === "commercial" ? "commercial" : prev.propertyType,
+                };
+
+                // Unit counts use the same names on the invoice as on this form.
+                for (const key of Object.keys(initialState) as (keyof FormState)[]) {
+                    const value = units[key];
+                    if ((key.endsWith("Count") || key.endsWith("Others")) && value !== undefined && value !== null && value !== "" && !prev[key]) {
+                        (next as Record<string, unknown>)[key] = String(value);
+                    }
+                }
+
+                return next;
+            });
+            setPrefilledFrom(text("property_name") || text("full_name") || "your property");
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     const progress = useMemo(() => {
         const requiredFields = [
@@ -406,6 +456,10 @@ export default function CustomerSetupPage() {
                 await notifyAdminsOfNewApplication().catch(() => {});
             }
 
+            // Invoices an admin made out to this email before they signed up
+            // move onto their account now that they have a customer record.
+            await supabase.rpc("claim_my_unregistered_invoices");
+
             window.location.href = "/auth/pending?role=customer";
         } finally {
             setSubmitting(false);
@@ -504,6 +558,16 @@ export default function CustomerSetupPage() {
                         </ul>
                     </div>
                 </div>
+
+                {prefilledFrom && (
+                    <div className="mb-6 rounded-2xl border border-sky-400/25 bg-sky-400/[0.07] px-5 py-4 text-sm text-sky-100">
+                        <p className="font-semibold">We&apos;ve filled in what we already have for {prefilledFrom}</p>
+                        <p className="mt-1 text-sky-100/80">
+                            Jigzack has invoiced you before. Please check these details, add anything missing, and send the form. Your
+                            earlier invoices will then show in your dashboard.
+                        </p>
+                    </div>
+                )}
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <SectionCard

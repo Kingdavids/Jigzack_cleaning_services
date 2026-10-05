@@ -13,6 +13,7 @@ import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 import RevertTaskButton from "@/components/dashboard/RevertTaskButton";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import SuspendedTag from "@/components/dashboard/SuspendedTag";
 import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
 import { TaskFilter, TaskGroup } from "@/components/dashboard/TaskGroups";
 import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";
@@ -100,6 +101,9 @@ export default async function AdminTasksPage() {
     const { data: patternRows } = groupCustomerIds.length
         ? await supabase.from("customers").select("*").in("profile_id", groupCustomerIds)
         : { data: [] as Record<string, unknown>[] };
+    const suspendedCustomers = new Set(
+        (patternRows ?? []).filter((row) => row.status === "inactive").map((row) => row.profile_id as string)
+    );
     const patternByCustomer = new Map(
         (patternRows ?? []).map((row) => [
             row.profile_id as string,
@@ -234,7 +238,10 @@ export default async function AdminTasksPage() {
                                             defaultOpen={needs > 0 && groups.length <= 6}
                                             header={
                                                 <div>
-                                                    <p className="truncate text-lg font-bold">{group.name}</p>
+                                                    <p className="flex flex-wrap items-center gap-2 text-lg font-bold">
+                                                        <span className="truncate">{group.name}</span>
+                                                        {suspendedCustomers.has(group.key) && <SuspendedTag />}
+                                                    </p>
                                                     <p className="mt-0.5 text-sm text-white/55">
                                                         {group.pattern ? `${group.pattern} · ` : ""}
                                                         {group.open.length} upcoming

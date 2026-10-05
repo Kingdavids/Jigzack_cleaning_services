@@ -1,3 +1,6 @@
+// What a status is called on screen when it differs from its stored value.
+const LABELS: Record<string, string> = { inactive: "suspended" };
+
 export default function StatusBadge({ status }: { status: string }) {
     const map: Record<string, string> = {
         pending: "border-yellow-400/20 bg-yellow-400/10 text-yellow-300",
@@ -10,7 +13,9 @@ export default function StatusBadge({ status }: { status: string }) {
         serviced: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
         failed: "border-red-400/20 bg-red-400/10 text-red-300",
         active: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
-        inactive: "border-zinc-400/20 bg-zinc-400/10 text-zinc-300",
+        // A customer with status "inactive" has been suspended by an admin.
+        inactive: "border-red-400/40 bg-red-500/15 text-red-300",
+        suspended: "border-red-400/40 bg-red-500/15 text-red-300",
         submitted: "border-yellow-400/20 bg-yellow-400/10 text-yellow-300",
         approved: "border-sky-400/20 bg-sky-400/10 text-sky-300",
         reimbursed: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300",
@@ -24,7 +29,7 @@ export default function StatusBadge({ status }: { status: string }) {
                 map[status] || "border-white/10 bg-white/10 text-white"
             }`}
         >
-      {status.replace("_", " ")}
+      {(LABELS[status] ?? status).replace("_", " ")}
     </span>
     );
 }

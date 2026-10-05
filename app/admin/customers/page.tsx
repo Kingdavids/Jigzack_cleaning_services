@@ -16,6 +16,8 @@ import { balanceOf, loadWithPaid } from "@/lib/billing/balance";
 import { discountInfo, type DiscountableCustomer } from "@/lib/billing/generate";
 import type { EstateUnit } from "@/lib/billing/pricing";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
+import { billToOf } from "@/lib/billing/billTo";
 
 type CustomerRow = {
     id: string;
@@ -46,9 +48,11 @@ type CustomerRow = {
 export default async function AdminCustomersPage({
                                                      searchParams,
                                                  }: {
-    searchParams: Promise<{ q?: string; fee?: string }>;
+    searchParams: Promise<{ q?: string; fee?: string; status?: string }>;
 }) {
-    const { q, fee } = await searchParams;
+    const { q, fee, status: statusFilter } = await searchParams;
+    // ?status=suspended or ?status=active narrows the list.
+    const show = statusFilter === "suspended" || statusFilter === "active" ? statusFilter : "all";
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     // Strip characters that have meaning inside a PostgREST or() filter.
@@ -88,7 +92,19 @@ export default async function AdminCustomersPage({
     const fullResult = await buildQuery(FULL_COLUMNS);
     const customersData = fullResult.error ? (await buildQuery(BASE_COLUMNS)).data : fullResult.data;
 
-    const customers = (customersData ?? []) as unknown as CustomerRow[];
+    const allCustomers = (customersData ?? []) as unknown as CustomerRow[];
+    const suspendedCount = allCustomers.filter((c) => isSuspended(c.status)).length;
+    const customers = allCustomers.filter((c) => (show === "suspended" ? isSuspended(c.status) : show === "active" ? !isSuspended(c.status) : true));
+
+    // Keeps the search and the other filter when switching between All, Active and Suspended.
+    const filterHref = (value: "all" | "active" | "suspended") => {
+        const params = new URLSearchParams();
+        if (term) params.set("q", term);
+        if (fee) params.set("fee", fee);
+        if (value !== "all") params.set("status", value);
+        const query = params.toString();
+        return `/admin/customers${query ? `?${query}` : ""}`;
+    };
 
     // Customers waiting in Recently deleted (an owner can restore them).
     const { data: deletedData } = await supabase
@@ -119,6 +135,26 @@ export default async function AdminCustomersPage({
     const noDetails = ((customerLogins ?? []) as { id: string; full_name: string | null; email: string | null; status: string; created_at: string }[]).filter(
         (person) => !haveRecord.has(person.id) && person.status !== "declined"
     );
+
+    // Invoices made out to someone before they had an account, matched to these
+    // signups by email (as their property form will be) or else by name.
+    const unregisteredRows = noDetails.length
+        ? ((await loadWithPaid(
+              (select) => supabase.from("payments").select(select).is("customer_id", null).not("bill_to", "is", null),
+              "id, amount, arrears, status, bill_to"
+          )) as { amount: number; arrears: number | null; status: string | null; amount_paid?: number | string | null; bill_to: unknown }[])
+        : [];
+
+    const earlierInvoicesFor = (person: { email: string | null; full_name: string | null }) => {
+        const email = person.email?.trim().toLowerCase();
+        const name = person.full_name?.trim().toLowerCase();
+        const byEmail = unregisteredRows.filter((row) => email && billToOf(row)?.email?.trim().toLowerCase() === email);
+        const rows = byEmail.length > 0 ? byEmail : unregisteredRows.filter((row) => name && billToOf(row)?.full_name.trim().toLowerCase() === name);
+
+        return rows.length === 0
+            ? null
+            : { count: rows.length, owed: rows.reduce((sum, row) => sum + balanceOf(row), 0), byEmail: byEmail.length > 0 };
+    };
 
     // Arrears count toward what a customer owes, and money already paid on a part
     // paid invoice is subtracted, so this matches the balance shown everywhere else.
@@ -187,14 +223,46 @@ export default async function AdminCustomersPage({
                     </button>
                 </form>
 
+                <nav aria-label="Filter customers" className="mb-5 flex flex-wrap gap-2">
+                    {([
+                        { value: "all", label: "All", count: allCustomers.length },
+                        { value: "active", label: "Active", count: allCustomers.length - suspendedCount },
+                        { value: "suspended", label: "Suspended", count: suspendedCount },
+                    ] as const).map((f) => {
+                        const active = show === f.value;
+                        const red = f.value === "suspended" && f.count > 0;
+
+                        return (
+                            <Link
+                                key={f.value}
+                                href={filterHref(f.value)}
+                                aria-current={active ? "page" : undefined}
+                                className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm transition ${
+                                    active
+                                        ? red
+                                            ? "border-red-500 bg-red-500 font-semibold text-white"
+                                            : "border-amber-400 bg-amber-400 font-semibold text-black"
+                                        : red
+                                            ? "border-red-400/40 bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                                            : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                                }`}
+                            >
+                                {f.label}
+                                <span className={active ? "opacity-70" : "text-white/40"}>{f.count}</span>
+                            </Link>
+                        );
+                    })}
+                </nav>
+
                 {customers.length === 0 ? (
                     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
-                        {term ? `No customers match "${term}".` : "No customers yet."}
+                        {term ? `No customers match "${term}".` : show === "suspended" ? "No suspended customers." : "No customers yet."}
                     </div>
                 ) : (
                     <div className="space-y-3">
                         {customers.map((customer) => {
                             const outstanding = customer.profile_id ? owed.get(customer.profile_id) ?? 0 : 0;
+                            const suspended = isSuspended(customer.status);
                             const discount = discountInfo(
                                 customer as unknown as DiscountableCustomer,
                                 customer.profile_id ? unitsByEstate.get(customer.profile_id) : undefined
@@ -205,12 +273,17 @@ export default async function AdminCustomersPage({
                                     <Link
                                         key={customer.id}
                                         href={`/admin/customers/${customer.profile_id}`}
-                                        className="block rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition hover:border-white/25 hover:bg-white/[0.05]"
+                                        className={`block rounded-2xl border p-4 transition hover:bg-white/[0.05] ${
+                                            suspended
+                                                ? "border-red-400/30 border-l-4 border-l-red-500 bg-red-500/[0.04] opacity-80 hover:opacity-100"
+                                                : "border-white/10 bg-white/[0.03] hover:border-white/25"
+                                        }`}
                                     >
                                     <div className="flex items-start justify-between gap-4">
                                         <div className="min-w-0">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <p className="font-bold">{customer.full_name}</p>
+                                                {suspended && <SuspendedTag />}
                                                 {customer.is_estate && (
                                                     <span className="rounded-full bg-sky-400/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-sky-300">
                                                         Estate
@@ -329,7 +402,10 @@ export default async function AdminCustomersPage({
                         description="These people created a login but have not filled in their property form, so there is no customer record to open. Pending ones can be reviewed in Signup approvals."
                     >
                         <div className="space-y-2">
-                            {noDetails.map((person) => (
+                            {noDetails.map((person) => {
+                                const earlier = earlierInvoicesFor(person);
+
+                                return (
                                 <div
                                     key={person.id}
                                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm"
@@ -339,6 +415,20 @@ export default async function AdminCustomersPage({
                                         <p className="truncate text-xs text-white/50">
                                             {person.email ?? "No email"} · signed up {formatDate(person.created_at)}
                                         </p>
+                                        {earlier && (
+                                            <p className="mt-1 text-xs text-sky-300">
+                                                Has {earlier.count} invoice{earlier.count === 1 ? "" : "s"} from before they registered ·{" "}
+                                                <span className="font-semibold">{naira(earlier.owed)} owed</span> ·{" "}
+                                                <Link href="/admin/payments#not-registered" className="underline underline-offset-2">
+                                                    View
+                                                </Link>
+                                                <span className="block text-white/45">
+                                                    {earlier.byEmail
+                                                        ? "Same email: their property form will be filled in from these, and the invoices move to them once they send it."
+                                                        : "Same name only: check it's them, then use Move to customer on the Payments page."}
+                                                </span>
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex flex-wrap items-center gap-3">
                                         <StatusBadge status={person.status} />
@@ -361,7 +451,8 @@ export default async function AdminCustomersPage({
                                         )}
                                     </div>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </SectionCard>
                 </div>

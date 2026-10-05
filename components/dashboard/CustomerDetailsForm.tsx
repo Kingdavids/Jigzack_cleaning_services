@@ -150,7 +150,7 @@ export default function CustomerDetailsForm({
                         className={`${inputClass} bg-[#141518]`}
                     >
                         <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
+                        <option value="inactive">Suspended</option>
                     </select>
                 </Field>
             </div>
