@@ -51,7 +51,8 @@ export default function CustomerDetailsForm({
         account_code: string | null;
         property_code: string | null;
         property_class: string | null;
-        status: string | null;
+        // Not edited here: only the Suspend / Reactivate control changes it.
+        status?: string | null;
         preferred_pickup_frequency: string | null;
         facility_details: FacilityDetails;
     };
@@ -142,16 +143,6 @@ export default function CustomerDetailsForm({
                         placeholder="e.g. Weekly, or 3 times a week"
                         className={inputClass}
                     />
-                </Field>
-                <Field label="Account status">
-                    <select
-                        name="status"
-                        defaultValue={defaults.status ?? "active"}
-                        className={`${inputClass} bg-[#141518]`}
-                    >
-                        <option value="active">Active</option>
-                        <option value="inactive">Suspended</option>
-                    </select>
                 </Field>
             </div>
 
