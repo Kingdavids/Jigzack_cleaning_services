@@ -3628,3 +3628,17 @@ revoke execute on function public.claim_my_unregistered_invoices() from public, 
 grant execute on function public.claim_my_unregistered_invoices() to authenticated;
 
 select 'done' as result;
+
+-- ============================================================
+-- (also in supabase/studio-apartments-2026-10.sql for the live project)
+-- ============================================================
+
+alter table public.units drop constraint if exists units_property_type_check;
+
+alter table public.units
+    add constraint units_property_type_check check (
+        property_type is null
+        or property_type in ('duplexCount', 'flatsCount', 'miniFlatsCount', 'studioCount', 'bungalowCount', 'terraceCount', 'shopsCount')
+    );
+
+select 'done' as result;

@@ -33,6 +33,7 @@ type FormState = {
     duplexCount: string;
     flatsCount: string;
     miniFlatsCount: string;
+    studioCount: string;
     bungalowCount: string;
     terraceCount: string;
     shopsCount: string;
@@ -73,6 +74,7 @@ const initialState: FormState = {
     duplexCount: "",
     flatsCount: "",
     miniFlatsCount: "",
+    studioCount: "",
     bungalowCount: "",
     terraceCount: "",
     shopsCount: "",
@@ -279,6 +281,7 @@ export default function CustomerSetupPage() {
             form.duplexCount,
             form.flatsCount,
             form.miniFlatsCount,
+            form.studioCount,
             form.bungalowCount,
             form.terraceCount,
             form.shopsCount,
@@ -425,6 +428,7 @@ export default function CustomerSetupPage() {
                     duplexCount: form.duplexCount,
                     flatsCount: form.flatsCount,
                     miniFlatsCount: form.miniFlatsCount,
+                    studioCount: form.studioCount,
                     bungalowCount: form.bungalowCount,
                     terraceCount: form.terraceCount,
                     shopsCount: form.shopsCount,
@@ -804,6 +808,15 @@ export default function CustomerSetupPage() {
                                 <TextInput
                                     value={form.miniFlatsCount}
                                     onChange={(value) => updateField("miniFlatsCount", value)}
+                                    placeholder="0"
+                                />
+                            </div>
+
+                            <div>
+                                <FieldLabel>Studio Apartments</FieldLabel>
+                                <TextInput
+                                    value={form.studioCount}
+                                    onChange={(value) => updateField("studioCount", value)}
                                     placeholder="0"
                                 />
                             </div>

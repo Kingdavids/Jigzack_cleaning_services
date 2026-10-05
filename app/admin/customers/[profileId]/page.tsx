@@ -652,6 +652,7 @@ const DOMESTIC_KEY: Record<string, string> = {
     Duplex: "duplexCount",
     Flats: "flatsCount",
     "Mini flats": "miniFlatsCount",
+    "Studio apartments": "studioCount",
     Bungalows: "bungalowCount",
     Terraces: "terraceCount",
     Shops: "shopsCount",

@@ -7,6 +7,7 @@ export const DOMESTIC_FACILITIES: FacilityDef[] = [
     { key: "duplexCount", label: "Duplex", unitLabel: "Duplex" },
     { key: "flatsCount", label: "Flats", unitLabel: "Flat" },
     { key: "miniFlatsCount", label: "Mini flats", unitLabel: "Mini flat" },
+    { key: "studioCount", label: "Studio apartments", unitLabel: "Studio apartment" },
     { key: "bungalowCount", label: "Bungalows", unitLabel: "Bungalow" },
     { key: "terraceCount", label: "Terraces", unitLabel: "Terrace" },
     { key: "shopsCount", label: "Shops", unitLabel: "Shop" },

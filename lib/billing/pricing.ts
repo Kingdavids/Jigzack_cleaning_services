@@ -8,6 +8,7 @@ export type LineItem = { label: string; quantity: number; unit_price: number; no
 export const UNIT_PRICES: Record<string, number> = {
     flatsCount: 5000,
     miniFlatsCount: 5000,
+    studioCount: 5000,
     shopsCount: 2000,
     duplexCount: 8000,
     bungalowCount: 7000,

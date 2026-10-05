@@ -354,7 +354,7 @@ export default async function AdminPaymentsPage() {
 
                 <SectionCard
                     title="Monthly invoices"
-                    description={`Creates a ${billingMonthLabel()} invoice for every active customer that doesn't have one yet: flat ₦5,000, mini flat ₦5,000, shop ₦2,000, duplex ₦8,000, bungalow ₦7,000, terrace ₦10,000, minus any vacant units.`}
+                    description={`Creates a ${billingMonthLabel()} invoice for every active customer that doesn't have one yet: flat ₦5,000, mini flat ₦5,000, studio apartment ₦5,000, shop ₦2,000, duplex ₦8,000, bungalow ₦7,000, terrace ₦10,000, minus any vacant units.`}
                 >
                     <BillingActionButton run={generateAllInvoices}>Generate {billingMonthLabel()} invoices</BillingActionButton>
                 </SectionCard>
