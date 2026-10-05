@@ -200,17 +200,15 @@ function invoiceInsertError(message: string | undefined) {
     return "Could not create the invoice. Please try again.";
 }
 
-// An invoice for someone who is not registered on the app. Their details are
-// kept on the invoice itself (payments.bill_to); an admin prints, downloads or
-// shares it with them, since they have no dashboard to see it in.
-export async function createNonCustomerInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {
-    const actor = await requireAdmin();
-    const supabase = await createClient();
-
+// Who an invoice is for, from BillToFields: the person or business, an
+// optional property name printed instead of theirs, contact details and the
+// address the service is for.
+function readBillTo(formData: FormData) {
     const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
     const billTo = {
         full_name: text("fullName", 120),
+        property_name: text("propertyName", 120),
         phone: text("phone", 40),
         whatsapp_number: text("whatsapp", 40),
         email: text("email", 160),
@@ -221,10 +219,67 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
         property_type: text("propertyType", 40),
     };
 
-    if (!billTo.full_name) return { success: false, error: "Enter the name of the person or business being billed." };
-    if (!billTo.phone && !billTo.email) return { success: false, error: "Enter a phone number or an email address for them." };
-    if (!billTo.address) return { success: false, error: "Enter the address the service is for." };
-    if (billTo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) return { success: false, error: "That email address doesn't look right." };
+    if (!billTo.full_name) return { error: "Enter the name of the person or business being billed." };
+    if (!billTo.phone && !billTo.email) return { error: "Enter a phone number or an email address for them." };
+    if (!billTo.address) return { error: "Enter the address the service is for." };
+    if (billTo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) return { error: "That email address doesn't look right." };
+
+    return { billTo };
+}
+
+// Corrects the details on every invoice for someone not registered on the app.
+// Each invoice keeps its own unit counts; only who and where change. Invoices
+// already moved to a customer are left alone.
+export async function updateBillToDetails(invoiceIds: string[], _prevState: CustomerActionState, formData: FormData): Promise<CustomerActionState> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const ids = [...new Set((invoiceIds ?? []).filter(Boolean))].slice(0, 500);
+    if (ids.length === 0) return { success: false, error: "No invoices to update." };
+
+    const read = readBillTo(formData);
+    if ("error" in read) return { success: false, error: read.error };
+
+    const { data: rows, error: loadError } = await supabase.from("payments").select("id, bill_to").in("id", ids).is("customer_id", null);
+
+    if (loadError || !rows || rows.length === 0) {
+        console.error("updateBillToDetails load error:", loadError?.message);
+        return { success: false, error: "Could not find these invoices." };
+    }
+
+    for (const row of rows) {
+        const before = (row.bill_to as Record<string, unknown> | null) ?? {};
+        const { error } = await supabase
+            .from("payments")
+            .update({ bill_to: { ...before, ...read.billTo } })
+            .eq("id", row.id)
+            .is("customer_id", null);
+
+        if (error) {
+            console.error("updateBillToDetails error:", error.message);
+            return { success: false, error: "Could not save the details. Please try again." };
+        }
+    }
+
+    await logActivity(supabase, actor, "invoice_edited", `Updated the details for ${read.billTo.full_name} (not registered)`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+
+    return { success: true, message: `Details updated on ${rows.length} invoice${rows.length === 1 ? "" : "s"}.` };
+}
+
+// An invoice for someone who is not registered on the app. Their details are
+// kept on the invoice itself (payments.bill_to); an admin prints, downloads or
+// shares it with them, since they have no dashboard to see it in.
+export async function createNonCustomerInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const read = readBillTo(formData);
+    if ("error" in read) return { success: false, error: read.error };
+
+    const { billTo } = read;
+    const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
     const built = readBuiltInvoice(formData);
     if ("error" in built) return { success: false, error: built.error };
@@ -1603,30 +1658,58 @@ export async function updateCustomerDetails(
     }
 
     const status = String(formData.get("status") || "active");
+    const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
-    const { error } = await supabase
-        .from("customers")
-        .update({
-            account_code: String(formData.get("accountCode") || "").trim() || null,
-            property_code: String(formData.get("propertyCode") || "").trim() || null,
-            property_class: String(formData.get("propertyClass") || "").trim() || null,
-            preferred_pickup_frequency: String(formData.get("pickupFrequency") || "").trim() || null,
-            status: status === "inactive" ? "inactive" : "active",
-            facility_details,
-        })
-        .eq("profile_id", profileId);
+    const fullName = text("fullName", 120);
+    if (!fullName) return { success: false, error: "Enter the customer's name." };
+
+    const propertyType = text("propertyType", 20);
+
+    // The property name needs supabase/property-name-2026-10.sql; everything
+    // else saves without it.
+    const propertyName = { property_name: text("propertyName", 120) };
+
+    const changes = {
+        full_name: fullName,
+        phone: text("phone", 40),
+        whatsapp_number: text("whatsapp", 40),
+        address: text("address", 300),
+        landmark: text("landmark", 160),
+        lga: text("lga", 80),
+        state: text("state", 80),
+        ...(propertyType === "residential" || propertyType === "commercial" ? { property_type: propertyType } : {}),
+        account_code: String(formData.get("accountCode") || "").trim() || null,
+        property_code: String(formData.get("propertyCode") || "").trim() || null,
+        property_class: String(formData.get("propertyClass") || "").trim() || null,
+        preferred_pickup_frequency: String(formData.get("pickupFrequency") || "").trim() || null,
+        status: status === "inactive" ? "inactive" : "active",
+        facility_details,
+    };
+
+    let { error } = await supabase.from("customers").update({ ...changes, ...propertyName }).eq("profile_id", profileId);
+    let note = "";
+
+    if (error && /property_name/.test(error.message)) {
+        ({ error } = await supabase.from("customers").update(changes).eq("profile_id", profileId));
+        note = propertyName.property_name ? " The property name wasn't saved: run supabase/property-name-2026-10.sql in Supabase first." : "";
+    }
 
     if (error) {
         console.error("updateCustomerDetails error:", error.message);
         return { success: false, error: "Could not save these details." };
     }
 
+    // Their login shows the same name everywhere else in the app.
+    await supabase.from("profiles").update({ full_name: fullName }).eq("id", profileId);
+
     await logActivity(supabase, actor, "customer_edited", "Edited a customer record", { type: "profile", id: profileId });
     revalidatePath(`/admin/customers/${profileId}`);
     revalidatePath("/admin/customers");
     revalidatePath("/customer");
 
-    return { success: true, message: "Customer details saved." };
+    revalidatePath("/admin/payments");
+
+    return { success: true, message: `Customer details saved.${note}` };
 }
 
 // The landlord tells the company a unit is vacant; the admin records it here

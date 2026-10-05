@@ -39,6 +39,15 @@ export default function CustomerDetailsForm({
     action: (prev: CustomerActionState, formData: FormData) => Promise<CustomerActionState>;
     profileId: string;
     defaults: {
+        full_name?: string | null;
+        property_name?: string | null;
+        phone?: string | null;
+        whatsapp_number?: string | null;
+        address?: string | null;
+        landmark?: string | null;
+        lga?: string | null;
+        state?: string | null;
+        property_type?: string | null;
         account_code: string | null;
         property_code: string | null;
         property_class: string | null;
@@ -58,6 +67,58 @@ export default function CustomerDetailsForm({
     return (
         <form action={formAction} className="space-y-5">
             <input type="hidden" name="profileId" value={profileId} />
+
+            <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/45">Account holder and property</p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <Field label="Name">
+                        <input name="fullName" required maxLength={120} defaultValue={defaults.full_name ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="Property name (optional)">
+                        <input
+                            name="propertyName"
+                            maxLength={120}
+                            defaultValue={defaults.property_name ?? ""}
+                            placeholder="e.g. Grace Hotel"
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="Property type">
+                        <select name="propertyType" defaultValue={defaults.property_type ?? "residential"} className={`${inputClass} bg-[#141518]`}>
+                            <option value="residential">Residential</option>
+                            <option value="commercial">Commercial</option>
+                        </select>
+                    </Field>
+                    <Field label="Phone">
+                        <input name="phone" type="tel" inputMode="tel" maxLength={40} defaultValue={defaults.phone ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="WhatsApp">
+                        <input
+                            name="whatsapp"
+                            type="tel"
+                            inputMode="tel"
+                            maxLength={40}
+                            defaultValue={defaults.whatsapp_number ?? ""}
+                            className={inputClass}
+                        />
+                    </Field>
+                    <Field label="Address">
+                        <input name="address" maxLength={300} defaultValue={defaults.address ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="Landmark">
+                        <input name="landmark" maxLength={160} defaultValue={defaults.landmark ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="L.G.A">
+                        <input name="lga" maxLength={80} defaultValue={defaults.lga ?? ""} className={inputClass} />
+                    </Field>
+                    <Field label="State">
+                        <input name="state" maxLength={80} defaultValue={defaults.state ?? ""} className={inputClass} />
+                    </Field>
+                </div>
+                <p className="mt-2 text-xs text-white/40">
+                    If a property name is given, their invoices and receipts show that name alone as the account holder.
+                </p>
+            </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Field label="Account code">

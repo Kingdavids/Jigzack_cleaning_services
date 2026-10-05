@@ -2,7 +2,7 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { generateAllInvoices } from "../actions";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
-import { billingMonthLabel } from "@/lib/billing/pricing";
+import { billingMonthKey, billingMonthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
@@ -12,6 +12,8 @@ import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dash
 import { ALL_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
 import MoveToCustomerControl from "@/components/dashboard/MoveToCustomerControl";
+import EditBillToForm from "@/components/dashboard/EditBillToForm";
+import type { BillTo } from "@/lib/billing/billTo";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import { BulkSelectProvider } from "@/components/dashboard/BulkSelect";
@@ -68,8 +70,8 @@ export default async function AdminPaymentsPage() {
         return { id: c.id, full_name: c.full_name, counts };
     });
 
-    // One-off invoices start from the current month, Lagos time ("YYYY-MM").
-    const startMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(0, 7);
+    // One-off invoices start from the billing month: last month's until the 25th.
+    const startMonth = billingMonthKey();
 
     // "*" picks up the transfer and part payment columns once they exist, so the
     // page works before and after the SQL files have been run. Unpaid and paid are
@@ -106,6 +108,8 @@ export default async function AdminPaymentsPage() {
         key: string;
         name: string;
         contact: string;
+        // Their details as on their invoices, for the edit form.
+        details: BillTo;
         email: string | null;
         phones: string[];
         items: PaymentRow[];
@@ -120,8 +124,9 @@ export default async function AdminPaymentsPage() {
         const key = billTo.email?.toLowerCase() || digits(billTo.phone) || billTo.full_name.trim().toLowerCase();
         const group = people.get(key) ?? {
             key,
-            name: billTo.full_name,
+            name: billTo.property_name ? `${billTo.property_name} (${billTo.full_name})` : billTo.full_name,
             contact: [billTo.phone, billTo.email, billTo.address].filter(Boolean).join(" · "),
+            details: billTo,
             email: billTo.email?.toLowerCase() ?? null,
             phones: [digits(billTo.phone), digits(billTo.whatsapp_number)].filter(Boolean),
             items: [],
@@ -490,6 +495,7 @@ export default async function AdminPaymentsPage() {
                                                         </div>
                                                     }
                                                 >
+                                                    {canAct && <EditBillToForm invoiceIds={group.items.map((i) => i.id)} defaults={group.details} />}
                                                     {canAct && (
                                                         <MoveToCustomerControl
                                                             personName={group.name}

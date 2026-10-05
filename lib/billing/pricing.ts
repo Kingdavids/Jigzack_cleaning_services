@@ -128,6 +128,14 @@ export function monthRangeLabel(months: string[]): string {
 // September's, and from 25 October it is October's.
 export const INVOICE_DAY = 25;
 
+// The billing month as "YYYY-MM" (see INVOICE_DAY): on 5 October it is
+// "2026-09", from 25 October "2026-10".
+export function billingMonthKey(now: Date = new Date()) {
+    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);
+    const first = new Date(Date.UTC(y, d < INVOICE_DAY ? m - 2 : m - 1, 1));
+    return first.toISOString().slice(0, 7);
+}
+
 // The month whose invoice is the current one right now (see INVOICE_DAY).
 export function billingMonthLabel(now: Date = new Date()) {
     const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);

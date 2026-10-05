@@ -18,6 +18,10 @@ const naira = (value: number) => `₦${value.toLocaleString("en-NG", { maximumFr
 // An extra charge on a hand-made invoice, charged once or for every month covered.
 type OtherCharge = LineItem & { monthly: boolean };
 
+// A commercial property that isn't one of the listed types (a church, a filling
+// station), with its own name, how many and the agreed price a month.
+type OtherSite = { name: string; count: number; price: number };
+
 // The money part of a hand-made invoice: the property's units at their monthly
 // price (residential at the standard rates, commercial at whatever price was
 // agreed for the site), how many months it covers, any other charges, a
@@ -36,6 +40,7 @@ export default function InvoiceBuilder({
     const [prices, setPrices] = useState<Record<string, number>>({ ...UNIT_PRICES });
     const [range, setRange] = useState({ start: defaultStartMonth, end: defaultStartMonth });
     const [others, setOthers] = useState<OtherCharge[]>([]);
+    const [otherSites, setOtherSites] = useState<OtherSite[]>([]);
     const [arrears, setArrears] = useState(0);
     const [discount, setDiscount] = useState<DiscountInput>(NO_DISCOUNT);
 
@@ -53,16 +58,28 @@ export default function InvoiceBuilder({
         note: perMonthNote(prices[f.key] ?? 0),
     }));
 
+    const filledSites = otherSites.filter((site) => site.name.trim() && site.count > 0);
+    const siteLines: LineItem[] = filledSites.map((site) => ({
+        label: forMonths(site.name.trim()),
+        quantity: site.count,
+        unit_price: site.price * n,
+        note: perMonthNote(site.price),
+    }));
+
     const filledOthers = others.filter((o) => o.label && o.quantity > 0);
     const otherLines: LineItem[] = filledOthers.map(({ monthly, ...item }) =>
         monthly ? { ...item, label: forMonths(item.label), unit_price: item.unit_price * n, note: item.note || perMonthNote(item.unit_price) } : item
     );
 
     // A commercial site counted but not yet given its agreed price.
-    const unpriced = COMMERCIAL_FACILITIES.filter((f) => (counts[f.key] ?? 0) > 0 && !(prices[f.key] > 0));
+    const unpriced = [
+        ...COMMERCIAL_FACILITIES.filter((f) => (counts[f.key] ?? 0) > 0 && !(prices[f.key] > 0)).map((f) => f.label.toLowerCase()),
+        ...filledSites.filter((site) => !(site.price > 0)).map((site) => site.name.trim()),
+    ];
 
     const monthly =
         ALL_FACILITIES.reduce((sum, f) => sum + (counts[f.key] ?? 0) * (prices[f.key] ?? 0), 0) +
+        filledSites.reduce((sum, site) => sum + site.count * site.price, 0) +
         itemsTotal(filledOthers.filter((o) => o.monthly));
     const othersTotal = itemsTotal(filledOthers.filter((o) => !o.monthly));
     // The discount comes off the charges (units for the months, plus other charges), never off arrears.
@@ -70,8 +87,15 @@ export default function InvoiceBuilder({
     const { amount: discountAmount, percent: discountPercent, line: discountLine } = applyDiscount(charges, discount);
     const total = charges - discountAmount + arrears;
 
-    const lineItems = [...unitLines, ...otherLines, ...(discountLine ? [discountLine] : [])];
-    const propertyDetails = Object.fromEntries(Object.entries(counts).filter(([, c]) => c > 0).map(([k, c]) => [k, String(c)]));
+    const lineItems = [...unitLines, ...siteLines, ...otherLines, ...(discountLine ? [discountLine] : [])];
+    const propertyDetails: Record<string, string> = Object.fromEntries(
+        Object.entries(counts).filter(([, c]) => c > 0).map(([k, c]) => [k, String(c)])
+    );
+    // Shown under "Property" on the invoice, the same field the sign-up form uses.
+    if (filledSites.length > 0) propertyDetails.commercialOthers = filledSites.map((site) => `${site.name.trim()} ${site.count}`).join(", ");
+
+    const updateSite = (index: number, patch: Partial<OtherSite>) =>
+        setOtherSites((prev) => prev.map((site, i) => (i === index ? { ...site, ...patch } : site)));
 
     const updateOther = (index: number, patch: Partial<OtherCharge>) =>
         setOthers((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -123,18 +147,72 @@ export default function InvoiceBuilder({
                     {DOMESTIC_FACILITIES.map((f) => unitCard(f, false))}
                 </div>
 
-                <details open={COMMERCIAL_FACILITIES.some((f) => (counts[f.key] ?? 0) > 0)} className="group rounded-xl border border-white/10">
+                <details
+                    open={COMMERCIAL_FACILITIES.some((f) => (counts[f.key] ?? 0) > 0) || otherSites.length > 0}
+                    className="group rounded-xl border border-white/10"
+                >
                     <summary className="cursor-pointer list-none p-3 text-xs font-semibold uppercase tracking-[0.15em] text-white/45 [&::-webkit-details-marker]:hidden">
                         Commercial <span className="normal-case tracking-normal text-white/35">· price agreed for each site</span>
                     </summary>
                     <div className="grid gap-3 border-t border-white/10 p-3 sm:grid-cols-2 lg:grid-cols-3">
                         {COMMERCIAL_FACILITIES.map((f) => unitCard(f, true))}
                     </div>
+
+                    <div className="space-y-2 border-t border-white/10 p-3">
+                        <p className="text-sm font-semibold">Others</p>
+                        <p className="text-xs text-white/40">Any other kind of site, such as a church or a filling station.</p>
+                        {otherSites.map((site, index) => (
+                            <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_7rem_10rem_44px]">
+                                <input
+                                    value={site.name}
+                                    onChange={(e) => updateSite(index, { name: e.target.value.slice(0, 60) })}
+                                    placeholder="Type of site, e.g. Church"
+                                    aria-label="Type of site"
+                                    className={`${inputClass} col-span-2 sm:col-span-1`}
+                                />
+                                <input
+                                    type="number"
+                                    min="0"
+                                    inputMode="numeric"
+                                    value={site.count}
+                                    onChange={(e) => updateSite(index, { count: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+                                    aria-label="How many"
+                                    className={inputClass}
+                                />
+                                <input
+                                    type="number"
+                                    min="0"
+                                    inputMode="decimal"
+                                    value={site.price || ""}
+                                    onChange={(e) => updateSite(index, { price: Math.max(0, Number(e.target.value) || 0) })}
+                                    placeholder="Agreed ₦ a month"
+                                    aria-label="Agreed price a month"
+                                    className={inputClass}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setOtherSites((prev) => prev.filter((_, i) => i !== index))}
+                                    aria-label="Remove site"
+                                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-white/50 transition hover:text-red-300"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                            </div>
+                        ))}
+                        <button
+                            type="button"
+                            onClick={() => setOtherSites((prev) => [...prev, { name: "", count: 1, price: 0 }])}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            Add another type of site
+                        </button>
+                    </div>
                 </details>
 
                 {unpriced.length > 0 && (
                     <p className="rounded-xl border border-amber-300/30 bg-amber-300/10 px-3 py-2 text-xs text-amber-200">
-                        Enter the agreed monthly price for {unpriced.map((f) => f.label.toLowerCase()).join(", ")}.
+                        Enter the agreed monthly price for {unpriced.join(", ")}.
                     </p>
                 )}
             </fieldset>

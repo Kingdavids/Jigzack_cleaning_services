@@ -45,6 +45,8 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 type PropertyCustomer = {
     full_name?: string | null;
+    // A commercial property's own name, printed instead of the person's name.
+    property_name?: string | null;
     email?: string | null;
     phone?: string | null;
     whatsapp_number?: string | null;
@@ -70,7 +72,7 @@ export function PropertyDetailsBlock({ customer, fallbackName }: { customer: Pro
         <div className="grid gap-3 text-xs sm:grid-cols-2">
             <div className="rounded-lg border border-black/15 bg-white/50 p-3">
                 <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-black/50">Billed to</p>
-                <Row label="Account holder" value={customer?.full_name ?? fallbackName ?? "Customer"} />
+                <Row label="Account holder" value={customer?.property_name?.trim() || customer?.full_name || fallbackName || "Customer"} />
                 <Row label="Phone" value={customer?.phone} />
                 <Row label="WhatsApp" value={customer?.whatsapp_number} />
                 <Row label="Email" value={customer?.email} />

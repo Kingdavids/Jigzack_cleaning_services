@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createNonCustomerInvoice, type NewInvoiceState } from "@/app/admin/actions";
 import InvoiceBuilder from "@/components/dashboard/InvoiceBuilder";
+import BillToFields from "@/components/dashboard/BillToFields";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -58,49 +59,7 @@ export default function NonCustomerInvoiceForm({ defaultStartMonth }: { defaultS
 
     return (
         <form action={formAction} className="space-y-6">
-
-            <fieldset className="space-y-3">
-                <legend className="mb-2 text-sm font-semibold">Who it&apos;s for</legend>
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Name or business" required>
-                        <input name="fullName" required maxLength={120} className={inputClass} />
-                    </Field>
-                    <Field label="Phone">
-                        <input name="phone" type="tel" inputMode="tel" maxLength={40} className={inputClass} />
-                    </Field>
-                    <Field label="WhatsApp">
-                        <input name="whatsapp" type="tel" inputMode="tel" maxLength={40} className={inputClass} />
-                    </Field>
-                    <Field label="Email">
-                        <input name="email" type="email" maxLength={160} className={inputClass} />
-                    </Field>
-                </div>
-                <p className="text-xs text-white/40">A phone number or an email is needed so they can be reached about it.</p>
-            </fieldset>
-
-            <fieldset className="space-y-3">
-                <legend className="mb-2 text-sm font-semibold">Where the service is</legend>
-                <Field label="Address" required>
-                    <input name="address" required maxLength={300} className={inputClass} />
-                </Field>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <Field label="Landmark">
-                        <input name="landmark" maxLength={160} className={inputClass} />
-                    </Field>
-                    <Field label="L.G.A">
-                        <input name="lga" maxLength={80} className={inputClass} />
-                    </Field>
-                    <Field label="State">
-                        <input name="state" maxLength={80} defaultValue="Lagos" className={inputClass} />
-                    </Field>
-                    <Field label="Property type">
-                        <select name="propertyType" defaultValue="residential" className={`${inputClass} bg-[#141518]`}>
-                            <option value="residential">Residential</option>
-                            <option value="commercial">Commercial</option>
-                        </select>
-                    </Field>
-                </div>
-            </fieldset>
+            <BillToFields />
 
             <Field label="Description">
                 <input name="description" placeholder="Waste management service" maxLength={200} className={inputClass} />

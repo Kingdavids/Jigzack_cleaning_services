@@ -5,6 +5,8 @@ import type { FacilityDetails } from "@/lib/customer/facilities";
 // record so invoices and receipts show it the same way.
 export type BillTo = {
     full_name: string;
+    // A commercial property's own name ("Grace Hotel"), printed instead of full_name.
+    property_name: string | null;
     phone: string | null;
     whatsapp_number: string | null;
     email: string | null;
@@ -26,6 +28,7 @@ export function billToOf(invoice: { bill_to?: unknown } | null | undefined): Bil
 
     return {
         full_name: String(value.full_name),
+        property_name: value.property_name ?? null,
         phone: value.phone ?? null,
         whatsapp_number: value.whatsapp_number ?? null,
         email: value.email ?? null,
