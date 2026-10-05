@@ -137,6 +137,46 @@ export function billingMonthKey(now: Date = new Date()) {
     return first.toISOString().slice(0, 7);
 }
 
+const MONTH_WORDS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
+// The first month an invoice month label names, as "YYYY-MM": "October 2026",
+// "October – December 2026" and "October 2026 – January 2027" all give
+// "2026-10". Null when the label doesn't name a month and year.
+export function firstMonthKeyOf(label: string | null | undefined): string | null {
+    const text = (label ?? "").toLowerCase();
+
+    // The month name that comes first in the label.
+    let month = -1;
+    let at = Infinity;
+    MONTH_WORDS.forEach((name, i) => {
+        const found = text.match(new RegExp(`\\b${name}\\b`));
+        if (found?.index !== undefined && found.index < at) {
+            at = found.index;
+            month = i;
+        }
+    });
+
+    const year = text.match(/\b(20\d{2})\b/)?.[1];
+
+    return month >= 0 && year ? `${year}-${String(month + 1).padStart(2, "0")}` : null;
+}
+
+// Why an invoice for this month can't be made yet, or null when it can. A
+// month's invoices start on INVOICE_DAY, so before then a single-month invoice
+// can't be for it or any later month. An invoice covering several months
+// ("October – December 2026") is someone paying ahead, so it is always allowed.
+export function tooEarlyToBill(label: string | null | undefined, now: Date = new Date()): string | null {
+    if (/–|\s-\s|\bto\b/i.test(label ?? "")) return null;
+
+    const first = firstMonthKeyOf(label);
+    const latest = billingMonthKey(now);
+    if (!first || first <= latest) return null;
+
+    const [y, m] = first.split("-").map(Number);
+    const name = new Date(Date.UTC(y, m - 1, 15)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    return `${name} invoices start on ${INVOICE_DAY} ${name.split(" ")[0]}. Until then, start from ${billingMonthLabel(now)} or earlier.`;
+}
+
 // The month whose invoice is the current one right now (see INVOICE_DAY).
 export function billingMonthLabel(now: Date = new Date()) {
     const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);

@@ -10,7 +10,7 @@ import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
-import { billingMonthLabel, itemsTotal, normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
+import { billingMonthLabel, itemsTotal, normalizeLineItems, tooEarlyToBill, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
 import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
 import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
@@ -189,6 +189,10 @@ function readBuiltInvoice(formData: FormData):
     const arrearsInput = Number(formData.get("arrears") || 0);
     const arrears = Number.isFinite(arrearsInput) && arrearsInput > 0 ? round2(arrearsInput) : 0;
     const invoiceMonth = String(formData.get("invoiceMonth") ?? "").trim().slice(0, 60) || null;
+
+    // A single month is only billed from the 25th; several months at once is paying ahead.
+    const early = tooEarlyToBill(invoiceMonth);
+    if (early) return { error: early };
 
     return { items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails };
 }
@@ -1657,7 +1661,6 @@ export async function updateCustomerDetails(
         facility_details[facility.key] = countString(formData.get(facility.key));
     }
 
-    const status = String(formData.get("status") || "active");
     const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
     const fullName = text("fullName", 120);
@@ -1682,7 +1685,8 @@ export async function updateCustomerDetails(
         property_code: String(formData.get("propertyCode") || "").trim() || null,
         property_class: String(formData.get("propertyClass") || "").trim() || null,
         preferred_pickup_frequency: String(formData.get("pickupFrequency") || "").trim() || null,
-        status: status === "inactive" ? "inactive" : "active",
+        // Status is left alone: suspending and reactivating only happen through
+        // setCustomerSuspended, so saving details can never undo either.
         facility_details,
     };
 
@@ -1803,6 +1807,10 @@ export async function updateInvoice(
     const arrears = Number(formData.get("arrears") || 0);
     const cleanArrears = Number.isFinite(arrears) && arrears > 0 ? round2(arrears) : 0;
     const newTotal = round2(itemsTotal(items) + cleanArrears);
+
+    // A month is only billed from the 25th, so an invoice can't be moved into it early either.
+    const early = tooEarlyToBill(String(formData.get("invoiceMonth") || ""));
+    if (early) return { success: false, error: early };
 
     // Money may already have been received on this invoice, with receipts
     // issued for it, so the total can never drop below what was paid.

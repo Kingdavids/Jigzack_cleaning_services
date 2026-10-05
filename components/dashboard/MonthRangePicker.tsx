@@ -149,10 +149,14 @@ export default function MonthRangePicker({
                                              start,
                                              end,
                                              onChange,
+                                             latestStart,
                                          }: {
     start: string;
     end: string;
     onChange: (range: { start: string; end: string }) => void;
+    // The latest month a range may start in ("YYYY-MM"): the billing month,
+    // since a month isn't billed before its invoices start on the 25th.
+    latestStart?: string;
 }) {
     const changeStart = (value: string) => {
         const from = toIndex(value);
@@ -163,7 +167,7 @@ export default function MonthRangePicker({
 
     return (
         <div className="flex flex-col gap-3 sm:flex-row">
-            <MonthField label="From" value={start} onChange={changeStart} />
+            <MonthField label="From" value={start} onChange={changeStart} max={latestStart} />
             <MonthField
                 label="To"
                 value={end}
