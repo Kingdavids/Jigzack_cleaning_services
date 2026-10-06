@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { round2 } from "@/lib/billing/balance";
 import { todayLagos } from "@/lib/tasks";
 import { naira } from "@/lib/customer/billing";
+import { MATERIAL_VALUES } from "@/lib/admin/invoice-input";
 import { requireAdmin } from "./shared";
 
 // Recyclable waste in (collected) or out (sold or dispatched), by weight.
@@ -20,14 +21,17 @@ export async function logRecyclable(formData: FormData): Promise<{ success: bool
     const clean = (name: string, max: number) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
     if (direction !== "in" && direction !== "out") return { success: false, error: "Choose whether it came in or went out." };
-    if (!["plastic", "metal", "paper", "glass", "electronics", "other"].includes(material)) return { success: false, error: "Choose the material." };
+    if (!MATERIAL_VALUES.includes(material)) return { success: false, error: "Choose the material." };
     if (!Number.isFinite(kg) || kg <= 0 || kg > 1_000_000) return { success: false, error: "Enter the weight in kilograms." };
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayLagos()) return { success: false, error: "Choose a date that is not in the future." };
 
-    // What was paid when buying; money from selling comes in through the sale invoice.
-    const paidInput = String(formData.get("paid") ?? "").replace(/,/g, "").trim();
-    const paid = direction === "in" && paidInput !== "" ? round2(Number(paidInput)) : null;
-    if (paid !== null && (!Number.isFinite(paid) || paid < 0 || paid > 500_000_000)) return { success: false, error: "Enter what was paid in naira, or leave it empty." };
+    // When buying, what was paid is the weight times the price per kilogram.
+    // The price starts from the material's buying price and can be changed per entry.
+    const priceInput = String(formData.get("pricePerKg") ?? "").replace(/,/g, "").trim();
+    const price = direction === "in" && priceInput !== "" ? Number(priceInput) : 0;
+    if (!Number.isFinite(price) || price < 0 || price > 10_000_000) return { success: false, error: "Enter the price per kilogram in naira, or leave it empty." };
+    const paid = price > 0 ? round2(kg * price) : null;
+    if (paid !== null && paid > 500_000_000) return { success: false, error: "That comes to too much. Check the weight and the price." };
 
     const materialNote = clean("materialNote", 80);
     if (material === "other" && !materialNote) return { success: false, error: "Say what the other material is." };
@@ -97,6 +101,44 @@ export async function deleteRecyclable(id: string): Promise<{ success: boolean; 
     await logActivity(supabase, admin, "recyclable_removed", "Removed a recyclables entry");
     revalidatePath("/admin/recyclables");
     revalidatePath("/admin");
+
+    return { success: true };
+}
+
+// Changes what we pay per kilogram for each material. Only a price that was
+// filled in is saved; a blank means no change.
+export async function setBuyPrices(formData: FormData): Promise<{ success: boolean; error?: string }> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    const rows: { material: string; buy_price_per_kg: number; updated_at: string }[] = [];
+
+    for (const material of MATERIAL_VALUES) {
+        const raw = String(formData.get(`price_${material}`) ?? "").replace(/,/g, "").trim();
+        if (raw === "") continue;
+
+        const price = round2(Number(raw));
+        if (!Number.isFinite(price) || price < 0 || price > 10_000_000) return { success: false, error: "Each price must be a number of naira, 0 or more." };
+
+        rows.push({ material, buy_price_per_kg: price, updated_at: new Date().toISOString() });
+    }
+
+    if (rows.length === 0) return { success: false, error: "Enter at least one price." };
+
+    const { error } = await supabase.from("recyclable_prices").upsert(rows, { onConflict: "material" });
+
+    if (error) {
+        console.error("setBuyPrices error:", error.message);
+        return {
+            success: false,
+            error: /relation|does not exist|schema cache/i.test(error.message)
+                ? "Not switched on yet. Run supabase/pet-bottles-cans-2026-10.sql in Supabase first."
+                : "Could not save the prices. Please try again.",
+        };
+    }
+
+    await logActivity(supabase, admin, "recyclable_prices_changed", "Changed the recyclable buying prices");
+    revalidatePath("/admin/recyclables");
 
     return { success: true };
 }

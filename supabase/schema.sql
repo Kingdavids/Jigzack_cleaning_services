@@ -3701,7 +3701,7 @@ $$;
 create table if not exists public.recyclable_movements (
     id uuid primary key default gen_random_uuid(),
     direction text not null check (direction in ('in', 'out')),
-    material text not null check (material in ('plastic', 'metal', 'paper', 'glass', 'electronics', 'other')),
+    material text not null check (material in ('plastic', 'pet_bottles', 'cans', 'metal', 'paper', 'glass', 'electronics', 'other')),
     -- For "other": what it is.
     material_note text,
     kg numeric(12, 2) not null check (kg > 0),

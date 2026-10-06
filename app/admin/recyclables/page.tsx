@@ -3,12 +3,13 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import Link from "next/link";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { isFullAdmin } from "@/lib/auth/roles";
-import { kgText, materialLabel, MATERIALS, summarise, type Movement } from "@/lib/recyclables";
+import { kgText, loadBuyPrices, materialLabel, MATERIALS, summarise, type Movement } from "@/lib/recyclables";
 import { monthName } from "@/lib/finance/cashflow";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import RecyclableForm from "@/components/dashboard/RecyclableForm";
+import BuyPricesForm from "@/components/dashboard/BuyPricesForm";
 import RecyclableDeleteButton from "@/components/dashboard/RecyclableDeleteButton";
 import { TIMEZONE } from "@/lib/config/business";
 
@@ -45,6 +46,7 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
     const spent = inMonth.filter((m) => m.direction === "in").reduce((sum, m) => sum + Number(m.amount ?? 0), 0);
     const sold = inMonth.filter((m) => m.direction === "out").reduce((sum, m) => sum + Number(m.amount ?? 0), 0);
     const canAct = isFullAdmin(profile);
+    const prices = await loadBuyPrices(supabase);
 
     const monthLabel = monthName(month);
 
@@ -104,7 +106,13 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
 
                 {canAct && (
                     <SectionCard title="Log recyclables" description="Add what was collected, or what was sold or dispatched. Nothing can go out that isn't in stock." collapsible>
-                        <RecyclableForm today={today} />
+                        <RecyclableForm today={today} prices={prices} />
+                    </SectionCard>
+                )}
+
+                {canAct && (
+                    <SectionCard title="Buying prices" description="What we pay per kilogram for each material. Change them whenever the rate changes." collapsible>
+                        <BuyPricesForm prices={prices} />
                     </SectionCard>
                 )}
 

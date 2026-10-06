@@ -5,7 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const MATERIALS = [
     { value: "plastic", label: "Plastic" },
-    { value: "metal", label: "Metal" },
+    { value: "pet_bottles", label: "PET bottles" },
+    { value: "cans", label: "Cans" },
+    { value: "metal", label: "Metal (iron)" },
     { value: "paper", label: "Paper and cardboard" },
     { value: "glass", label: "Glass" },
     { value: "electronics", label: "Electronics" },
@@ -72,4 +74,33 @@ export async function loadStock(supabase: SupabaseClient): Promise<Stock> {
     const { data, error } = await supabase.from("recyclable_movements").select("direction, material, kg").limit(20000);
 
     return error ? summarise([], false) : summarise((data ?? []) as Pick<Movement, "direction" | "material" | "kg">[]);
+}
+
+// What the business pays a seller per kilogram, in naira. These start each
+// material off; admins change them on the recyclables page, and the changed
+// prices (in recyclable_prices) win. A material with no price is bought at 0
+// until one is set.
+export const DEFAULT_BUY_PRICES: Record<string, number> = {
+    plastic: 200,
+    pet_bottles: 200,
+    metal: 300,
+    cans: 1000,
+    paper: 100,
+};
+
+export type BuyPrices = Record<string, number>;
+
+// The price per kilogram for every material. Quiet (defaults only) before the
+// prices SQL has been run.
+export async function loadBuyPrices(supabase: SupabaseClient): Promise<BuyPrices> {
+    const prices: BuyPrices = Object.fromEntries(MATERIALS.map((m) => [m.value, DEFAULT_BUY_PRICES[m.value] ?? 0]));
+    const { data, error } = await supabase.from("recyclable_prices").select("material, buy_price_per_kg");
+
+    if (error) return prices;
+
+    for (const row of (data ?? []) as { material: string; buy_price_per_kg: number | string }[]) {
+        if (row.material in prices) prices[row.material] = Number(row.buy_price_per_kg);
+    }
+
+    return prices;
 }

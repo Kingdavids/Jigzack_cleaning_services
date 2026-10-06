@@ -4,19 +4,26 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { logRecyclable } from "@/app/admin/actions/recyclables";
-import { MATERIALS } from "@/lib/recyclables";
+import { MATERIALS, type BuyPrices } from "@/lib/recyclables";
+import { naira } from "@/lib/customer/billing";
 
 const fieldClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
 const labelClass = "mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50";
 
 // Log recyclable waste coming in (collected) or going out (sold or dispatched), by weight.
-export default function RecyclableForm({ today }: { today: string }) {
+export default function RecyclableForm({ today, prices }: { today: string; prices: BuyPrices }) {
     const router = useRouter();
     const formRef = useRef<HTMLFormElement>(null);
     const [direction, setDirection] = useState<"in" | "out">("in");
     const [material, setMaterial] = useState("plastic");
+    const [kg, setKg] = useState("");
+    // The price per kg follows the material until the admin types a different one.
+    const [typedPrice, setTypedPrice] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+
+    const price = typedPrice ?? String(prices[material] ?? 0);
+    const cost = Math.round(Number(kg) * Number(price) * 100) / 100;
 
     const submit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -34,6 +41,8 @@ export default function RecyclableForm({ today }: { today: string }) {
         toast.success(direction === "in" ? "Recyclables logged as collected" : "Recyclables logged as sold or dispatched");
         formRef.current?.reset();
         setMaterial("plastic");
+        setKg("");
+        setTypedPrice(null);
         router.refresh();
     };
 
@@ -74,7 +83,10 @@ export default function RecyclableForm({ today }: { today: string }) {
                         id="rc-material"
                         name="material"
                         value={material}
-                        onChange={(e) => setMaterial(e.target.value)}
+                        onChange={(e) => {
+                            setMaterial(e.target.value);
+                            setTypedPrice(null);
+                        }}
                         className={`${fieldClass} bg-[#141518]`}
                     >
                         {MATERIALS.map((m) => (
@@ -88,7 +100,7 @@ export default function RecyclableForm({ today }: { today: string }) {
                     <label htmlFor="rc-kg" className={labelClass}>
                         Weight (kg)
                     </label>
-                    <input id="rc-kg" name="kg" type="number" inputMode="decimal" min="0.01" step="0.01" required placeholder="e.g. 250" className={fieldClass} />
+                    <input id="rc-kg" name="kg" type="number" inputMode="decimal" min="0.01" step="0.01" required value={kg} onChange={(e) => setKg(e.target.value)} placeholder="e.g. 250" className={fieldClass} />
                 </div>
                 <div>
                     <label htmlFor="rc-date" className={labelClass}>
@@ -109,11 +121,25 @@ export default function RecyclableForm({ today }: { today: string }) {
 
             {direction === "in" ? (
                 <div>
-                    <label htmlFor="rc-paid" className={labelClass}>
-                        Amount paid for it (₦, optional)
+                    <label htmlFor="rc-price" className={labelClass}>
+                        Price we pay per kg (₦)
                     </label>
-                    <input id="rc-paid" name="paid" type="number" inputMode="decimal" min="0" step="0.01" placeholder="Leave empty if it cost nothing" className={fieldClass} />
-                    <p className="mt-1 text-xs text-white/40">Counts as money out on Money in &amp; out, under recyclables purchases.</p>
+                    <input
+                        id="rc-price"
+                        name="pricePerKg"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        value={price}
+                        onChange={(e) => setTypedPrice(e.target.value)}
+                        placeholder="0 if it cost nothing"
+                        className={fieldClass}
+                    />
+                    <p className="mt-1 text-xs text-white/40">
+                        {cost > 0 ? `${naira(cost)} to pay. ` : ""}It starts from the buying price for this material and can be changed here for this entry. Counts as money out on Money in &amp; out, under
+                        recyclables purchases.
+                    </p>
                 </div>
             ) : (
                 <p className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-white/55">

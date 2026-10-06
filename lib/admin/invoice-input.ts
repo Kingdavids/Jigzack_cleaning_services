@@ -2,6 +2,7 @@ import { createClient } from "@/utils/supabase/server";
 import { itemsTotal, normalizeLineItems, tooEarlyToBill, type LineItem } from "@/lib/billing/pricing";
 import { round2 } from "@/lib/billing/balance";
 import { todayLagos } from "@/lib/tasks";
+import { MATERIALS } from "@/lib/recyclables";
 
 // Reading what the admin invoice forms submit, and the checks around a sale of
 // recyclables. These are plain functions, not server actions: anything exported
@@ -13,7 +14,7 @@ export type InvoiceKind = "service" | "recyclables" | "other";
 
 export type SaleLine = { material: string; materialNote: string | null; kg: number; price: number };
 
-export const MATERIAL_VALUES = ["plastic", "metal", "paper", "glass", "electronics", "other"];
+export const MATERIAL_VALUES: string[] = MATERIALS.map((m) => m.value);
 
 // What InvoiceBuilder submits: the priced lines, arrears, the months covered,
 // the property's unit counts and, for a sale, the weight of each material.

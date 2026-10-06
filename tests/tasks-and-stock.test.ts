@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { nextPickupDay, taskDisplayStatus } from "@/lib/tasks";
-import { summarise } from "@/lib/recyclables";
+import { DEFAULT_BUY_PRICES, loadBuyPrices, MATERIALS, summarise } from "@/lib/recyclables";
+import { fakeSupabase } from "./helpers/fakeSupabase";
 import { canMoveExpense } from "@/lib/expenses";
 
 afterEach(() => vi.useRealTimers());
@@ -93,5 +94,22 @@ describe("expense review order", () => {
     it("treats paid back as final", () => {
         expect(canMoveExpense("reimbursed", "approved")).toBe(false);
         expect(canMoveExpense("reimbursed", "rejected")).toBe(false);
+    });
+});
+
+describe("recyclable buying prices", () => {
+    it("start at the agreed rates and only for real materials", () => {
+        expect(DEFAULT_BUY_PRICES).toMatchObject({ pet_bottles: 200, plastic: 200, metal: 300, cans: 1000, paper: 100 });
+
+        const known = new Set<string>(MATERIALS.map((m) => m.value));
+        for (const material of Object.keys(DEFAULT_BUY_PRICES)) expect(known.has(material)).toBe(true);
+    });
+
+    it("use the saved price over the starting one, and 0 for a material with no price", async () => {
+        const prices = await loadBuyPrices(fakeSupabase({ recyclable_prices: [{ material: "cans", buy_price_per_kg: "1200" }] }).client);
+
+        expect(prices.cans).toBe(1200);
+        expect(prices.plastic).toBe(200);
+        expect(prices.glass).toBe(0);
     });
 });
