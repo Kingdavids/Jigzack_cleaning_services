@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { logRecyclable } from "@/app/admin/actions/recyclables";
-import { MATERIALS, type BuyPrices } from "@/lib/recyclables";
+import { COMMON_MATERIALS, type BuyPrices } from "@/lib/recyclables";
 import { naira } from "@/lib/customer/billing";
 
 const fieldClass =
@@ -89,7 +89,7 @@ export default function RecyclableForm({ today, prices }: { today: string; price
                         }}
                         className={`${fieldClass} bg-[#141518]`}
                     >
-                        {MATERIALS.map((m) => (
+                        {COMMON_MATERIALS.map((m) => (
                             <option key={m.value} value={m.value}>
                                 {m.label}
                             </option>

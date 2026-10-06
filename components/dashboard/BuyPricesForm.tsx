@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { setBuyPrices } from "@/app/admin/actions/recyclables";
-import { MATERIALS, type BuyPrices } from "@/lib/recyclables";
+import { COMMON_MATERIALS, type BuyPrices } from "@/lib/recyclables";
 
 // What we pay per kilogram for each material. Changing a price here changes the
 // starting price on the log form; entries already logged keep what was paid.
@@ -32,7 +32,7 @@ export default function BuyPricesForm({ prices }: { prices: BuyPrices }) {
     return (
         <form onSubmit={submit} className="grid gap-3">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {MATERIALS.filter((m) => m.value !== "other").map((m) => (
+                {COMMON_MATERIALS.map((m) => (
                     <div key={m.value}>
                         <label htmlFor={`price-${m.value}`} className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
                             {m.label}
@@ -50,7 +50,7 @@ export default function BuyPricesForm({ prices }: { prices: BuyPrices }) {
                     </div>
                 ))}
             </div>
-            <p className="text-xs text-white/40">Naira per kg, paid to the person we buy from. The &ldquo;Other&rdquo; material has no set price; type one in when you log it.</p>
+            <p className="text-xs text-white/40">Naira per kg, paid to the person we buy from.</p>
             <button
                 type="submit"
                 disabled={busy}

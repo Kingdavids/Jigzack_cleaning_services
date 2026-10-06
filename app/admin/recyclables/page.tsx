@@ -3,12 +3,13 @@ import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import Link from "next/link";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { isFullAdmin } from "@/lib/auth/roles";
-import { kgText, loadBuyPrices, materialLabel, MATERIALS, summarise, type Movement } from "@/lib/recyclables";
+import { COMMON_MATERIALS, kgText, loadBuyPrices, materialLabel, MATERIALS, summarise, type Movement } from "@/lib/recyclables";
 import { monthName } from "@/lib/finance/cashflow";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import RecyclableForm from "@/components/dashboard/RecyclableForm";
+import RecyclableEditButton from "@/components/dashboard/RecyclableEditButton";
 import BuyPricesForm from "@/components/dashboard/BuyPricesForm";
 import RecyclableDeleteButton from "@/components/dashboard/RecyclableDeleteButton";
 import { TIMEZONE } from "@/lib/config/business";
@@ -49,6 +50,9 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
     const prices = await loadBuyPrices(supabase);
 
     const monthLabel = monthName(month);
+    // The four common materials always; any other only once something is logged under it.
+    const logged = new Set(movements.map((m) => m.material));
+    const tableMaterials = MATERIALS.filter((m) => COMMON_MATERIALS.some((c) => c.value === m.value) || logged.has(m.value));
 
     return (
         <DashboardShell
@@ -85,7 +89,7 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                                 </tr>
                             </thead>
                             <tbody>
-                                {MATERIALS.map((m) => (
+                                {tableMaterials.map((m) => (
                                     <tr key={m.value} className="border-t border-white/10">
                                         <td className="py-2.5 pr-4 font-semibold">{m.label}</td>
                                         <td className="py-2.5 pr-4 text-right text-emerald-300">{kgText(monthly.byMaterial[m.value].inKg)}</td>
@@ -163,7 +167,12 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                                                 From a sale invoice
                                             </Link>
                                         ) : (
-                                            canAct && <RecyclableDeleteButton id={m.id} summary={summary} />
+                                            canAct && (
+                                                <div className="flex shrink-0 gap-2">
+                                                    <RecyclableEditButton entry={m} />
+                                                    <RecyclableDeleteButton id={m.id} summary={summary} />
+                                                </div>
+                                            )
                                         )}
                                     </li>
                                 );

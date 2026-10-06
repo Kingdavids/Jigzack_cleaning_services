@@ -14,6 +14,11 @@ export const MATERIALS = [
     { value: "other", label: "Other" },
 ] as const;
 
+// The materials people deal with day to day. These are the ones the forms and
+// tables show; the rest stay in the database but are kept out of sight, and a
+// table row for one appears only if something has been logged under it.
+export const COMMON_MATERIALS = MATERIALS.filter((m) => ["plastic", "pet_bottles", "cans", "metal"].includes(m.value));
+
 export type Material = (typeof MATERIALS)[number]["value"];
 
 export const materialLabel = (value: string) => MATERIALS.find((m) => m.value === value)?.label ?? value;

@@ -7,7 +7,7 @@ import { itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } f
 import MonthRangePicker, { monthSpan } from "@/components/dashboard/MonthRangePicker";
 import DiscountFields from "@/components/dashboard/DiscountFields";
 import { applyDiscount, NO_DISCOUNT, type DiscountInput } from "@/lib/billing/discount-line";
-import { MATERIALS, materialLabel } from "@/lib/recyclables";
+import { COMMON_MATERIALS, materialLabel } from "@/lib/recyclables";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -199,7 +199,7 @@ export default function InvoiceBuilder({
                                             onChange={(e) => updateSale(index, { material: e.target.value })}
                                             className={`${inputClass} bg-[#141518]`}
                                         >
-                                            {MATERIALS.map((m) => (
+                                            {COMMON_MATERIALS.map((m) => (
                                                 <option key={m.value} value={m.value}>
                                                     {m.label}
                                                 </option>
