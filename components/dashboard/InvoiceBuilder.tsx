@@ -7,6 +7,7 @@ import { itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } f
 import MonthRangePicker, { monthSpan } from "@/components/dashboard/MonthRangePicker";
 import DiscountFields from "@/components/dashboard/DiscountFields";
 import { applyDiscount, NO_DISCOUNT, type DiscountInput } from "@/lib/billing/discount-line";
+import { MATERIALS, materialLabel } from "@/lib/recyclables";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -17,6 +18,13 @@ const naira = (value: number) => `₦${value.toLocaleString("en-NG", { maximumFr
 
 // An extra charge on a hand-made invoice, charged once or for every month covered.
 type OtherCharge = LineItem & { monthly: boolean };
+
+// What an invoice is for: the property's monthly service, a sale of
+// recyclables (by the kilogram), or any other service or item.
+export type InvoiceKind = "service" | "recyclables" | "other";
+
+// One material in a recyclables sale.
+type SaleLine = { material: string; materialNote: string; kg: number; price: number };
 
 // A commercial property that isn't one of the listed types (a church, a filling
 // station), with its own name, how many and the agreed price a month.
@@ -30,11 +38,16 @@ type OtherSite = { name: string; count: number; price: number };
 export default function InvoiceBuilder({
                                            defaultStartMonth,
                                            initialCounts = {},
+                                           kind = "service",
+                                           stock = {},
                                        }: {
     // "YYYY-MM"
     defaultStartMonth: string;
     // Unit counts to start from, by facility key (from a customer's record).
     initialCounts?: Record<string, number>;
+    kind?: InvoiceKind;
+    // Kilograms in stock per material, so a sale can warn before it sends out more than there is.
+    stock?: Record<string, number>;
 }) {
     const [counts, setCounts] = useState<Record<string, number>>(initialCounts);
     const [prices, setPrices] = useState<Record<string, number>>({ ...UNIT_PRICES });
@@ -43,6 +56,7 @@ export default function InvoiceBuilder({
     const [otherSites, setOtherSites] = useState<OtherSite[]>([]);
     const [arrears, setArrears] = useState(0);
     const [discount, setDiscount] = useState<DiscountInput>(NO_DISCOUNT);
+    const [sales, setSales] = useState<SaleLine[]>([{ material: "plastic", materialNote: "", kg: 0, price: 0 }]);
 
     const months = useMemo(() => monthsFrom(range.start, monthSpan(range.start, range.end)), [range]);
     const period = monthRangeLabel(months);
@@ -77,17 +91,35 @@ export default function InvoiceBuilder({
         ...filledSites.filter((site) => !(site.price > 0)).map((site) => site.name.trim()),
     ];
 
+    // Recyclables sold, priced per kilogram.
+    const filledSales = sales.filter((line) => line.kg > 0 && (line.material !== "other" || line.materialNote.trim()));
+    const saleName = (line: SaleLine) => (line.material === "other" ? line.materialNote.trim() : materialLabel(line.material));
+    const saleLines: LineItem[] = filledSales.map((line) => ({
+        label: `${saleName(line)} (per kg)`,
+        quantity: line.kg,
+        unit_price: line.price,
+    }));
+    const salesTotal = filledSales.reduce((sum, line) => sum + line.kg * line.price, 0);
+
+    // Total weight of each material in this sale, against what is in stock.
+    const weightByMaterial = new Map<string, number>();
+    for (const line of filledSales) weightByMaterial.set(line.material, (weightByMaterial.get(line.material) ?? 0) + line.kg);
+    const overStock = [...weightByMaterial].filter(([material, kg]) => kg > (stock[material] ?? 0) + 0.001).map(([material]) => materialLabel(material).toLowerCase());
+
     const monthly =
         ALL_FACILITIES.reduce((sum, f) => sum + (counts[f.key] ?? 0) * (prices[f.key] ?? 0), 0) +
         filledSites.reduce((sum, site) => sum + site.count * site.price, 0) +
         itemsTotal(filledOthers.filter((o) => o.monthly));
     const othersTotal = itemsTotal(filledOthers.filter((o) => !o.monthly));
     // The discount comes off the charges (units for the months, plus other charges), never off arrears.
-    const charges = monthly * n + othersTotal;
+    const charges =
+        kind === "recyclables" ? salesTotal : kind === "other" ? itemsTotal(filledOthers) : monthly * n + othersTotal;
     const { amount: discountAmount, percent: discountPercent, line: discountLine } = applyDiscount(charges, discount);
-    const total = charges - discountAmount + arrears;
+    const arrearsApplied = kind === "service" ? arrears : 0;
+    const total = charges - discountAmount + arrearsApplied;
 
-    const lineItems = [...unitLines, ...siteLines, ...otherLines, ...(discountLine ? [discountLine] : [])];
+    const baseLines = kind === "recyclables" ? saleLines : kind === "other" ? filledOthers.map((item) => ({ label: item.label, quantity: item.quantity, unit_price: item.unit_price, note: item.note })) : [...unitLines, ...siteLines, ...otherLines];
+    const lineItems = [...baseLines, ...(discountLine ? [discountLine] : [])];
     const propertyDetails: Record<string, string> = Object.fromEntries(
         Object.entries(counts).filter(([, c]) => c > 0).map(([k, c]) => [k, String(c)])
     );
@@ -96,6 +128,9 @@ export default function InvoiceBuilder({
 
     const updateSite = (index: number, patch: Partial<OtherSite>) =>
         setOtherSites((prev) => prev.map((site, i) => (i === index ? { ...site, ...patch } : site)));
+
+    const updateSale = (index: number, patch: Partial<SaleLine>) =>
+        setSales((prev) => prev.map((line, i) => (i === index ? { ...line, ...patch } : line)));
 
     const updateOther = (index: number, patch: Partial<OtherCharge>) =>
         setOthers((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -133,12 +168,113 @@ export default function InvoiceBuilder({
 
     return (
         <div className="space-y-6">
+            <input type="hidden" name="invoiceKind" value={kind} />
             <input type="hidden" name="lineItems" value={JSON.stringify(lineItems)} />
-            <input type="hidden" name="invoiceMonth" value={period} />
-            <input type="hidden" name="coveredMonths" value={JSON.stringify(months)} />
-            <input type="hidden" name="propertyDetails" value={JSON.stringify(propertyDetails)} />
-            <input type="hidden" name="arrears" value={arrears || ""} />
+            <input type="hidden" name="invoiceMonth" value={kind === "service" ? period : ""} />
+            <input type="hidden" name="coveredMonths" value={JSON.stringify(kind === "service" ? months : [])} />
+            <input type="hidden" name="propertyDetails" value={JSON.stringify(kind === "service" ? propertyDetails : {})} />
+            <input type="hidden" name="arrears" value={arrearsApplied || ""} />
+            <input
+                type="hidden"
+                name="recyclableLines"
+                value={JSON.stringify(filledSales.map((l) => ({ material: l.material, materialNote: l.materialNote, kg: l.kg, price: l.price })))}
+            />
 
+            {kind === "recyclables" && (
+                <fieldset className="space-y-2">
+                    <legend className="mb-2 text-sm font-semibold">What is being sold</legend>
+                    <p className="text-xs text-white/40">
+                        Each material by weight and price per kilogram. Saving the invoice takes the weight out of stock.
+                    </p>
+                    {sales.map((line, index) => {
+                        const available = stock[line.material] ?? 0;
+
+                        return (
+                            <div key={index} className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
+                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_8rem_9rem_7rem_44px] sm:items-end">
+                                    <label className="col-span-2 block sm:col-span-1">
+                                        <span className={labelClass}>Material</span>
+                                        <select
+                                            value={line.material}
+                                            onChange={(e) => updateSale(index, { material: e.target.value })}
+                                            className={`${inputClass} bg-[#141518]`}
+                                        >
+                                            {MATERIALS.map((m) => (
+                                                <option key={m.value} value={m.value}>
+                                                    {m.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                    <label className="block">
+                                        <span className={labelClass}>Weight (kg)</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            inputMode="decimal"
+                                            value={line.kg || ""}
+                                            onChange={(e) => updateSale(index, { kg: Math.max(0, Number(e.target.value) || 0) })}
+                                            placeholder="0"
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <label className="block">
+                                        <span className={labelClass}>₦ per kg</span>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="any"
+                                            inputMode="decimal"
+                                            value={line.price || ""}
+                                            onChange={(e) => updateSale(index, { price: Math.max(0, Number(e.target.value) || 0) })}
+                                            placeholder="0"
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <p className="pb-3 text-right text-sm font-semibold">{naira(line.kg * line.price)}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSales((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)))}
+                                        disabled={sales.length === 1}
+                                        aria-label="Remove material"
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 text-white/50 transition hover:text-red-300 disabled:opacity-30"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </button>
+                                </div>
+                                {line.material === "other" && (
+                                    <input
+                                        value={line.materialNote}
+                                        onChange={(e) => updateSale(index, { materialNote: e.target.value.slice(0, 80) })}
+                                        placeholder="What is it? e.g. Used tyres"
+                                        aria-label="What the other material is"
+                                        className={inputClass}
+                                    />
+                                )}
+                                <p className="text-xs text-white/45">
+                                    In stock: <span className="font-semibold text-white/70">{available.toLocaleString("en-NG", { maximumFractionDigits: 1 })} kg</span>
+                                </p>
+                            </div>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        onClick={() => setSales((prev) => [...prev, { material: "plastic", materialNote: "", kg: 0, price: 0 }])}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
+                    >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add another material
+                    </button>
+                    {overStock.length > 0 && (
+                        <p className="rounded-xl border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                            This is more {overStock.join(" and ")} than is in stock, so it won&apos;t save. Log what came in first on the Recyclables page, or lower the weight.
+                        </p>
+                    )}
+                </fieldset>
+            )}
+
+            {kind === "service" && (<>
             <fieldset className="space-y-3">
                 <legend className="mb-2 text-sm font-semibold">Property details</legend>
                 <p className="text-xs text-white/40">Units on the property and their monthly price. Leave a type at 0 if they have none.</p>
@@ -227,11 +363,23 @@ export default function InvoiceBuilder({
                 </div>
             </fieldset>
 
+            </>)}
+
+            {kind !== "recyclables" && (
             <fieldset className="space-y-2">
-                <legend className="mb-2 text-sm font-semibold">Other charges (optional)</legend>
-                <p className="text-xs text-white/40">Anything else: an extra pickup, a site with a single agreed fee. Tick &quot;Each month&quot; to charge it for every month covered.</p>
+                <legend className="mb-2 text-sm font-semibold">{kind === "other" ? "Services and items" : "Other charges (optional)"}</legend>
+                <p className="text-xs text-white/40">
+                    {kind === "other"
+                        ? "Whatever is being charged for: a service, a hire, a fee. Each line has a quantity and a price."
+                        : "Anything else: an extra pickup, a site with a single agreed fee. Tick \"Each month\" to charge it for every month covered."}
+                </p>
                 {others.map((item, index) => (
-                    <div key={index} className="grid grid-cols-2 gap-2 sm:grid-cols-[1fr_80px_130px_1fr_auto_44px] sm:items-center">
+                    <div
+                        key={index}
+                        className={`grid grid-cols-2 gap-2 sm:items-center ${
+                            kind === "service" ? "sm:grid-cols-[1fr_80px_130px_1fr_auto_44px]" : "sm:grid-cols-[1fr_80px_130px_1fr_44px]"
+                        }`}
+                    >
                         <input
                             value={item.label}
                             onChange={(e) => updateOther(index, { label: e.target.value })}
@@ -242,6 +390,7 @@ export default function InvoiceBuilder({
                         <input
                             type="number"
                             min="0"
+                            step="any"
                             value={item.quantity}
                             onChange={(e) => updateOther(index, { quantity: Number(e.target.value) })}
                             aria-label="Quantity"
@@ -249,6 +398,7 @@ export default function InvoiceBuilder({
                         />
                         <input
                             type="number"
+                            step="any"
                             value={item.unit_price}
                             onChange={(e) => updateOther(index, { unit_price: Number(e.target.value) })}
                             aria-label="Price"
@@ -261,15 +411,17 @@ export default function InvoiceBuilder({
                             aria-label="Note"
                             className={`${inputClass} col-span-2 sm:col-span-1`}
                         />
-                        <label className="flex h-11 cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-white/70">
-                            <input
-                                type="checkbox"
-                                checked={item.monthly}
-                                onChange={(e) => updateOther(index, { monthly: e.target.checked })}
-                                className="h-4 w-4 accent-amber-400"
-                            />
-                            Each month
-                        </label>
+                        {kind === "service" && (
+                            <label className="flex h-11 cursor-pointer items-center gap-2 whitespace-nowrap text-xs text-white/70">
+                                <input
+                                    type="checkbox"
+                                    checked={item.monthly}
+                                    onChange={(e) => updateOther(index, { monthly: e.target.checked })}
+                                    className="h-4 w-4 accent-amber-400"
+                                />
+                                Each month
+                            </label>
+                        )}
                         <button
                             type="button"
                             onClick={() => setOthers((prev) => prev.filter((_, i) => i !== index))}
@@ -286,12 +438,14 @@ export default function InvoiceBuilder({
                     className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/10"
                 >
                     <Plus className="h-3.5 w-3.5" />
-                    Add a charge
+                    {kind === "other" ? "Add a line" : "Add a charge"}
                 </button>
             </fieldset>
+            )}
 
             <DiscountFields value={discount} onChange={setDiscount} charges={charges} inputClass={inputClass} />
 
+            {kind === "service" && (
             <label className="block sm:w-48">
                 <span className={labelClass}>Arrears (₦)</span>
                 <input
@@ -304,22 +458,32 @@ export default function InvoiceBuilder({
                     className={inputClass}
                 />
             </label>
+            )}
 
             <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-white/45">Total</p>
                 <dl className="space-y-1.5">
-                    <div className="flex justify-between gap-3">
-                        <dt className="text-white/60">Monthly charge for the property</dt>
-                        <dd>{naira(monthly)}</dd>
-                    </div>
-                    <div className="flex justify-between gap-3">
-                        <dt className="text-white/60">
-                            × {n} month{n === 1 ? "" : "s"}
-                            {period ? ` (${period})` : ""}
-                        </dt>
-                        <dd>{naira(monthly * n)}</dd>
-                    </div>
-                    {others.length > 0 && (
+                    {kind === "service" ? (
+                        <>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-white/60">Monthly charge for the property</dt>
+                                <dd>{naira(monthly)}</dd>
+                            </div>
+                            <div className="flex justify-between gap-3">
+                                <dt className="text-white/60">
+                                    × {n} month{n === 1 ? "" : "s"}
+                                    {period ? ` (${period})` : ""}
+                                </dt>
+                                <dd>{naira(monthly * n)}</dd>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="flex justify-between gap-3">
+                            <dt className="text-white/60">{kind === "recyclables" ? "Recyclables" : "Services and items"}</dt>
+                            <dd>{naira(charges)}</dd>
+                        </div>
+                    )}
+                    {kind === "service" && others.length > 0 && (
                         <div className="flex justify-between gap-3">
                             <dt className="text-white/60">Other charges</dt>
                             <dd>{naira(othersTotal)}</dd>
@@ -331,10 +495,10 @@ export default function InvoiceBuilder({
                             <dd className="text-emerald-300">−{naira(discountAmount)}</dd>
                         </div>
                     )}
-                    {arrears > 0 && (
+                    {arrearsApplied > 0 && (
                         <div className="flex justify-between gap-3">
                             <dt className="text-white/60">Arrears</dt>
-                            <dd>{naira(arrears)}</dd>
+                            <dd>{naira(arrearsApplied)}</dd>
                         </div>
                     )}
                     <div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-base font-bold">

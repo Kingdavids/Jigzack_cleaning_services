@@ -36,6 +36,8 @@ export type AdminInvoiceRow = {
     invoice_emailed_at?: string | null;
     // Who it is for when they are not registered on the app.
     bill_to?: unknown;
+    // What it is for; empty means the normal monthly service.
+    invoice_kind?: string | null;
 };
 
 // One invoice as admins work with it: totals, payments received, a reported
@@ -89,6 +91,7 @@ export default function AdminInvoiceCard({
                         {invoiceNumber(payment.id)}
                         {payment.auto_generated ? " · auto-generated" : ""}
                         {billTo ? " · not registered on the app" : ""}
+                        {payment.invoice_kind === "recyclables" ? " · recyclables sale" : payment.invoice_kind === "other" ? " · other service" : ""}
                     </p>
                 </div>
 

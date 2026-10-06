@@ -8,6 +8,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
+import { kgText, summarise, type Movement } from "@/lib/recyclables";
 
 // One category's share of a total, as a labelled bar.
 function Row({ label, amount, total, count, tone }: { label: string; amount: number; total: number; count?: number; tone: "in" | "out" }) {
@@ -41,6 +42,15 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
 
     const months = monthsEndingAt(month, 6);
     const flows = await loadCashflow(supabase, months);
+
+    // Recyclable waste moved this month (by weight, so it is shown beside the money, not in it).
+    const { data: movementData, error: movementError } = await supabase
+        .from("recyclable_movements")
+        .select("direction, material, kg, movement_date")
+        .limit(20000);
+    const movements = (movementError ? [] : (movementData ?? [])) as Pick<Movement, "direction" | "material" | "kg" | "movement_date">[];
+    const recyclablesMonth = summarise(movements.filter((m) => m.movement_date.startsWith(month)));
+    const recyclablesStock = summarise(movements);
     const current = flows[flows.length - 1];
     const net = current.inTotal - current.outTotal;
 
@@ -87,7 +97,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                         icon={ArrowUpRight}
                         label="Money out"
                         value={naira(current.outTotal)}
-                        helper="Approved staff expenses"
+                        helper="Approved staff expenses and recyclables bought"
                         href={`/admin/expenses?month=${month}`}
                     />
                     <StatCard
@@ -135,18 +145,43 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
 
                 <SectionCard
                     title="Money out by category"
-                    description="Staff expenses spent this month that an admin approved or paid back. Waiting and rejected claims aren't counted."
+                    description="Expenses an admin approved or paid back, and recyclables bought. Waiting and rejected claims aren't counted."
                 >
                     {categories.length === 0 ? (
                         <p className="text-sm text-white/50">No approved expenses this month.</p>
                     ) : (
                         <ul className="grid gap-4 md:grid-cols-2">
                             {categories.map(([category, v]) => (
-                                <Row key={category} label={categoryLabel(category)} amount={v.amount} count={v.count} total={current.outTotal} tone="out" />
+                                <Row key={category} label={category === "recyclables" ? "Recyclables purchases" : categoryLabel(category)} amount={v.amount} count={v.count} total={current.outTotal} tone="out" />
                             ))}
                         </ul>
                     )}
                 </SectionCard>
+
+                {!movementError && (
+                    <SectionCard
+                        title="Recyclable waste"
+                        description={`By weight, not money. In ${monthName(month)}, and the stock on hand now.`}
+                    >
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Came in</p>
+                                <p className="mt-1 text-xl font-bold text-emerald-300">{kgText(recyclablesMonth.inKg)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Went out</p>
+                                <p className="mt-1 text-xl font-bold text-red-300">{kgText(recyclablesMonth.outKg)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">In stock now</p>
+                                <p className="mt-1 text-xl font-bold">{kgText(recyclablesStock.stock)}</p>
+                            </div>
+                        </div>
+                        <Link href="/admin/recyclables" className="mt-4 inline-block text-xs font-semibold text-amber-300 underline underline-offset-2">
+                            Open recyclables
+                        </Link>
+                    </SectionCard>
+                )}
 
                 <SectionCard title="Last 6 months" description="Tap a month to see its breakdown.">
                     <div className="overflow-x-auto">

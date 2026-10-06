@@ -10,6 +10,9 @@ import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSel
 import { deleteExpenses } from "../cleanup-actions";
 import { isOwner } from "@/lib/auth/roles";
 import { Clock, HandCoins, Receipt, Wallet } from "lucide-react";
+import ExpenseForm from "@/components/dashboard/ExpenseForm";
+import { logAdminExpense } from "../actions";
+import { isFullAdmin } from "@/lib/auth/roles";
 
 const STATUSES = ["submitted", "approved", "reimbursed", "rejected"] as const;
 
@@ -110,6 +113,24 @@ export default async function AdminExpensesPage({
                     <StatCard icon={Wallet} label="Approved, not paid back" value={naira(sum(owed))} helper={entries(owed.length)} />
                     <StatCard icon={HandCoins} label="Reimbursed" value={naira(sum(paidBack))} helper={entries(paidBack.length)} />
                 </div>
+
+                {isFullAdmin(profile) && (
+                    <SectionCard
+                        title="Log an expense"
+                        description="For spending the business made itself: fuel, repairs, supplies. It is approved as you save it and counts straight away."
+                        collapsible
+                    >
+                        <ExpenseForm
+                            tasks={[]}
+                            showJob={false}
+                            today={lagosDay(new Date())}
+                            earliest={`${new Date().getFullYear() - 1}-01-01`}
+                            action={logAdminExpense}
+                            successMessage="Expense logged and approved"
+                            saveLabel="Save expense"
+                        />
+                    </SectionCard>
+                )}
 
                 <SectionCard title="Filter" description="Pick a month, a status or a staff member.">
                     <form method="get" className="grid gap-3 sm:grid-cols-4">

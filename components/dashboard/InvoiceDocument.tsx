@@ -17,6 +17,8 @@ type InvoiceRecord = {
     description?: string | null;
     invoice_month?: string | null;
     line_items?: unknown;
+    // What it is for; empty means the normal monthly service.
+    invoice_kind?: string | null;
     created_at: string;
 };
 
@@ -103,7 +105,7 @@ export default function InvoiceDocument({
                         }
                     />
 
-                    <PropertyDetailsBlock customer={customer} fallbackName={fallbackName} />
+                    <PropertyDetailsBlock customer={customer} fallbackName={fallbackName} showProperty={!invoice.invoice_kind || invoice.invoice_kind === "service"} />
 
                     <div className="overflow-x-auto rounded-lg border border-black/15">
                         <table className="min-w-full text-left text-xs">

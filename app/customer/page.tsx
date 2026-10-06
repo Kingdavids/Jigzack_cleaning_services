@@ -110,7 +110,8 @@ export default async function CustomerPage({ searchParams }: { searchParams: Pro
     // The current invoice changes on the 25th: until then it is last month's.
     // A new customer may only have one for a different month, so fall back to their latest.
     const newestFirst = [...invoices].sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const currentInvoice = newestFirst.find((i) => i.invoice_month === billingMonthLabel()) ?? newestFirst[0] ?? null;
+    // Sales and other one-off invoices have no month, so they are never "the current invoice".
+    const currentInvoice = newestFirst.find((i) => i.invoice_month === billingMonthLabel()) ?? newestFirst.find((i) => i.invoice_month) ?? newestFirst[0] ?? null;
     // Every other invoice still owing, so the total below is everything to pay.
     const earlierUnpaid = currentInvoice
         ? invoices

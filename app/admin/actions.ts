@@ -11,6 +11,7 @@ import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { billingMonthLabel, itemsTotal, normalizeLineItems, tooEarlyToBill, type LineItem } from "@/lib/billing/pricing";
+import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
 import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
 import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
@@ -163,9 +164,26 @@ export type NewInvoiceState = { success: boolean; error?: string; invoiceId?: st
 
 // What InvoiceBuilder submits: the priced lines, arrears, the months covered
 // and the property's unit counts.
+type InvoiceKind = "service" | "recyclables" | "other";
+type SaleLine = { material: string; materialNote: string | null; kg: number; price: number };
+
+const MATERIAL_VALUES = ["plastic", "metal", "paper", "glass", "electronics", "other"];
+
 function readBuiltInvoice(formData: FormData):
     | { error: string }
-    | { items: LineItem[]; amount: number; arrears: number; invoiceMonth: string | null; coveredMonths: string[]; propertyDetails: Record<string, string> } {
+    | {
+          kind: InvoiceKind;
+          sales: SaleLine[];
+          items: LineItem[];
+          amount: number;
+          arrears: number;
+          invoiceMonth: string | null;
+          coveredMonths: string[];
+          propertyDetails: Record<string, string>;
+      } {
+    const rawKind = String(formData.get("invoiceKind") ?? "service");
+    const kind: InvoiceKind = rawKind === "recyclables" || rawKind === "other" ? rawKind : "service";
+    let sales: SaleLine[] = [];
     let items: LineItem[] = [];
     let coveredMonths: string[] = [];
     let propertyDetails: Record<string, string> = {};
@@ -176,38 +194,123 @@ function readBuiltInvoice(formData: FormData):
         coveredMonths = Array.isArray(months) ? months.map(String).filter(Boolean).slice(0, 24) : [];
         const details = JSON.parse(String(formData.get("propertyDetails") || "{}"));
         propertyDetails = details && typeof details === "object" ? Object.fromEntries(Object.entries(details).map(([k, v]) => [k, String(v)])) : {};
+
+        if (kind === "recyclables") {
+            const raw = JSON.parse(String(formData.get("recyclableLines") || "[]"));
+            sales = (Array.isArray(raw) ? raw : [])
+                .map((line: { material?: unknown; materialNote?: unknown; kg?: unknown; price?: unknown }) => ({
+                    material: String(line.material ?? ""),
+                    materialNote: String(line.materialNote ?? "").trim().slice(0, 80) || null,
+                    kg: round2(Number(line.kg)),
+                    price: round2(Number(line.price)),
+                }))
+                .filter((line) => MATERIAL_VALUES.includes(line.material) && Number.isFinite(line.kg) && line.kg > 0 && Number.isFinite(line.price) && line.price >= 0);
+
+            if (sales.some((line) => line.material === "other" && !line.materialNote)) return { error: "Say what each \"other\" material is." };
+        }
     } catch {
         return { error: "The invoice details couldn't be read. Please try again." };
     }
 
     items = items.filter((item) => item.label && item.quantity > 0);
-    if (items.length === 0) return { error: "Add the property's units, or another charge, so there is something to bill." };
+    if (items.length === 0) {
+        return {
+            error:
+                kind === "recyclables"
+                    ? "Add at least one material with its weight and price."
+                    : kind === "other"
+                        ? "Add at least one item with a name, quantity and price."
+                        : "Add the property's units, or another charge, so there is something to bill.",
+        };
+    }
 
     const amount = round2(itemsTotal(items));
     if (amount <= 0) return { error: "The charges must add up to more than zero." };
 
     const arrearsInput = Number(formData.get("arrears") || 0);
     const arrears = Number.isFinite(arrearsInput) && arrearsInput > 0 ? round2(arrearsInput) : 0;
+
+    // A sale or other invoice isn't a month of service: it has no month, and it
+    // covers no months, so the automatic monthly invoice is never skipped for it.
+    if (kind !== "service") return { kind, sales, items, amount, arrears, invoiceMonth: null, coveredMonths: [], propertyDetails: {} };
+
     const invoiceMonth = String(formData.get("invoiceMonth") ?? "").trim().slice(0, 60) || null;
 
     // A single month is only billed from the 25th; several months at once is paying ahead.
     const early = tooEarlyToBill(invoiceMonth);
     if (early) return { error: early };
 
-    return { items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails };
+    return { kind, sales, items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails };
+}
+
+// What an invoice says it is for when no description was typed.
+function invoiceDescription(kind: InvoiceKind, month: string | null) {
+    return kind === "recyclables" ? "Sale of recyclables" : kind === "other" ? "Services and items" : `Waste management service${month ? `, ${month}` : ""}`;
 }
 
 // Why an invoice insert failed, in words an admin can act on.
 function invoiceInsertError(message: string | undefined) {
+    if (/invoice_kind/.test(message ?? "")) return "Not switched on yet. Run supabase/recyclables-trading-2026-10.sql in Supabase first.";
     if (/covered_months/.test(message ?? "")) return "Not switched on yet. Run supabase/invoice-months-2026-10.sql in Supabase first.";
     if (/bill_to/.test(message ?? "")) return "Not switched on yet. Run supabase/non-customer-invoices-2026-10.sql in Supabase first.";
     return "Could not create the invoice. Please try again.";
 }
 
+// Weight of each material in stock, to make sure a sale never sends out more
+// than there is. Null where the recyclables table doesn't exist yet.
+async function stockOf(supabase: Awaited<ReturnType<typeof createClient>>, material: string) {
+    const { data, error } = await supabase.from("recyclable_movements").select("direction, kg").eq("material", material).limit(20000);
+    if (error) return null;
+
+    return (data ?? []).reduce((sum, r) => sum + (r.direction === "in" ? Number(r.kg) : -Number(r.kg)), 0);
+}
+
+async function checkSaleStock(supabase: Awaited<ReturnType<typeof createClient>>, sales: SaleLine[]): Promise<string | null> {
+    const wanted = new Map<string, number>();
+    for (const line of sales) wanted.set(line.material, (wanted.get(line.material) ?? 0) + line.kg);
+
+    for (const [material, kg] of wanted) {
+        const stock = await stockOf(supabase, material);
+        if (stock === null) return "Recyclables tracking isn't switched on. Run supabase/admin-expenses-recyclables-2026-10.sql in Supabase first.";
+        if (kg > stock + 0.001) return `Only ${Math.max(0, Math.round(stock * 100) / 100)} kg of ${material} is in stock, and this sale is for ${kg} kg.`;
+    }
+
+    return null;
+}
+
+// A sale takes its weight out of stock, tied to the invoice so removing the
+// invoice puts the stock back. Returns an error (and nothing is left behind).
+async function logSaleMovements(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    adminId: string,
+    paymentId: string,
+    buyer: string | null,
+    sales: SaleLine[]
+): Promise<string | null> {
+    if (sales.length === 0) return null;
+
+    const { error } = await supabase.from("recyclable_movements").insert(
+        sales.map((line) => ({
+            direction: "out",
+            material: line.material,
+            material_note: line.material === "other" ? line.materialNote : null,
+            kg: line.kg,
+            movement_date: todayLagos(),
+            party: buyer,
+            note: "Sale invoice",
+            amount: round2(line.kg * line.price),
+            payment_id: paymentId,
+            recorded_by: adminId,
+        }))
+    );
+
+    return error ? error.message : null;
+}
+
 // Who an invoice is for, from BillToFields: the person or business, an
 // optional property name printed instead of theirs, contact details and the
 // address the service is for.
-function readBillTo(formData: FormData) {
+function readBillTo(formData: FormData, kind: InvoiceKind = "service") {
     const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
     const billTo = {
@@ -225,7 +328,7 @@ function readBillTo(formData: FormData) {
 
     if (!billTo.full_name) return { error: "Enter the name of the person or business being billed." };
     if (!billTo.phone && !billTo.email) return { error: "Enter a phone number or an email address for them." };
-    if (!billTo.address) return { error: "Enter the address the service is for." };
+    if (kind === "service" && !billTo.address) return { error: "Enter the address the service is for." };
     if (billTo.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(billTo.email)) return { error: "That email address doesn't look right." };
 
     return { billTo };
@@ -279,16 +382,21 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
     const actor = await requireAdmin();
     const supabase = await createClient();
 
-    const read = readBillTo(formData);
+    const built = readBuiltInvoice(formData);
+    if ("error" in built) return { success: false, error: built.error };
+
+    const { kind, sales, items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails } = built;
+
+    const read = readBillTo(formData, kind);
     if ("error" in read) return { success: false, error: read.error };
 
     const { billTo } = read;
     const text = (name: string, max = 200) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
 
-    const built = readBuiltInvoice(formData);
-    if ("error" in built) return { success: false, error: built.error };
-
-    const { items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails } = built;
+    if (kind === "recyclables") {
+        const short = await checkSaleStock(supabase, sales);
+        if (short) return { success: false, error: short };
+    }
 
     // A double click or a retried request is the same invoice, not a second one.
     const { data: recent } = await supabase
@@ -309,11 +417,12 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
             // The unit counts go with their details, so the invoice lists them as it does for a customer.
             bill_to: { ...billTo, facility_details: propertyDetails },
             covered_months: coveredMonths.length > 0 ? coveredMonths : null,
+            ...(kind !== "service" ? { invoice_kind: kind } : {}),
             amount,
             arrears,
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             line_items: items,
-            description: text("description", 200) ?? `Waste management service${invoiceMonth ? `, ${invoiceMonth}` : ""}`,
+            description: text("description", 200) ?? invoiceDescription(kind, invoiceMonth),
             invoice_month: invoiceMonth,
             auto_generated: false,
         })
@@ -325,7 +434,23 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
         return { success: false, error: invoiceInsertError(error?.message) };
     }
 
-    await logActivity(supabase, actor, "invoice_created", `Created an invoice for ${billTo.full_name} (not registered)`);
+    if (kind === "recyclables") {
+        const failed = await logSaleMovements(supabase, actor.id, data.id as string, billTo.property_name ?? billTo.full_name, sales);
+
+        if (failed) {
+            await supabase.from("payments").delete().eq("id", data.id);
+            console.error("createNonCustomerInvoice stock error:", failed);
+            return { success: false, error: "Could not take the stock out for this sale. Run supabase/recyclables-trading-2026-10.sql in Supabase first." };
+        }
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "invoice_created",
+        `Created ${kind === "recyclables" ? "a recyclables sale invoice" : "an invoice"} for ${billTo.full_name} (not registered)`
+    );
+    if (kind === "recyclables") revalidatePath("/admin/recyclables");
     revalidatePath("/admin/payments");
     revalidatePath("/admin");
 
@@ -384,7 +509,12 @@ export async function createInvoice(_prevState: NewInvoiceState, formData: FormD
     const built = readBuiltInvoice(formData);
     if ("error" in built) return { success: false, error: built.error };
 
-    const { items, amount, arrears, invoiceMonth, coveredMonths } = built;
+    const { kind, sales, items, amount, arrears, invoiceMonth, coveredMonths } = built;
+
+    if (kind === "recyclables") {
+        const short = await checkSaleStock(supabase, sales);
+        if (short) return { success: false, error: short };
+    }
 
     // A double click or a retried request is the same invoice, not a second one.
     const { data: duplicateInvoice } = await supabase
@@ -405,10 +535,11 @@ export async function createInvoice(_prevState: NewInvoiceState, formData: FormD
             arrears,
             units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
             line_items: items,
-            description: String(formData.get("description") || "").trim().slice(0, 200) || `Waste management service${invoiceMonth ? `, ${invoiceMonth}` : ""}`,
+            description: String(formData.get("description") || "").trim().slice(0, 200) || invoiceDescription(kind, invoiceMonth),
             invoice_month: invoiceMonth,
             // The automatic monthly invoice skips these months, so they are never billed twice.
             covered_months: coveredMonths.length > 0 ? coveredMonths : null,
+            ...(kind !== "service" ? { invoice_kind: kind } : {}),
             auto_generated: false,
         })
         .select("id")
@@ -419,7 +550,25 @@ export async function createInvoice(_prevState: NewInvoiceState, formData: FormD
         return { success: false, error: invoiceInsertError(error?.message) };
     }
 
-    await logActivity(supabase, actor, "invoice_created", `Created an invoice${invoiceMonth ? ` for ${invoiceMonth}` : ""}`, { type: "profile", id: customerId });
+    if (kind === "recyclables") {
+        const { data: buyer } = await supabase.from("profiles").select("full_name").eq("id", customerId).maybeSingle();
+        const failed = await logSaleMovements(supabase, actor.id, data.id as string, buyer?.full_name ?? null, sales);
+
+        if (failed) {
+            await supabase.from("payments").delete().eq("id", data.id);
+            console.error("createInvoice stock error:", failed);
+            return { success: false, error: "Could not take the stock out for this sale. Run supabase/recyclables-trading-2026-10.sql in Supabase first." };
+        }
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "invoice_created",
+        kind === "recyclables" ? "Created a recyclables sale invoice" : `Created an invoice${invoiceMonth ? ` for ${invoiceMonth}` : ""}`,
+        { type: "profile", id: customerId }
+    );
+    if (kind === "recyclables") revalidatePath("/admin/recyclables");
     revalidatePath("/admin/payments");
     revalidatePath("/admin");
     revalidatePath(`/admin/customers/${customerId}`);
@@ -2186,6 +2335,160 @@ export async function deleteTask(taskId: string, unlock = false): Promise<TaskCh
 // ---------------------------------------------------------------------------
 // Staff expenses
 // ---------------------------------------------------------------------------
+
+// An admin logs an expense (fuel for the office van, a repair, supplies...).
+// It is approved straight away, since the admin is the one who approves.
+export async function logAdminExpense(formData: FormData): Promise<{ success: boolean; error?: string }> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    const amount = Math.round(Number(String(formData.get("amount") ?? "").replace(/,/g, "")) * 100) / 100;
+    const category = String(formData.get("category") ?? "");
+    const note = String(formData.get("note") ?? "").trim().slice(0, 500);
+    const date = String(formData.get("date") ?? "");
+    const receipt = formData.get("receipt");
+
+    if (!Number.isFinite(amount) || amount <= 0 || amount > 50_000_000) return { success: false, error: "Enter an amount between ₦1 and ₦50,000,000." };
+    if (!EXPENSE_CATEGORIES.some((c) => c.value === category)) return { success: false, error: "Choose a category." };
+    if (note.length < 3) return { success: false, error: "Add a short note saying what the money was for." };
+
+    const today = todayLagos();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today) return { success: false, error: "Choose a date that is not in the future." };
+
+    let receiptPath: string | null = null;
+
+    if (receipt instanceof File && receipt.size > 0) {
+        const extension = RECEIPT_EXTENSIONS[receipt.type];
+        if (!extension || receipt.size > MAX_RECEIPT_BYTES) return { success: false, error: "The receipt must be a photo or PDF under 10MB." };
+
+        receiptPath = `${admin.id}/${randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage.from(RECEIPT_BUCKET).upload(receiptPath, receipt, { upsert: false });
+
+        if (uploadError) {
+            console.error("Admin receipt upload failed:", uploadError.message);
+            return { success: false, error: "Could not upload the receipt. Run supabase/admin-expenses-recyclables-2026-10.sql in Supabase, or save without a receipt." };
+        }
+    }
+
+    const { error } = await supabase.from("expenses").insert({
+        employee_id: admin.id,
+        amount,
+        category,
+        note,
+        expense_date: date,
+        receipt_path: receiptPath,
+        status: "approved",
+        admin_note: "Logged by an admin",
+        reviewed_by: admin.id,
+        reviewed_at: new Date().toISOString(),
+    });
+
+    if (error) {
+        console.error("logAdminExpense error:", error.message);
+        if (receiptPath) await supabase.storage.from(RECEIPT_BUCKET).remove([receiptPath]);
+        return { success: false, error: "Could not save this expense. Please try again." };
+    }
+
+    await logActivity(supabase, admin, "expense_logged", `Logged an expense of ${naira(amount)} (${category})`);
+    revalidatePath("/admin/expenses");
+    revalidatePath("/admin/finance");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
+
+// Recyclable waste in (collected) or out (sold or dispatched), by weight.
+export async function logRecyclable(formData: FormData): Promise<{ success: boolean; error?: string }> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    const direction = String(formData.get("direction") ?? "");
+    const material = String(formData.get("material") ?? "");
+    const kg = Math.round(Number(String(formData.get("kg") ?? "").replace(/,/g, "")) * 100) / 100;
+    const date = String(formData.get("date") ?? "");
+    const clean = (name: string, max: number) => String(formData.get(name) ?? "").trim().slice(0, max) || null;
+
+    if (direction !== "in" && direction !== "out") return { success: false, error: "Choose whether it came in or went out." };
+    if (!["plastic", "metal", "paper", "glass", "electronics", "other"].includes(material)) return { success: false, error: "Choose the material." };
+    if (!Number.isFinite(kg) || kg <= 0 || kg > 1_000_000) return { success: false, error: "Enter the weight in kilograms." };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayLagos()) return { success: false, error: "Choose a date that is not in the future." };
+
+    // What was paid when buying; money from selling comes in through the sale invoice.
+    const paidInput = String(formData.get("paid") ?? "").replace(/,/g, "").trim();
+    const paid = direction === "in" && paidInput !== "" ? round2(Number(paidInput)) : null;
+    if (paid !== null && (!Number.isFinite(paid) || paid < 0 || paid > 500_000_000)) return { success: false, error: "Enter what was paid in naira, or leave it empty." };
+
+    const materialNote = clean("materialNote", 80);
+    if (material === "other" && !materialNote) return { success: false, error: "Say what the other material is." };
+
+    // Can't send out more than is in stock for that material.
+    if (direction === "out") {
+        const { data: rows } = await supabase.from("recyclable_movements").select("direction, kg").eq("material", material).limit(20000);
+        const stock = (rows ?? []).reduce((sum, r) => sum + (r.direction === "in" ? Number(r.kg) : -Number(r.kg)), 0);
+
+        if (kg > stock + 0.001) {
+            return { success: false, error: `Only ${Math.max(0, Math.round(stock * 100) / 100)} kg of that material is in stock.` };
+        }
+    }
+
+    const { error } = await supabase.from("recyclable_movements").insert({
+        direction,
+        material,
+        material_note: material === "other" ? materialNote : null,
+        kg,
+        movement_date: date,
+        party: clean("party", 120),
+        note: clean("note", 300),
+        recorded_by: admin.id,
+        ...(paid !== null ? { amount: paid } : {}),
+    });
+
+    if (error) {
+        console.error("logRecyclable error:", error.message);
+        return {
+            success: false,
+            error: /amount/.test(error.message)
+                ? "Not switched on yet. Run supabase/recyclables-trading-2026-10.sql in Supabase first."
+                : /relation|does not exist|schema cache/i.test(error.message)
+                    ? "Not switched on yet. Run supabase/admin-expenses-recyclables-2026-10.sql in Supabase first."
+                    : "Could not save this. Please try again.",
+        };
+    }
+
+    await logActivity(
+        supabase,
+        admin,
+        "recyclable_logged",
+        `Logged ${kg} kg of ${material} ${direction === "in" ? "in" : "out"}${paid !== null ? ` (paid ${naira(paid)})` : ""}`
+    );
+    revalidatePath("/admin/finance");
+    revalidatePath("/admin/recyclables");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
+
+export async function deleteRecyclable(id: string): Promise<{ success: boolean; error?: string }> {
+    const admin = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!id) return { success: false, error: "Missing entry." };
+
+    const { data: existing } = await supabase.from("recyclable_movements").select("id, payment_id").eq("id", id).maybeSingle();
+    if (existing?.payment_id) {
+        return { success: false, error: "This came from a sale invoice. Remove or change the invoice instead, and the stock follows." };
+    }
+
+    const { data, error } = await supabase.from("recyclable_movements").delete().eq("id", id).select("id");
+
+    if (error || !data || data.length === 0) return { success: false, error: "Could not remove that entry." };
+
+    await logActivity(supabase, admin, "recyclable_removed", "Removed a recyclables entry");
+    revalidatePath("/admin/recyclables");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
 
 // Which statuses an expense may move to each status from: waiting → approved
 // or rejected; approved → reimbursed or rejected; a rejected one can be

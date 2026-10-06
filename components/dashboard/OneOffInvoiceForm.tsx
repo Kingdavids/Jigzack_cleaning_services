@@ -5,7 +5,7 @@ import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { createInvoice, type NewInvoiceState } from "@/app/admin/actions";
-import InvoiceBuilder from "@/components/dashboard/InvoiceBuilder";
+import InvoiceBuilder, { type InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -39,9 +39,13 @@ export type InvoiceCustomerOption = {
 export default function OneOffInvoiceForm({
                                               customers,
                                               defaultStartMonth,
+                                              kind = "service",
+                                              stock = {},
                                           }: {
     customers: InvoiceCustomerOption[];
     defaultStartMonth: string;
+    kind?: InvoiceKind;
+    stock?: Record<string, number>;
 }) {
     const router = useRouter();
     const [state, formAction] = useActionState<NewInvoiceState, FormData>(createInvoice, null);
@@ -85,16 +89,27 @@ export default function OneOffInvoiceForm({
                 </label>
                 <label className="block">
                     <span className={labelClass}>Description</span>
-                    <input name="description" placeholder="Waste management service" maxLength={200} className={inputClass} />
+                    <input
+                        name="description"
+                        placeholder={kind === "recyclables" ? "Sale of recyclables" : kind === "other" ? "Services and items" : "Waste management service"}
+                        maxLength={200}
+                        className={inputClass}
+                    />
                 </label>
             </div>
 
             {customerId ? (
                 // Rebuilt for each customer, so their own units fill in.
-                <InvoiceBuilder key={customerId} defaultStartMonth={defaultStartMonth} initialCounts={chosen?.counts ?? {}} />
+                <InvoiceBuilder
+                    key={`${customerId}-${kind}`}
+                    defaultStartMonth={defaultStartMonth}
+                    initialCounts={kind === "service" ? chosen?.counts ?? {} : {}}
+                    kind={kind}
+                    stock={stock}
+                />
             ) : (
                 <p className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-white/50">
-                    Choose a customer to fill in their property details.
+                    {kind === "service" ? "Choose a customer to fill in their property details." : "Choose who the invoice is for."}
                 </p>
             )}
 

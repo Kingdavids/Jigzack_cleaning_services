@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { createNonCustomerInvoice, type NewInvoiceState } from "@/app/admin/actions";
 import InvoiceBuilder from "@/components/dashboard/InvoiceBuilder";
 import BillToFields from "@/components/dashboard/BillToFields";
+import type { InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -42,7 +43,15 @@ function Field({ label, required, children }: { label: string; required?: boolea
 // Bills someone who is not registered on the app. Everything the invoice
 // needs is filled in here; once created it opens, ready to print, download
 // or share with them.
-export default function NonCustomerInvoiceForm({ defaultStartMonth }: { defaultStartMonth: string }) {
+export default function NonCustomerInvoiceForm({
+                                                   defaultStartMonth,
+                                                   kind = "service",
+                                                   stock = {},
+                                               }: {
+    defaultStartMonth: string;
+    kind?: InvoiceKind;
+    stock?: Record<string, number>;
+}) {
     const router = useRouter();
     const [state, formAction] = useActionState<NewInvoiceState, FormData>(createNonCustomerInvoice, null);
 
@@ -59,13 +68,18 @@ export default function NonCustomerInvoiceForm({ defaultStartMonth }: { defaultS
 
     return (
         <form action={formAction} className="space-y-6">
-            <BillToFields />
+            <BillToFields kind={kind} />
 
             <Field label="Description">
-                <input name="description" placeholder="Waste management service" maxLength={200} className={inputClass} />
+                <input
+                    name="description"
+                    placeholder={kind === "recyclables" ? "Sale of recyclables" : kind === "other" ? "Services and items" : "Waste management service"}
+                    maxLength={200}
+                    className={inputClass}
+                />
             </Field>
 
-            <InvoiceBuilder defaultStartMonth={defaultStartMonth} />
+            <InvoiceBuilder key={kind} defaultStartMonth={defaultStartMonth} kind={kind} stock={stock} />
 
             <SubmitButton />
         </form>

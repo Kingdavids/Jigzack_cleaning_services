@@ -1,6 +1,7 @@
 'use client';
 
 import type { BillTo } from "@/lib/billing/billTo";
+import type { InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 
 const inputClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -21,7 +22,10 @@ function Field({ label, required, children }: { label: string; required?: boolea
 
 // Who an invoice is for and where the service is, for someone not registered
 // on the app. Used when creating their invoice and when correcting it later.
-export default function BillToFields({ defaults }: { defaults?: Partial<BillTo> | null }) {
+export default function BillToFields({ defaults, kind = "service" }: { defaults?: Partial<BillTo> | null; kind?: InvoiceKind }) {
+    // A buyer or a one-off client needs contact details, but not a property.
+    const property = kind === "service";
+
     return (
         <>
             <fieldset className="space-y-3">
@@ -30,7 +34,7 @@ export default function BillToFields({ defaults }: { defaults?: Partial<BillTo> 
                     <Field label="Name of the person or business" required>
                         <input name="fullName" required maxLength={120} defaultValue={defaults?.full_name ?? ""} className={inputClass} />
                     </Field>
-                    <Field label="Property name (optional)">
+                    <Field label={property ? "Property name (optional)" : "Company or business name (optional)"}>
                         <input
                             name="propertyName"
                             maxLength={120}
@@ -63,9 +67,9 @@ export default function BillToFields({ defaults }: { defaults?: Partial<BillTo> 
             </fieldset>
 
             <fieldset className="space-y-3">
-                <legend className="mb-2 text-sm font-semibold">Where the service is</legend>
-                <Field label="Address" required>
-                    <input name="address" required maxLength={300} defaultValue={defaults?.address ?? ""} className={inputClass} />
+                <legend className="mb-2 text-sm font-semibold">{property ? "Where the service is" : "Address (optional)"}</legend>
+                <Field label="Address" required={property}>
+                    <input name="address" required={property} maxLength={300} defaultValue={defaults?.address ?? ""} className={inputClass} />
                 </Field>
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <Field label="Landmark">
@@ -77,12 +81,14 @@ export default function BillToFields({ defaults }: { defaults?: Partial<BillTo> 
                     <Field label="State">
                         <input name="state" maxLength={80} defaultValue={defaults?.state ?? "Lagos"} className={inputClass} />
                     </Field>
-                    <Field label="Property type">
-                        <select name="propertyType" defaultValue={defaults?.property_type ?? "residential"} className={`${inputClass} bg-[#141518]`}>
-                            <option value="residential">Residential</option>
-                            <option value="commercial">Commercial</option>
-                        </select>
-                    </Field>
+                    {property && (
+                        <Field label="Property type">
+                            <select name="propertyType" defaultValue={defaults?.property_type ?? "residential"} className={`${inputClass} bg-[#141518]`}>
+                                <option value="residential">Residential</option>
+                                <option value="commercial">Commercial</option>
+                            </select>
+                        </Field>
+                    )}
                 </div>
             </fieldset>
         </>

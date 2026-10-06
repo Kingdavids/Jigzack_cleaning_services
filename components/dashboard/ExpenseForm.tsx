@@ -15,10 +15,20 @@ export default function ExpenseForm({
                                         tasks,
                                         today,
                                         earliest,
+                                        action = submitExpense,
+                                        successMessage = "Expense sent to the admin",
+                                        showJob = true,
+                                        saveLabel = "Send to admin",
                                     }: {
     tasks: { id: string; label: string }[];
     today: string;
     earliest: string;
+    // Staff send theirs for review; an admin's own is approved as it's saved.
+    action?: (data: FormData) => Promise<{ success: boolean; error?: string } | null>;
+    successMessage?: string;
+    // Admins' expenses aren't tied to one job.
+    showJob?: boolean;
+    saveLabel?: string;
 }) {
     const router = useRouter();
     const formRef = useRef<HTMLFormElement>(null);
@@ -51,14 +61,14 @@ export default function ExpenseForm({
                 }
             }
 
-            const result = await submitExpense(data);
+            const result = await action(data);
 
             if (!result?.success) {
                 toast.error(result?.error ?? "Could not save this expense.");
                 return;
             }
 
-            toast.success("Expense sent to the admin");
+            toast.success(successMessage);
             form.reset();
             router.refresh();
         } finally {
@@ -124,7 +134,7 @@ export default function ExpenseForm({
                         className={fieldClass}
                     />
                 </div>
-                <div>
+                {showJob && <div>
                     <label htmlFor="expense-task" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
                         For which job (optional)
                     </label>
@@ -136,7 +146,7 @@ export default function ExpenseForm({
                             </option>
                         ))}
                     </select>
-                </div>
+                </div>}
             </div>
 
             <div>
@@ -172,7 +182,7 @@ export default function ExpenseForm({
                 disabled={busy}
                 className="h-11 rounded-xl bg-amber-400 px-5 text-sm font-bold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
             >
-                {busy ? "Sending..." : "Send to admin"}
+                {busy ? "Saving..." : saveLabel}
             </button>
         </form>
     );

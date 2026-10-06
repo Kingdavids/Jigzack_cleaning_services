@@ -8,9 +8,10 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import BillingActionButton from "@/components/dashboard/BillingActionButton";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
-import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
 import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
-import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
+import OneOffInvoiceChooser from "@/components/dashboard/OneOffInvoiceChooser";
+import { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
+import { loadStock } from "@/lib/recyclables";
 import { ALL_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { billToOf } from "@/lib/billing/billTo";
 import MoveToCustomerControl from "@/components/dashboard/MoveToCustomerControl";
@@ -91,6 +92,9 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
 
         return { id: c.id, full_name: c.full_name, counts };
     });
+
+    // Recyclables in stock per material, so a sale can warn before it sends out more than there is.
+    const stockByMaterial = Object.fromEntries(Object.entries((await loadStock(supabase)).byMaterial).map(([material, v]) => [material, v.stock]));
 
     // One-off invoices start from the billing month: last month's until the 25th.
     const startMonth = billingMonthKey();
@@ -619,18 +623,10 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
 
                 <SectionCard
                     title="Create a one-off invoice"
-                    description="For anything outside the automatic monthly charge, including several months at once. Months it covers are skipped by the automatic invoice."
+                    description="For anything outside the automatic monthly charge: a property for several months, a sale of recyclables, or any other service or item. For a registered customer, or for someone who isn't one."
                     collapsible
                 >
-                    <OneOffInvoiceForm customers={invoiceCustomers} defaultStartMonth={startMonth} />
-                </SectionCard>
-
-                <SectionCard
-                    title="Invoice someone who isn't registered"
-                    description="For a one-off job or a client without an account. Fill in their details and the charges; the invoice opens ready to print, download or share with them."
-                    collapsible
-                >
-                    <NonCustomerInvoiceForm defaultStartMonth={startMonth} />
+                    <OneOffInvoiceChooser customers={invoiceCustomers} defaultStartMonth={startMonth} stock={stockByMaterial} />
                 </SectionCard>
             </div>
         </DashboardShell>

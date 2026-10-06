@@ -115,6 +115,7 @@ export default function InvoiceEditor({
                             <input
                                 type="number"
                                 min="0"
+                                step="any"
                                 value={item.quantity}
                                 onChange={(e) => update(index, { quantity: Number(e.target.value) })}
                                 aria-label="Quantity"
@@ -122,6 +123,7 @@ export default function InvoiceEditor({
                             />
                             <input
                                 type="number"
+                                step="any"
                                 value={item.unit_price}
                                 onChange={(e) => update(index, { unit_price: Number(e.target.value) })}
                                 aria-label="Unit price (negative for a discount line)"

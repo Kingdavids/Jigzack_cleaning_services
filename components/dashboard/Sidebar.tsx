@@ -21,6 +21,7 @@ import {
     X,
     type LucideIcon,
     Scale,
+    Recycle,
 } from "lucide-react";
 import { UserRole } from "@/lib/dashboard-types";
 import { useViewer } from "@/components/dashboard/ViewerContext";
@@ -38,6 +39,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Payments", href: "/admin/payments", icon: CreditCard },
         { label: "Expenses", href: "/admin/expenses", icon: Receipt },
         { label: "Money in & out", href: "/admin/finance", icon: Scale },
+        { label: "Recyclables", href: "/admin/recyclables", icon: Recycle },
         { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
         { label: "Activity", href: "/admin/activity", icon: History },
     ],

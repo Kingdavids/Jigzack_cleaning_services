@@ -11,6 +11,7 @@ import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from "@/lib/billing/balance";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { billToOf } from "@/lib/billing/billTo";
+import { kgText, loadStock } from "@/lib/recyclables";
 import {
     AlertTriangle,
     Briefcase,
@@ -21,6 +22,8 @@ import {
     UserCheck,
     Users,
     Wallet,
+    Recycle,
+    Scale,
 } from "lucide-react";
 
 type ProfileRef = { full_name: string | null } | null;
@@ -48,6 +51,8 @@ type UnpaidRow = {
     customer: ProfileRef;
     // Who it is for when they are not registered on the app.
     bill_to?: unknown;
+    // What it is for; empty means the normal monthly service.
+    invoice_kind?: string | null;
 };
 
 type PhotoRow = { id: string; image_url: string | null; photo_type: string | null; task_title: string | null };
@@ -172,6 +177,11 @@ export default async function AdminPage() {
     // collected this month is every payment recorded this month, plus invoices
     // settled in one go before part payments existed.
     const outstanding = unpaid.reduce((sum, row) => sum + balanceOf(row), 0);
+    const recyclables = await loadStock(supabase);
+    // Money owed by buyers of recyclables is kept apart from the solid waste service.
+    const recyclableInvoices = unpaid.filter((row) => row.invoice_kind === "recyclables");
+    const recyclablesOwed = recyclableInvoices.reduce((sum, row) => sum + balanceOf(row), 0);
+    const solidOwed = outstanding - recyclablesOwed;
 
     // An invoice settled from an advance payment is not new money: the advance payment itself is counted below.
     const paidThisMonth = ((paidRes.data ?? []) as { id: string; amount: number; arrears: number | null; payment_method?: string | null }[]).filter(
@@ -212,6 +222,39 @@ export default async function AdminPage() {
             <LiveRefresh tables={["tasks", "payments", "uploads", "profiles"]} />
             <div className="space-y-6">
                 {owner && <OwnerOverview supabase={supabase} collected={collected} outstanding={outstanding} />}
+
+                {/* Solid waste and recyclables are kept apart, with the money still owed in total. */}
+                <section aria-label="Balances" className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Balances</p>
+                    <div className="grid gap-5 sm:grid-cols-3">
+                        <StatCard
+                            icon={Wallet}
+                            label="Solid waste owed"
+                            value={naira(solidOwed)}
+                            helper={`${unpaid.length - recyclableInvoices.length} unpaid invoice${unpaid.length - recyclableInvoices.length === 1 ? "" : "s"} for collection, disposal and other services`}
+                            href="/admin/payments"
+                        />
+                        <StatCard
+                            icon={Recycle}
+                            label="Recyclables owed"
+                            value={naira(recyclablesOwed)}
+                            helper={
+                                recyclables.table
+                                    ? `${recyclableInvoices.length} unpaid sale${recyclableInvoices.length === 1 ? "" : "s"} · ${kgText(recyclables.stock)} in stock`
+                                    : "Run the recyclables SQL to start tracking stock"
+                            }
+                            href="/admin/recyclables"
+                        />
+                        <StatCard
+                            icon={Scale}
+                            label="Total outstanding"
+                            value={naira(outstanding)}
+                            helper="Solid waste owed plus recyclables owed"
+                            href="/admin/payments"
+                            tone={outstanding > 0 ? "alert" : "default"}
+                        />
+                    </div>
+                </section>
 
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard

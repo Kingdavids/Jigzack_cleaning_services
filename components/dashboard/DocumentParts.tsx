@@ -64,12 +64,21 @@ type PropertyCustomer = {
 } | null;
 
 // The customer and property the bill is for.
-export function PropertyDetailsBlock({ customer, fallbackName }: { customer: PropertyCustomer; fallbackName?: string | null }) {
+export function PropertyDetailsBlock({
+                                         customer,
+                                         fallbackName,
+                                         showProperty = true,
+                                     }: {
+    customer: PropertyCustomer;
+    fallbackName?: string | null;
+    // Off for a sale or other invoice that isn't about a property.
+    showProperty?: boolean;
+}) {
     const { counted } = describeFacilities(customer?.facility_details);
     const vacant = describeFacilities(customer?.vacancies).counted;
 
     return (
-        <div className="grid gap-3 text-xs sm:grid-cols-2">
+        <div className={`grid gap-3 text-xs ${showProperty ? "sm:grid-cols-2" : ""}`}>
             <div className="rounded-lg border border-black/15 bg-white/50 p-3">
                 <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-black/50">Billed to</p>
                 <Row label="Account holder" value={customer?.property_name?.trim() || customer?.full_name || fallbackName || "Customer"} />
@@ -77,8 +86,10 @@ export function PropertyDetailsBlock({ customer, fallbackName }: { customer: Pro
                 <Row label="WhatsApp" value={customer?.whatsapp_number} />
                 <Row label="Email" value={customer?.email} />
                 <Row label="Account code" value={customer?.account_code} />
+                {!showProperty && <Row label="Address" value={customer?.address} />}
             </div>
 
+            {showProperty && (
             <div className="rounded-lg border border-black/15 bg-white/50 p-3">
                 <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-black/50">Property</p>
                 <Row label="Address" value={customer?.address} />
@@ -102,6 +113,7 @@ export function PropertyDetailsBlock({ customer, fallbackName }: { customer: Pro
                     <Row label="Vacant (not billed)" value={vacant.map((f) => `${f.label} ${f.count}`).join(", ")} />
                 )}
             </div>
+            )}
         </div>
     );
 }
