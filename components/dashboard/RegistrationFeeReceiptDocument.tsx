@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatDate, naira } from "@/lib/customer/billing";
 import DocumentActions from "@/components/dashboard/DocumentActions";
 import { DocumentHeader, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
+import { BUSINESS } from "@/lib/config/business";
 
 type PropertyProps = Parameters<typeof PropertyDetailsBlock>[0]["customer"];
 
@@ -47,7 +48,7 @@ export default function RegistrationFeeReceiptDocument({
                 >
                     <DocumentHeader
                         title="PAYMENT RECEIPT"
-                        subtitle="Lagos Waste Management Authority"
+                        subtitle={BUSINESS.regulator.name}
                         right={
                             <>
                                 <p><span className="font-semibold">Receipt No:</span> {number}</p>
@@ -104,9 +105,9 @@ export default function RegistrationFeeReceiptDocument({
                     </Link>
                     <DocumentActions
                         targetId="registration-receipt-sheet"
-                        fileName={`Jigzack-registration-receipt-${number}`}
-                        title={`Jigzack registration fee receipt ${number}`}
-                        shareText={`Jigzack Cleaning Services registration fee receipt ${number}: ${naira(amount)} paid.`}
+                        fileName={`${BUSINESS.shortName}-registration-receipt-${number}`}
+                        title={`${BUSINESS.shortName} registration fee receipt ${number}`}
+                        shareText={`${BUSINESS.name} registration fee receipt ${number}: ${naira(amount)} paid.`}
                         printLabel="Print receipt"
                     />
                 </div>

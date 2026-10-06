@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { ShieldCheck } from "lucide-react";
 import CookieSettingsButton from "@/components/CookieSettingsButton";
+import { BUSINESS } from "@/lib/config/business";
 
 export default function Footer() {
     return (
@@ -12,7 +13,7 @@ export default function Footer() {
                         <Link href="/" className="inline-flex items-center gap-2 text-xl font-extrabold tracking-tight text-amber-500">
                             <Image src="/images/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" />
                             <span>
-                                Jigzack<span className="text-amber-300">.</span>
+                                {BUSINESS.shortName}<span className="text-amber-300">.</span>
                             </span>
                         </Link>
                         <p className="mt-4 max-w-sm text-sm leading-relaxed text-white/55">
@@ -20,7 +21,7 @@ export default function Footer() {
                         </p>
                         <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-300">
                             <ShieldCheck className="h-3.5 w-3.5" />
-                            LAWMA Approved
+                            {BUSINESS.regulator.short} Approved
                         </div>
                     </div>
 
@@ -45,15 +46,15 @@ export default function Footer() {
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Contact</p>
                         <div className="mt-4 flex flex-col gap-2 text-sm text-white/65">
-                            <a href="mailto:info@jigzack.com" className="transition hover:text-amber-300">info@jigzack.com</a>
-                            <a href="tel:+2347034339721" className="transition hover:text-amber-300">0703 433 9721</a>
+                            <a href={`mailto:${BUSINESS.contact.email}`} className="transition hover:text-amber-300">{BUSINESS.contact.email}</a>
+                            <a href={BUSINESS.contact.phone.href} className="transition hover:text-amber-300">{BUSINESS.contact.phone.display}</a>
                             <p className="text-white/45">Lagos • Port Harcourt</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="mt-12 flex flex-col gap-4 border-t border-white/10 pt-6 text-xs text-white/40 sm:flex-row sm:items-center sm:justify-between">
-                    <p>&copy; {new Date().getFullYear()} Jigzack Cleaning Services. All rights reserved.</p>
+                    <p>&copy; {new Date().getFullYear()} {BUSINESS.name}. All rights reserved.</p>
                     <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                         <Link href="/privacy" className="transition hover:text-amber-300">Privacy Policy</Link>
                         <Link href="/terms" className="transition hover:text-amber-300">Terms of Service</Link>

@@ -7,6 +7,8 @@ import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
+import { TIMEZONE } from "@/lib/config/business";
+import { BUSINESS } from "@/lib/config/business";
 
 export type CustomerAccountResult = { success: boolean; error?: string; message?: string };
 
@@ -31,7 +33,7 @@ async function requireOwner() {
     return profile;
 }
 
-const lagosToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosToday = () => new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 // Suspending pauses an account without losing anything. The customer cannot
 // open their dashboard, they are left out of the monthly invoices and the
@@ -222,12 +224,12 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
     if (action === "confirm" && customer.email && !customer.registration_fee_paid) {
         await sendEmail({
             to: [customer.email],
-            subject: "Your Jigzack registration fee is confirmed",
+            subject: `Your ${BUSINESS.shortName} registration fee is confirmed`,
             html: `
                 <p>Hi ${escapeHtml(customer.full_name ?? "there")},</p>
                 <p>We have confirmed your registration fee. Your dashboard is now open.</p>
                 <p><a href="${escapeHtml(`${await siteOrigin()}/auth`)}">Log in to your account</a></p>
-                <p>Jigzack Cleaning Services</p>
+                <p>${BUSINESS.name}</p>
             `,
         });
     }

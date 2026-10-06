@@ -1,6 +1,7 @@
 import { escapeHtml } from "@/lib/send-email";
+import { BUSINESS, REGISTRATION_FEE_NGN } from "@/lib/config/business";
 
-const SUPPORT_PHONES = "0703 433 9721 / 0708 680 8079";
+const SUPPORT_PHONES = BUSINESS.contact.supportPhones.join(" / ");
 
 export function approvalEmail({
                                   name,
@@ -26,18 +27,18 @@ export function approvalEmail({
 
     if (status === "declined") {
         return {
-            subject: "Update on your Jigzack Cleaning Services application",
+            subject: `Update on your ${BUSINESS.name} application`,
             html: `
                 <p>${greeting}</p>
                 <p>Thank you for applying. Unfortunately we couldn't approve your account at this time.</p>
                 ${reason ? `<p>Reason: ${escapeHtml(reason)}</p>` : ""}
                 <p>If you think this is a mistake, or you'd like to send us more information, please get in touch on ${SUPPORT_PHONES}.</p>
-                <p>Jigzack Cleaning Services</p>
+                <p>${BUSINESS.name}</p>
             `,
         };
     }
 
-    const fee = Number(process.env.REGISTRATION_FEE_NGN ?? "5000");
+    const fee = REGISTRATION_FEE_NGN;
     const next =
         role === "employee"
             ? "Log in to see your assigned tasks."
@@ -48,7 +49,7 @@ export function approvalEmail({
                     : `Log in to see your pickup schedule, invoices and messages. On your first login you'll be asked to pay a one-time registration fee of ₦${fee.toLocaleString()} to activate your dashboard.`;
 
     return {
-        subject: "Your Jigzack Cleaning Services account is approved",
+        subject: `Your ${BUSINESS.name} account is approved`,
         html: `
             <p>${greeting}</p>
             <p>Good news: your account has been approved.</p>
@@ -60,7 +61,7 @@ export function approvalEmail({
             }
             <p><a href="${escapeHtml(loginUrl)}">Log in to your account</a></p>
             <p>Questions? Call us on ${SUPPORT_PHONES}.</p>
-            <p>Jigzack Cleaning Services</p>
+            <p>${BUSINESS.name}</p>
         `,
     };
 }

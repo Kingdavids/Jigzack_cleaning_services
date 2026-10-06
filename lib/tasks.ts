@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { TIMEZONE } from "@/lib/config/business";
 
 // Pickups are dated in Lagos time, so "today" has to be too.
-export const todayLagos = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+export const todayLagos = () => new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 export const isPastDate = (date: string | null | undefined) => Boolean(date) && (date as string) < todayLagos();
 

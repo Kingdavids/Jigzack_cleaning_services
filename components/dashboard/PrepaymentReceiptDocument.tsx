@@ -3,6 +3,7 @@ import { formatDate, naira, receiptNumber } from "@/lib/customer/billing";
 import type { Prepayment } from "@/lib/billing/prepaid";
 import DocumentActions from "@/components/dashboard/DocumentActions";
 import { DocumentHeader, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
+import { BUSINESS } from "@/lib/config/business";
 
 type PropertyProps = Parameters<typeof PropertyDetailsBlock>[0]["customer"];
 
@@ -41,7 +42,7 @@ export default function PrepaymentReceiptDocument({
                 >
                     <DocumentHeader
                         title="PAYMENT RECEIPT"
-                        subtitle="Lagos Waste Management Authority"
+                        subtitle={BUSINESS.regulator.name}
                         right={
                             <>
                                 <p><span className="font-semibold">Receipt No:</span> {number}</p>
@@ -104,9 +105,9 @@ export default function PrepaymentReceiptDocument({
                     </Link>
                     <DocumentActions
                         targetId="receipt-sheet"
-                        fileName={`Jigzack-receipt-${number}`}
-                        title={`Jigzack receipt ${number}`}
-                        shareText={`Jigzack Cleaning Services payment receipt ${number}: ${naira(amount)} paid in advance for ${prepayment.months} month${prepayment.months === 1 ? "" : "s"}.`}
+                        fileName={`${BUSINESS.shortName}-receipt-${number}`}
+                        title={`${BUSINESS.shortName} receipt ${number}`}
+                        shareText={`${BUSINESS.name} payment receipt ${number}: ${naira(amount)} paid in advance for ${prepayment.months} month${prepayment.months === 1 ? "" : "s"}.`}
                         printLabel="Print receipt"
                     />
                 </div>

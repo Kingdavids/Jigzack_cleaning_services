@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import RegistrationFeeReceiptDocument from "@/components/dashboard/RegistrationFeeReceiptDocument";
+import { REGISTRATION_FEE_NGN } from "@/lib/config/business";
 
-const REGISTRATION_FEE_NGN = Number(process.env.REGISTRATION_FEE_NGN ?? "5000");
 
 export default async function CustomerRegistrationFeeReceiptPage() {
     const profile = await getUserProfile();

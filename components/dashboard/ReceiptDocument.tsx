@@ -4,6 +4,7 @@ import { normalizeLineItems } from "@/lib/billing/pricing";
 import { invoiceTotal, round2, type Installment } from "@/lib/billing/balance";
 import DocumentActions from "@/components/dashboard/DocumentActions";
 import { DocumentHeader, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
+import { BUSINESS } from "@/lib/config/business";
 
 type PropertyProps = Parameters<typeof PropertyDetailsBlock>[0]["customer"];
 
@@ -77,7 +78,7 @@ export default function ReceiptDocument({
                 >
                     <DocumentHeader
                         title="PAYMENT RECEIPT"
-                        subtitle="Lagos Waste Management Authority"
+                        subtitle={BUSINESS.regulator.name}
                         right={
                             <>
                                 <p><span className="font-semibold">Receipt No:</span> {number}</p>
@@ -200,9 +201,9 @@ export default function ReceiptDocument({
                     </div>
                     <DocumentActions
                         targetId="receipt-sheet"
-                        fileName={`Jigzack-receipt-${number}`}
-                        title={`Jigzack receipt ${number}`}
-                        shareText={`Jigzack Cleaning Services payment receipt ${number} for ${month}: ${naira(thisPayment)} paid${settled ? "" : `, ${naira(balanceAfter)} still due`}.`}
+                        fileName={`${BUSINESS.shortName}-receipt-${number}`}
+                        title={`${BUSINESS.shortName} receipt ${number}`}
+                        shareText={`${BUSINESS.name} payment receipt ${number} for ${month}: ${naira(thisPayment)} paid${settled ? "" : `, ${naira(balanceAfter)} still due`}.`}
                         printLabel="Print receipt"
                     />
                 </div>

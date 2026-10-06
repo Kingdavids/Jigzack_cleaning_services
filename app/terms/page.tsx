@@ -3,11 +3,12 @@ import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
 import LegalPage, { LegalList, LegalSection } from "@/components/LegalPage";
 import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
+import { BUSINESS } from "@/lib/config/business";
 
 export const metadata: Metadata = pageMetadata({
     title: "Terms of Service",
     description:
-        "The terms for using Jigzack Cleaning Services: accounts, pickups, monthly charges, vacant units, and what we each agree to.",
+        `The terms for using ${BUSINESS.name}: accounts, pickups, monthly charges, vacant units, and what we each agree to.`,
     path: "/terms",
 });
 
@@ -24,17 +25,17 @@ export default function TermsPage() {
             <LegalPage
                 title="Terms of Service"
                 updated="23 September 2026"
-                intro="These terms cover your use of the Jigzack Cleaning Services website and your customer account. By creating an account or using our service you agree to them. If something here is unclear, ask us before you sign up."
+                intro={`These terms cover your use of the ${BUSINESS.name} website and your customer account. By creating an account or using our service you agree to them. If something here is unclear, ask us before you sign up.`}
             >
                 <LegalSection heading="About us and the service">
                     <p>
-                        Jigzack Cleaning Services is a LAWMA-approved solid waste disposal company. We collect waste from
+                        {BUSINESS.name} is a {BUSINESS.regulator.short}-approved solid waste disposal company. We collect waste from
                         homes and commercial premises in Lagos and Port Harcourt on a schedule, and we run waste education
                         sessions. You can contact us at{" "}
-                        <a className="text-amber-300 underline underline-offset-2" href="mailto:info@jigzack.com">
-                            info@jigzack.com
+                        <a className="text-amber-300 underline underline-offset-2" href={`mailto:${BUSINESS.contact.email}`}>
+                            {BUSINESS.contact.email}
                         </a>{" "}
-                        or on 0703 433 9721.
+                        or on {BUSINESS.contact.phone.display}.
                     </p>
                 </LegalSection>
 
@@ -107,7 +108,7 @@ export default function TermsPage() {
 
                 <LegalSection heading="Our responsibility">
                     <p>
-                        We take care to collect and dispose of waste properly and in line with our LAWMA approval. We are
+                        We take care to collect and dispose of waste properly and in line with our {BUSINESS.regulator.short} approval. We are
                         not responsible for delays or missed pickups caused by things outside our control, such as
                         flooding, road closures or strikes. Nothing in these terms limits any right or responsibility that
                         the law does not allow us to limit.

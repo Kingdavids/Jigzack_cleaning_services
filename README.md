@@ -44,6 +44,7 @@ See `.env.example` for the full list and what each one does. Never commit real k
 
 - `app/` routes and server actions: the admin ones are in `app/admin/actions/`, one file per area (tasks, invoices, payments, messages, estates, accounts, customers, billing, expenses, recyclables), and the employee ones in `app/employee/actions.ts`. Anything exported from one of those files is a public endpoint, so shared helpers go in `app/admin/actions/shared.ts` or `lib/`, never in an action file.
 - `components/` UI, split into `auth`, `dashboard` and `ui`
+- `lib/config/business.ts` the business settings in one place: name, contact details, bank accounts, unit prices, invoice day, registration fee, timezone and the regulator named on invoices. Change a value there and the website, emails, invoices and receipts follow. `lib/config/private.ts` holds what must stay on the server (the contact form's inboxes), so never move those into `business.ts`, which is sent to the browser.
 - `lib/` billing rules (`lib/billing`), auth helpers, email
 - `proxy.ts` refreshes the Supabase session and sends logged-out visitors from dashboard links to login
 - `supabase/schema.sql` database schema and policies

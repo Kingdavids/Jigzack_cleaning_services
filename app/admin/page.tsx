@@ -25,6 +25,8 @@ import {
     Recycle,
     Scale,
 } from "lucide-react";
+import { TIMEZONE } from "@/lib/config/business";
+import { TIMEZONE_OFFSET } from "@/lib/config/business";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -64,8 +66,8 @@ export default async function AdminPage() {
     const supabase = await createClient();
 
     // Pickups are dated in Lagos time, so "today" has to be too.
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
-    const monthStart = `${today.slice(0, 7)}-01T00:00:00+01:00`;
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
+    const monthStart = `${today.slice(0, 7)}-01T00:00:00${TIMEZONE_OFFSET}`;
     const weekAgoDate = new Date();
     weekAgoDate.setDate(weekAgoDate.getDate() - 7);
     const weekAgo = weekAgoDate.toISOString();

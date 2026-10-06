@@ -1,3 +1,4 @@
+import { BUSINESS } from "@/lib/config/business";
 export function escapeHtml(value: string) {
     return value
         .replace(/&/g, "&amp;")
@@ -29,7 +30,7 @@ export async function sendEmail({
 
     if (to.length === 0) return false;
 
-    const from = process.env.RESEND_FROM_EMAIL ?? "Jigzack Cleaning Services <onboarding@resend.dev>";
+    const from = process.env.RESEND_FROM_EMAIL ?? `${BUSINESS.name} <onboarding@resend.dev>`;
 
     try {
         const response = await fetch("https://api.resend.com/emails", {

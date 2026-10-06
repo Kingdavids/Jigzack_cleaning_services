@@ -5,6 +5,8 @@ import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 import { runBillingEmails } from "@/lib/billing/notify";
 import { billingMonthLabel, INVOICE_DAY } from "@/lib/billing/pricing";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
+import { TIMEZONE } from "@/lib/config/business";
+import { BUSINESS } from "@/lib/config/business";
 
 // Called once a day by the GitHub Actions workflow in .github/workflows.
 // Pickups are topped up every day (existing dates are skipped). Monthly
@@ -39,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-    const lagosDay = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    const lagosDay = new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
     const isInvoiceDay = Number(lagosDay.slice(8, 10)) === INVOICE_DAY;
     const forceInvoices = request.nextUrl.searchParams.get("invoices") === "force";
 
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
 
         lines.push("<p>Review and edit them in the admin dashboard under Tasks and Payments.</p>");
 
-        await sendEmail({ to, subject: "Jigzack billing job summary", html: lines.join("") });
+        await sendEmail({ to, subject: `${BUSINESS.shortName} billing job summary`, html: lines.join("") });
     }
 
     // Pickups whose date has passed are marked serviced. Quietly does nothing before the crew SQL has run.

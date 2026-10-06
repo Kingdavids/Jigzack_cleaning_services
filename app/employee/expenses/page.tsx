@@ -6,8 +6,9 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import ExpenseForm from "@/components/dashboard/ExpenseForm";
 import ExpenseDeleteButton from "@/components/dashboard/ExpenseDeleteButton";
+import { TIMEZONE } from "@/lib/config/business";
 
-const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 export default async function EmployeeExpensesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("employee");

@@ -1,11 +1,12 @@
 import type { MetadataRoute } from "next";
+import { BUSINESS } from "@/lib/config/business";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Jigzack Cleaning Services",
-    short_name: "Jigzack",
-    description: "LAWMA-approved waste collection for homes and businesses in Lagos and Port Harcourt.",
+    name: BUSINESS.name,
+    short_name: BUSINESS.shortName,
+    description: `${BUSINESS.regulator.short}-approved waste collection for homes and businesses in ${BUSINESS.cities.join(" and ")}.`,
     lang: "en-NG",
     start_url: "/",
     scope: "/",
@@ -41,7 +42,7 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         name: "Messages",
         short_name: "Messages",
-        description: "Talk to the Jigzack team",
+        description: `Talk to the ${BUSINESS.shortName} team`,
         url: "/customer/messages",
         icons: [{ src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
       },

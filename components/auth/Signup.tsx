@@ -11,6 +11,7 @@ import PasswordInput from "@/components/auth/PasswordInput";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { trackEvent } from "@/lib/analytics";
+import { BUSINESS } from "@/lib/config/business";
 
 // Public signup creates customers only. An employee account can only be
 // created through an admin-issued invite link (inviteToken) -- the database
@@ -109,8 +110,8 @@ export default function Signup({
                 <CardDescription className="text-white/65">
                     {isEmployeeInvite
                         ? inviteKind === "employee"
-                            ? "You've been invited to join the Jigzack team."
-                            : "You've been invited to help run Jigzack. Sign up with the email address the invite was sent to."
+                            ? `You've been invited to join the ${BUSINESS.shortName} team.`
+                            : `You've been invited to help run ${BUSINESS.shortName}. Sign up with the email address the invite was sent to.`
                         : "Register as a customer to book and track waste collection."}
                 </CardDescription>
             </CardHeader>

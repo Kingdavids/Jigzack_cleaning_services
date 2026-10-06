@@ -3,11 +3,12 @@ import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
 import LegalPage, { LegalList, LegalSection } from "@/components/LegalPage";
 import { breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
+import { BUSINESS } from "@/lib/config/business";
 
 export const metadata: Metadata = pageMetadata({
     title: "Privacy Policy",
     description:
-        "What personal information Jigzack Cleaning Services collects, why we collect it, who we share it with and how you can ask us to correct or delete it.",
+        `What personal information ${BUSINESS.name} collects, why we collect it, who we share it with and how you can ask us to correct or delete it.`,
     path: "/privacy",
 });
 
@@ -24,17 +25,17 @@ export default function PrivacyPage() {
             <LegalPage
                 title="Privacy Policy"
                 updated="23 September 2026"
-                intro="This page explains what personal information Jigzack Cleaning Services collects when you use our website and customer accounts, what we do with it, and the choices you have. We write it to follow the Nigeria Data Protection Act 2023."
+                intro={`This page explains what personal information ${BUSINESS.name} collects when you use our website and customer accounts, what we do with it, and the choices you have. We write it to follow the Nigeria Data Protection Act 2023.`}
             >
                 <LegalSection heading="Who we are">
                     <p>
-                        Jigzack Cleaning Services is a LAWMA-approved waste collection company serving homes and
+                        {BUSINESS.name} is a {BUSINESS.regulator.short}-approved waste collection company serving homes and
                         businesses in Lagos and Port Harcourt. We decide how the information described here is used, so
                         we are the data controller. You can reach us at{" "}
-                        <a className="text-amber-300 underline underline-offset-2" href="mailto:info@jigzack.com">
-                            info@jigzack.com
+                        <a className="text-amber-300 underline underline-offset-2" href={`mailto:${BUSINESS.contact.email}`}>
+                            {BUSINESS.contact.email}
                         </a>{" "}
-                        or on 0703 433 9721.
+                        or on {BUSINESS.contact.phone.display}.
                     </p>
                 </LegalSection>
 
@@ -157,8 +158,8 @@ export default function PrivacyPage() {
                     />
                     <p>
                         You can withdraw consent for analytics at any time. To use any of these rights, email{" "}
-                        <a className="text-amber-300 underline underline-offset-2" href="mailto:info@jigzack.com">
-                            info@jigzack.com
+                        <a className="text-amber-300 underline underline-offset-2" href={`mailto:${BUSINESS.contact.email}`}>
+                            {BUSINESS.contact.email}
                         </a>
                         . If you are not happy with how we handle your request, you can complain to the Nigeria Data
                         Protection Commission.

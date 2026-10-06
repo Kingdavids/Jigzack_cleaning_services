@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { ImageResponse } from "next/og";
+import { BUSINESS } from "@/lib/config/business";
 
 export const OG_SIZE = { width: 1200, height: 630 };
 
@@ -28,7 +29,7 @@ export async function renderOgImage() {
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={logoSrc} width={84} height={84} alt="" />
                     <div style={{ display: "flex", fontSize: 40, fontWeight: 800, letterSpacing: -1 }}>
-                        Jigzack<span style={{ color: "#fcd34d" }}>.</span>
+                        {BUSINESS.shortName}<span style={{ color: "#fcd34d" }}>.</span>
                     </div>
                 </div>
 
@@ -47,7 +48,7 @@ export async function renderOgImage() {
                             letterSpacing: 4,
                         }}
                     >
-                        LAWMA APPROVED
+                        {BUSINESS.regulator.short.toUpperCase()} APPROVED
                     </div>
                     <div style={{ display: "flex", fontSize: 76, fontWeight: 900, lineHeight: 1.05, letterSpacing: -2 }}>
                         Waste collection for homes and businesses
@@ -58,7 +59,7 @@ export async function renderOgImage() {
                 </div>
 
                 <div style={{ display: "flex", fontSize: 28, color: "#fcd34d", fontWeight: 700 }}>
-                    www.jigzackcleaningservices.com
+                    www.{BUSINESS.domain}
                 </div>
             </div>
         ),

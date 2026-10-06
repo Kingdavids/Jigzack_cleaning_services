@@ -13,10 +13,11 @@ import { Clock, HandCoins, Receipt, Wallet } from "lucide-react";
 import ExpenseForm from "@/components/dashboard/ExpenseForm";
 import { logAdminExpense } from "@/app/admin/actions/expenses";
 import { isFullAdmin } from "@/lib/auth/roles";
+import { TIMEZONE } from "@/lib/config/business";
 
 const STATUSES = ["submitted", "approved", "reimbursed", "rejected"] as const;
 
-const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 function monthBounds(month: string) {
     const [year, mon] = month.split("-").map(Number);

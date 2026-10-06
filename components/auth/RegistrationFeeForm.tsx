@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { reportRegistrationFee } from "@/lib/payment-actions";
+import { BUSINESS } from "@/lib/config/business";
 
 const PAYMENT_MODES = ["Bank transfer", "Cash", "POS / card", "Other"];
 
@@ -83,7 +84,7 @@ export default function RegistrationFeeForm({ reported = false }: { reported?: b
                     />
                     <span className="text-sm">
                         <span className="block font-semibold text-emerald-300">I&apos;m an existing customer</span>
-                        <span className="block text-white/60">I was already with Jigzack before this app. I have not made a transfer.</span>
+                        <span className="block text-white/60">I was already with {BUSINESS.shortName} before this app. I have not made a transfer.</span>
                     </span>
                 </label>
 

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import { BUSINESS } from "@/lib/config/business";
 
 const NAV_LINKS = [
     { href: '/', label: 'Home' },
@@ -27,7 +28,7 @@ export default function Navbar() {
                     >
                         <Image src="/images/logo-mark.png" alt="" width={32} height={32} className="h-8 w-8" priority />
                         <span>
-                            Jigzack<span className="text-amber-300">.</span>
+                            {BUSINESS.shortName}<span className="text-amber-300">.</span>
                         </span>
                     </Link>
 

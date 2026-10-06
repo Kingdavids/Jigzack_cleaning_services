@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/activity";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { RECEIPT_BUCKET } from "@/lib/expenses";
 import { removeUnreferencedAttachments } from "@/lib/message-attachments";
+import { BUSINESS } from "@/lib/config/business";
 
 export type BulkResult = { success: boolean; error?: string; deleted?: number; message?: string };
 
@@ -596,7 +597,7 @@ export async function inviteAdditionalProperty(primaryProfileId: string): Promis
 
     // A login the customer never signs in with directly; it only exists so
     // the property has its own row everything else (invoices, tasks) can key off.
-    const placeholderEmail = `property.${randomUUID()}@placeholder.jigzackcleaningservices.com`;
+    const placeholderEmail = `property.${randomUUID()}@placeholder.${BUSINESS.domain}`;
     const placeholderPassword = `${randomUUID()}${randomUUID()}`;
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({

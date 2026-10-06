@@ -4,6 +4,8 @@ import StatCard from "@/components/dashboard/StatCard";
 import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
+import { TIMEZONE } from "@/lib/config/business";
+import { TIMEZONE_OFFSET } from "@/lib/config/business";
 
 // The owner's view of the whole business: money, customers, pickups, what
 // needs the owner, and what the admins have been doing. Shown above the
@@ -17,7 +19,7 @@ export default async function OwnerOverview({
     collected: number;
     outstanding: number;
 }) {
-    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
     const month = today.slice(0, 7);
     const [year, mon] = month.split("-").map(Number);
     const start = `${month}-01`;
@@ -28,7 +30,7 @@ export default async function OwnerOverview({
         supabase
             .from("customers")
             .select("id", { count: "exact", head: true })
-            .gte("created_at", `${start}T00:00:00+01:00`)
+            .gte("created_at", `${start}T00:00:00${TIMEZONE_OFFSET}`)
             .neq("status", "deleted"),
         supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "active"),
         supabase.from("customers").select("id", { count: "exact", head: true }).eq("status", "inactive"),

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { invoiceTotal } from "@/lib/billing/balance";
 import { EXPENSE_CATEGORIES } from "@/lib/expenses";
+import { REGISTRATION_FEE_NGN, TIMEZONE, TIMEZONE_OFFSET } from "@/lib/config/business";
 
 // Money that came in and went out, month by month (Lagos time), sorted into
 // categories. Money in is counted when it was received; staff spending is
@@ -28,9 +29,8 @@ export type MonthFlow = {
     waiting: { amount: number; count: number };
 };
 
-const REGISTRATION_FEE_NGN = Number(process.env.REGISTRATION_FEE_NGN ?? "5000");
 
-const lagosMonth = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(0, 7);
+const lagosMonth = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TIMEZONE }).slice(0, 7);
 
 // "2026-10" and the 5 months before it, oldest first.
 export function monthsEndingAt(last: string, count = 6) {
@@ -90,8 +90,8 @@ export async function loadCashflow(supabase: SupabaseClient, months: string[]): 
     const first = months[0];
     const [ly, lm] = months[months.length - 1].split("-").map(Number);
     const after = new Date(Date.UTC(ly, lm, 1)).toISOString().slice(0, 7);
-    const from = `${first}-01T00:00:00+01:00`;
-    const until = `${after}-01T00:00:00+01:00`;
+    const from = `${first}-01T00:00:00${TIMEZONE_OFFSET}`;
+    const until = `${after}-01T00:00:00${TIMEZONE_OFFSET}`;
 
     const addIn = (iso: string | null, source: InflowSource, method: string | null, amount: number) => {
         const flow = iso ? flows.get(lagosMonth(iso)) : undefined;

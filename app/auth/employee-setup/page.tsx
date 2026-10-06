@@ -6,6 +6,7 @@ import { ChevronRight, MapPin, User } from "lucide-react";
 import { toast } from "sonner";
 import { createClient } from "@/utils/supabase/client";
 import { notifyAdminsOfNewApplication } from "@/lib/signup-notify";
+import { BUSINESS } from "@/lib/config/business";
 
 type FormState = {
     fullName: string;
@@ -152,7 +153,7 @@ export default function EmployeeSetupPage() {
             <div className="mx-auto max-w-3xl px-4 py-10 md:px-6 lg:px-8">
                 <div className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:p-8">
                     <span className="rounded-full border border-amber-300/20 bg-amber-400/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.25em] text-amber-300">
-                        Jigzack Employee Setup
+                        {BUSINESS.shortName} Employee Setup
                     </span>
 
                     <h1 className="mt-5 text-3xl font-black tracking-tight md:text-4xl">

@@ -8,6 +8,7 @@ import { isFullAdmin } from "@/lib/auth/roles";
 import { moveTaskToNextDay, todayLagos, type MoveTaskResult } from "@/lib/tasks";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
+import { TIMEZONE } from "@/lib/config/business";
 
 export type TaskServiceResult = { success: boolean; error?: string; needsConfirm?: boolean };
 
@@ -305,7 +306,7 @@ export async function deleteTaskPhoto(uploadId: string) {
 
 export type ExpenseActionState = { success: boolean; error?: string } | null;
 
-const lagosToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosToday = () => new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 export async function submitExpense(formData: FormData): Promise<ExpenseActionState> {
     const profile = await getUserProfile();
@@ -334,7 +335,7 @@ export async function submitExpense(formData: FormData): Promise<ExpenseActionSt
     }
 
     const today = lagosToday();
-    const earliest = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    const earliest = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > today || date < earliest) {
         return { success: false, error: "Choose a date within the last 60 days that is not in the future." };

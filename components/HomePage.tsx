@@ -5,10 +5,11 @@ import Link from "next/link";
 import useAuth from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import About from "@/components/About";
+import { BUSINESS } from "@/lib/config/business";
 
 const HERO_PHOTOS = [
     { src: "/images/field/bins-domestic.jpg", alt: "Green wheelie bins being rolled out for collection", ratio: "aspect-[3/4]", offset: "" },
-    { src: "/images/field/truck-side.jpg", alt: "Jigzack Cleaning Services refuse truck", ratio: "aspect-square", offset: "mt-8" },
+    { src: "/images/field/truck-side.jpg", alt: `${BUSINESS.name} refuse truck`, ratio: "aspect-square", offset: "mt-8" },
     { src: "/images/field/crew-rain-bin.jpg", alt: "Collection crew emptying a bin in the rain", ratio: "aspect-square", offset: "" },
     { src: "/images/field/truck-rear.jpg", alt: "Compactor truck at the loading point", ratio: "aspect-[3/4]", offset: "mt-8" },
 ];
@@ -40,11 +41,11 @@ export default function HomePage() {
                 <div className="relative mx-auto grid max-w-6xl items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
                     <div className="text-center lg:text-left">
                         <span className="inline-flex items-center gap-2 rounded-full border border-amber-300/20 bg-amber-400/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.25em] text-amber-300">
-                            LAWMA Approved
+                            {BUSINESS.regulator.short} Approved
                         </span>
 
                         <h1 className="mt-6 text-4xl font-black tracking-tight text-white md:text-5xl lg:text-6xl">
-                            Jigzack Cleaning Services<span className="text-amber-300">.</span>
+                            {BUSINESS.name}<span className="text-amber-300">.</span>
                         </h1>
 
                         <p className="mt-4 text-lg font-medium text-white/80 md:text-xl">
@@ -95,7 +96,7 @@ export default function HomePage() {
             <section className="border-y border-white/10 bg-[#06060a] px-6 py-10 md:px-10">
                 <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 text-center md:grid-cols-4">
                     {[
-                        { value: "LAWMA", label: "Approved operator" },
+                        { value: BUSINESS.regulator.short, label: "Approved operator" },
                         { value: "2,450+", label: "Domestic facilities serviced" },
                         { value: "680+", label: "Commercial facilities serviced" },
                         { value: "2 Cities", label: "Lagos & Port Harcourt" },

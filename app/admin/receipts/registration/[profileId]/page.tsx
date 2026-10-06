@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import RegistrationFeeReceiptDocument from "@/components/dashboard/RegistrationFeeReceiptDocument";
+import { REGISTRATION_FEE_NGN } from "@/lib/config/business";
 
-const REGISTRATION_FEE_NGN = Number(process.env.REGISTRATION_FEE_NGN ?? "5000");
 
 // What the customer sees for their registration fee receipt, opened from the
 // admin side. It is the same document, read only.

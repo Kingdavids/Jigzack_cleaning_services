@@ -5,6 +5,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { setUserApproval } from "@/app/admin/actions/accounts";
 import { ALL_FACILITIES, FACILITY_TEXT_LABELS } from "@/lib/customer/facilities";
+import { BUSINESS } from "@/lib/config/business";
 
 interface PendingUser {
     id: string;
@@ -205,7 +206,7 @@ export default function ApprovalsList({
                                 <span className="text-sm">
                                     <span className="font-semibold text-emerald-300">Existing customer, no registration fee</span>
                                     <span className="block text-white/60">
-                                        Tick this for someone who was already with Jigzack before the app. Their dashboard opens
+                                        Tick this for someone who was already with {BUSINESS.shortName} before the app. Their dashboard opens
                                         without the fee, and the approval email says so.
                                     </span>
                                 </span>

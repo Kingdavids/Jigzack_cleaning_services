@@ -1,4 +1,5 @@
 'use client';
+import { BUSINESS } from "@/lib/config/business";
 
 // Last resort when even the root layout fails. It has to bring its own html
 // and body, and can't rely on the site's styles.
@@ -22,7 +23,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
         <div style={{ maxWidth: 420 }}>
             <h1 style={{ fontSize: 28, marginBottom: 12 }}>Something went wrong</h1>
             <p style={{ color: "rgba(255,255,255,0.65)", marginBottom: 24 }}>
-                Please try again. If it keeps happening, call us on 0703 433 9721.
+                Please try again. If it keeps happening, call us on {BUSINESS.contact.phone.display}.
             </p>
             <button
                 type="button"

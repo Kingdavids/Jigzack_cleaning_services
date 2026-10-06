@@ -9,6 +9,7 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { kgText, summarise, type Movement } from "@/lib/recyclables";
+import { TIMEZONE } from "@/lib/config/business";
 
 // One category's share of a total, as a labelled bar.
 function Row({ label, amount, total, count, tone }: { label: string; amount: number; total: number; count?: number; tone: "in" | "out" }) {
@@ -37,7 +38,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
     const params = await searchParams;
 
-    const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).slice(0, 7);
+    const thisMonth = new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE }).slice(0, 7);
     const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(params.month ?? "") && (params.month as string) <= thisMonth ? (params.month as string) : thisMonth;
 
     const months = monthsEndingAt(month, 6);

@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import { SITE, absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
 import ContactForm from "@/components/ContactForm";
+import { BUSINESS } from "@/lib/config/business";
 
 export const metadata: Metadata = pageMetadata({
     title: "Contact Us",
     description:
-        "Get a pickup plan for your home or business in Lagos or Port Harcourt. Call 0703 433 9721, email info@jigzack.com or send us a message.",
+        `Get a pickup plan for your home or business in ${BUSINESS.cities.join(" or ")}. Call ${BUSINESS.contact.phone.display}, email ${BUSINESS.contact.email} or send us a message.`,
     path: "/contact",
 });
 
@@ -53,11 +54,11 @@ export default function ContactPage() {
                             <div className="mt-8 grid gap-4">
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Email</p>
-                                    <a href="mailto:info@jigzack.com" className="mt-1 block text-lg font-bold text-amber-300">info@jigzack.com</a>
+                                    <a href={`mailto:${BUSINESS.contact.email}`} className="mt-1 block text-lg font-bold text-amber-300">{BUSINESS.contact.email}</a>
                                 </div>
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
                                     <p className="text-sm text-white/70">Phone</p>
-                                    <a href="tel:+2347034339721" className="mt-1 block text-lg font-bold text-amber-300">0703 433 9721</a>
+                                    <a href={BUSINESS.contact.phone.href} className="mt-1 block text-lg font-bold text-amber-300">{BUSINESS.contact.phone.display}</a>
                                 </div>
 
                                 <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
@@ -80,10 +81,10 @@ export default function ContactPage() {
                             <ContactForm />
 
                             <a
-                                href="tel:+2347034339721"
+                                href={BUSINESS.contact.phone.href}
                                 className="mt-4 block rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-center font-bold text-white transition hover:bg-white/15"
                             >
-                                Or call 0703 433 9721
+                                Or call {BUSINESS.contact.phone.display}
                             </a>
                         </div>
                     </div>

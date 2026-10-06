@@ -5,6 +5,7 @@ import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity";
 import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
 import { requireAdmin, duplicateSince } from "./shared";
+import { TIMEZONE_OFFSET } from "@/lib/config/business";
 
 export type TaskActionState = { success: boolean; error?: string } | null;
 
@@ -15,8 +16,8 @@ const crewFrom = (values: unknown[], leadId: string | null) =>
 // A pickup dated before today has already happened, so it is saved as serviced.
 const servicedTimes = (date: string) => ({
     status: "completed",
-    started_at: `${date}T08:00:00+01:00`,
-    completed_at: `${date}T17:00:00+01:00`,
+    started_at: `${date}T08:00:00${TIMEZONE_OFFSET}`,
+    completed_at: `${date}T17:00:00${TIMEZONE_OFFSET}`,
 });
 
 async function setCrew(supabase: Awaited<ReturnType<typeof createClient>>, taskId: string, crewIds: string[]) {
@@ -217,8 +218,8 @@ export async function markTaskServiced(taskId: string, confirmEarly = false): Pr
         .from("tasks")
         .update({
             status: "completed",
-            started_at: (task.started_at as string | null) ?? (past && date ? `${date}T08:00:00+01:00` : now),
-            completed_at: past && date ? `${date}T17:00:00+01:00` : now,
+            started_at: (task.started_at as string | null) ?? (past && date ? `${date}T08:00:00${TIMEZONE_OFFSET}` : now),
+            completed_at: past && date ? `${date}T17:00:00${TIMEZONE_OFFSET}` : now,
         })
         .eq("id", taskId)
         .in("status", ["pending", "in progress"])

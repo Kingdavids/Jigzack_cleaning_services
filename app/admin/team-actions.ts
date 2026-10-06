@@ -8,6 +8,7 @@ import { isOwner } from "@/lib/auth/roles";
 import { logActivity } from "@/lib/activity";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
+import { BUSINESS } from "@/lib/config/business";
 
 export type AdminInviteState = { success: boolean; error?: string; link?: string; emailed?: boolean } | null;
 export type TeamResult = { success: boolean; error?: string };
@@ -77,9 +78,9 @@ export async function createAdminInvite(_prev: AdminInviteState, formData: FormD
 
     const emailed = await sendEmail({
         to: [email],
-        subject: "You're invited to help run Jigzack Cleaning Services",
+        subject: `You're invited to help run ${BUSINESS.name}`,
         html: `
-            <p>You've been invited to join Jigzack Cleaning Services as ${what}.</p>
+            <p>You've been invited to join ${BUSINESS.name} as ${what}.</p>
             <p><a href="${escapeHtml(link)}">Set up your account</a></p>
             <p>Sign up with this email address (${escapeHtml(email)}) and confirm it when we email you. The link works once and expires in ${INVITE_DAYS} days.</p>
         `,

@@ -2,22 +2,14 @@
 
 import { headers } from "next/headers";
 import { escapeHtml, sendEmail } from "@/lib/send-email";
+import { contactFormRecipients } from "@/lib/config/private";
+import { BUSINESS } from "@/lib/config/business";
 
 export type ContactState = { success: boolean; error?: string } | null;
 
-// Every enquiry goes to all three inboxes. Kept server-side so the personal
-// addresses never appear in the page. CONTACT_RECIPIENTS (comma separated)
-// overrides this without a code change.
-const DEFAULT_RECIPIENTS = ["info@jigzack.com", "razackolajide@gmail.com", "jigzackcleaningservices@gmail.com"];
-
-function recipients() {
-    const configured = (process.env.CONTACT_RECIPIENTS ?? "")
-        .split(",")
-        .map((e) => e.trim())
-        .filter(Boolean);
-
-    return configured.length > 0 ? configured : DEFAULT_RECIPIENTS;
-}
+// Every enquiry goes to all the inboxes in lib/config/private.ts, which stay
+// server-side so the personal addresses never appear in the page.
+const recipients = contactFormRecipients;
 
 // Best-effort limit per visitor (per server instance) so the form can't be
 // used to flood the inboxes.
@@ -63,7 +55,7 @@ export async function sendContactMessage(_prev: ContactState, formData: FormData
     });
 
     if (!sent) {
-        return { success: false, error: "We couldn't send your message just now. Please call us on 0703 433 9721." };
+        return { success: false, error: `We couldn't send your message just now. Please call us on ${BUSINESS.contact.phone.display}.` };
     }
 
     return { success: true };

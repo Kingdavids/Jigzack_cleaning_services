@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Signup from "@/components/auth/Signup";
 import Login from "@/components/auth/Login";
+import { BUSINESS } from "@/lib/config/business";
 
 export default function Auth() {
     const searchParams = useSearchParams();
@@ -29,7 +30,7 @@ export default function Auth() {
                     </p>
 
                     <h1 className="mt-2 text-3xl md:text-5xl font-black tracking-tight text-white">
-                        Jigzack<span className="text-amber-300">.</span>
+                        {BUSINESS.shortName}<span className="text-amber-300">.</span>
                     </h1>
 
                     <p className="mt-3 text-sm md:text-base text-white/65 max-w-md mx-auto leading-6">

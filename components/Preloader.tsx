@@ -1,3 +1,4 @@
+import { BUSINESS } from "@/lib/config/business";
 export default function Preloader({
     fullScreen = true,
     label = "Loading",
@@ -44,7 +45,7 @@ export default function Preloader({
 
             <div className="text-center">
                 <p className="text-lg font-black tracking-tight text-white">
-                    Jigzack<span className="text-amber-300">.</span>
+                    {BUSINESS.shortName}<span className="text-amber-300">.</span>
                 </p>
                 <p className="mt-1 text-xs font-semibold uppercase tracking-[0.25em] text-white/40">
                     {label}

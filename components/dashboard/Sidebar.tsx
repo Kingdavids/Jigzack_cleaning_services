@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { UserRole } from "@/lib/dashboard-types";
 import { useViewer } from "@/components/dashboard/ViewerContext";
+import { BUSINESS } from "@/lib/config/business";
 
 const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIcon }[]> = {
     admin: [
@@ -80,7 +81,7 @@ function SidebarNav({
                 </div>
                 <div>
                     <h2 className="text-lg font-bold tracking-tight">
-                        Jigzack<span className="text-amber-300">.</span>
+                        {BUSINESS.shortName}<span className="text-amber-300">.</span>
                     </h2>
                     <p className="text-xs uppercase tracking-[0.2em] text-white/40">{panelName} panel</p>
                 </div>

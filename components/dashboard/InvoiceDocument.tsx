@@ -4,6 +4,7 @@ import { normalizeLineItems, type LineItem } from "@/lib/billing/pricing";
 import { amountPaid, balanceOf, invoiceTotal, type Installment, type UnpaidInvoice } from "@/lib/billing/balance";
 import DocumentActions from "@/components/dashboard/DocumentActions";
 import { DocumentHeader, PaymentDetailsBlock, PropertyDetailsBlock, SupportBlock } from "@/components/dashboard/DocumentParts";
+import { BUSINESS } from "@/lib/config/business";
 
 type PropertyProps = Parameters<typeof PropertyDetailsBlock>[0]["customer"];
 
@@ -85,7 +86,7 @@ export default function InvoiceDocument({
                 >
                     <DocumentHeader
                         title="INVOICE"
-                        subtitle="Lagos Waste Management Authority"
+                        subtitle={BUSINESS.regulator.name}
                         right={
                             <>
                                 <p><span className="font-semibold">Invoice No:</span> {number}</p>
@@ -261,9 +262,9 @@ export default function InvoiceDocument({
                         )}
                         <DocumentActions
                             targetId="invoice-sheet"
-                            fileName={`Jigzack-invoice-${number}`}
-                            title={`Jigzack invoice ${number}`}
-                            shareText={`Jigzack Cleaning Services invoice ${number} for ${month}: ${naira(balance > 0 ? balance : total)} ${balance > 0 ? "due" : "(paid)"}.`}
+                            fileName={`${BUSINESS.shortName}-invoice-${number}`}
+                            title={`${BUSINESS.shortName} invoice ${number}`}
+                            shareText={`${BUSINESS.name} invoice ${number} for ${month}: ${naira(balance > 0 ? balance : total)} ${balance > 0 ? "due" : "(paid)"}.`}
                             printLabel="Print invoice"
                         />
                     </div>

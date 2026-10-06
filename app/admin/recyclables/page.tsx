@@ -10,8 +10,9 @@ import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
 import RecyclableForm from "@/components/dashboard/RecyclableForm";
 import RecyclableDeleteButton from "@/components/dashboard/RecyclableDeleteButton";
+import { TIMEZONE } from "@/lib/config/business";
 
-const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+const lagosDay = (date: Date) => date.toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 export default async function AdminRecyclablesPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");

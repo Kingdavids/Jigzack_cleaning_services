@@ -13,6 +13,7 @@ import {
     BriefcaseBusiness,
     UserRound,
 } from "lucide-react";
+import { BUSINESS } from "@/lib/config/business";
 
 export default function DeclinePage() {
     return (
@@ -32,7 +33,7 @@ function DeclineContent() {
                 badge: "Employee Review Result",
                 heading: "We couldn\u2019t approve this employee account",
                 subtitle:
-                    "Thanks for your interest in joining Jigzack. After reviewing your application, we couldn\u2019t approve it this time, so workspace access hasn\u2019t been enabled.",
+                    `Thanks for your interest in joining ${BUSINESS.shortName}. After reviewing your application, we couldn\u2019t approve it this time, so workspace access hasn\u2019t been enabled.`,
                 reviewText:
                     "The reason could be the details submitted, your verification status, or our requirements for onboarding employees.",
                 supportText:
@@ -47,7 +48,7 @@ function DeclineContent() {
                 badge: "Customer Review Result",
                 heading: "We couldn\u2019t approve this customer account",
                 subtitle:
-                    "Thanks for your interest in Jigzack. After reviewing your application, we couldn\u2019t approve it this time, so dashboard and service access haven\u2019t been enabled.",
+                    `Thanks for your interest in ${BUSINESS.shortName}. After reviewing your application, we couldn\u2019t approve it this time, so dashboard and service access haven\u2019t been enabled.`,
                 reviewText:
                     "The reason could be the details submitted, your verification status, or the service setup for the account.",
                 supportText:
@@ -238,7 +239,7 @@ function DeclineContent() {
 
                             <div className="mt-4 flex flex-wrap gap-3">
                                 <a
-                                    href="mailto:info@jigzack.com"
+                                    href={`mailto:${BUSINESS.contact.email}`}
                                     className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
                                 >
                                     <span className="inline-flex items-center gap-2">

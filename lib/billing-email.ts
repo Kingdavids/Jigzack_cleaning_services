@@ -1,6 +1,7 @@
 import { escapeHtml } from "@/lib/send-email";
+import { BUSINESS } from "@/lib/config/business";
 
-const PHONE = "0703 433 9721";
+const PHONE = BUSINESS.contact.phone.display;
 
 function wrap(body: string, link: string, button: string) {
     return `
@@ -9,7 +10,7 @@ function wrap(body: string, link: string, button: string) {
             <a href="${escapeHtml(link)}" style="background:#fbbf24;color:#000;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">${escapeHtml(button)}</a>
         </p>
         <p>Questions about the amount? Reply to this email or call ${PHONE}.</p>
-        <p>Jigzack Cleaning Services</p>
+        <p>${BUSINESS.name}</p>
     `;
 }
 
@@ -17,7 +18,7 @@ type Details = { name: string | null; month: string; total: string; link: string
 
 export function newInvoiceEmail({ name, month, total, link }: Details) {
     return {
-        subject: `Your Jigzack invoice for ${month}`,
+        subject: `Your ${BUSINESS.shortName} invoice for ${month}`,
         html: wrap(
             `<p>Hi ${escapeHtml(name?.trim() || "there")},</p>
              <p>Your invoice for <strong>${escapeHtml(month)}</strong> is ready. The amount is <strong>${escapeHtml(total)}</strong>.</p>

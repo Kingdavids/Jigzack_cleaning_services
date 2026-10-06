@@ -10,6 +10,7 @@ import SiteChrome from "@/components/SiteChrome";
 import JsonLd from "@/components/JsonLd";
 import RegisterServiceWorker from "@/components/RegisterServiceWorker";
 import { SITE, organizationJsonLd, websiteJsonLd } from "@/lib/seo";
+import { BUSINESS } from "@/lib/config/business";
 
 const jakarta = Plus_Jakarta_Sans({
     subsets: ["latin"],
@@ -29,28 +30,28 @@ export const metadata: Metadata = {
     metadataBase: new URL(SITE.url),
     applicationName: SITE.name,
     title: {
-        default: "Jigzack Cleaning Services | Waste collection in Lagos and Port Harcourt",
-        template: "%s | Jigzack Cleaning Services",
+        default: `${BUSINESS.name} | Waste collection in ${BUSINESS.cities.join(" and ")}`,
+        template: `%s | ${BUSINESS.name}`,
     },
     description: SITE.description,
     keywords: [
         "waste collection Lagos",
         "waste collection Port Harcourt",
-        "LAWMA approved waste disposal",
+        `${BUSINESS.regulator.short} approved waste disposal`,
         "refuse collection",
         "domestic waste collection",
         "commercial waste disposal",
         "waste management Nigeria",
-        "Jigzack Cleaning Services",
+        BUSINESS.name,
     ],
     authors: [{ name: SITE.name, url: SITE.url }],
     creator: SITE.name,
     publisher: SITE.name,
     formatDetection: { telephone: true, email: true, address: false },
-    // When added to an iPhone home screen it opens full screen, named Jigzack.
-    appleWebApp: { capable: true, title: "Jigzack", statusBarStyle: "black" },
+    // When added to an iPhone home screen it opens full screen, named like the business.
+    appleWebApp: { capable: true, title: BUSINESS.shortName, statusBarStyle: "black" },
     openGraph: {
-        title: "Jigzack Cleaning Services",
+        title: BUSINESS.name,
         description: SITE.description,
         siteName: SITE.name,
         locale: SITE.locale,
@@ -58,7 +59,7 @@ export const metadata: Metadata = {
     },
     twitter: {
         card: "summary_large_image",
-        title: "Jigzack Cleaning Services",
+        title: BUSINESS.name,
         description: SITE.description,
     },
     robots: {

@@ -1,20 +1,20 @@
 import type { Metadata } from "next";
+import { BUSINESS } from "@/lib/config/business";
 
 // One place for the facts search engines and social previews repeat, so the
 // page titles, structured data and footer never drift apart.
 export const SITE = {
-    name: "Jigzack Cleaning Services",
-    shortName: "Jigzack",
-    url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.jigzackcleaningservices.com").replace(/\/$/, ""),
-    phone: "+2347034339721",
-    email: "info@jigzack.com",
-    locale: "en_NG",
-    description:
-        "LAWMA-approved waste collection for homes and businesses in Lagos and Port Harcourt. Scheduled pickups, monthly invoices and receipts online.",
-    cities: ["Lagos", "Port Harcourt"],
-    logo: "/images/logo.png",
-    image: "/images/field/truck-side.jpg",
-} as const;
+    name: BUSINESS.name,
+    shortName: BUSINESS.shortName,
+    url: BUSINESS.url,
+    phone: BUSINESS.contact.phone.international,
+    email: BUSINESS.contact.email,
+    locale: BUSINESS.locale,
+    description: BUSINESS.description,
+    cities: BUSINESS.cities,
+    logo: BUSINESS.brand.logo,
+    image: BUSINESS.brand.shareImage,
+};
 
 export const SERVICES = [
     {

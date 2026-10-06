@@ -9,6 +9,7 @@ import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { generateInvoiceFor, generateScheduleFor, loadBillable } from "@/lib/billing/generate";
 import { requireAdmin } from "./shared";
+import { BUSINESS } from "@/lib/config/business";
 
 export type InviteActionState = {
     success: boolean;
@@ -52,9 +53,9 @@ export async function createEmployeeInvite(
     if (email) {
         emailed = await sendEmail({
             to: [email],
-            subject: "You're invited to join Jigzack Cleaning Services",
+            subject: `You're invited to join ${BUSINESS.name}`,
             html: `
-                <p>You've been invited to create an employee account with Jigzack Cleaning Services.</p>
+                <p>You've been invited to create an employee account with ${BUSINESS.name}.</p>
                 <p><a href="${escapeHtml(link)}">Set up your account</a></p>
                 <p>This link works once and expires in 7 days.</p>
             `,

@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { describeFacilities, type FacilityDetails } from "@/lib/customer/facilities";
 import { BANK_ACCOUNT } from "@/lib/bank-details";
+import { BUSINESS } from "@/lib/config/business";
 
 
 export function DocumentHeader({
@@ -16,15 +17,15 @@ export function DocumentHeader({
         <div className="flex items-start justify-between gap-4 border-b border-black/15 pb-3">
             <div className="flex items-start gap-3">
                 <Image
-                    src="/images/lawma-logo.png"
-                    alt="Lagos Waste Management Authority logo"
+                    src={BUSINESS.regulator.logo}
+                    alt={`${BUSINESS.regulator.name} logo`}
                     width={56}
                     height={56}
                     className="shrink-0"
                 />
                 <div>
                     <h1 className="text-2xl font-black leading-tight tracking-tight">{title}</h1>
-                    <p className="mt-1 text-sm font-semibold">JIGZACK CLEANING SERVICES</p>
+                    <p className="mt-1 text-sm font-semibold">{BUSINESS.invoiceName}</p>
                     {subtitle && <p className="text-xs text-black/65">{subtitle}</p>}
                 </div>
             </div>
@@ -145,7 +146,9 @@ export function SupportBlock() {
     return (
         <div className="rounded-lg border border-black/15 bg-white/50 p-3 text-xs">
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-black/50">Support</p>
-            <p className="mt-1 leading-5">Jigzack Cleaning Services: 0703 433 9721 / 0708 680 8079</p>
+            <p className="mt-1 leading-5">
+                {BUSINESS.name}: {BUSINESS.contact.supportPhones.join(" / ")}
+            </p>
         </div>
     );
 }

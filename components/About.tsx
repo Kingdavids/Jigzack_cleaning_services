@@ -1,7 +1,8 @@
+import { BUSINESS } from "@/lib/config/business";
 const About = () => {
     return (
         <p>
-            We&apos;re an approved operator under the Lagos Waste Management Authority (LAWMA). Pickups run on a fixed
+            We&apos;re an approved operator under the {BUSINESS.regulator.name} ({BUSINESS.regulator.short}). Pickups run on a fixed
             schedule, and the monthly rate depends on the type of property. Once you sign up, your pickup dates,
             invoices and receipts are all in your dashboard.
         </p>

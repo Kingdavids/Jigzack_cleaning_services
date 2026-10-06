@@ -1,19 +1,13 @@
 import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
+import { BUSINESS } from "@/lib/config/business";
+import { TIMEZONE } from "@/lib/config/business";
 
 export type LineItem = { label: string; quantity: number; unit_price: number; note?: string };
 
 // Monthly service charge per unit. Only these property types are priced;
 // anything else (commercial facilities, etc.) is left for the admin to add
 // by hand when editing the invoice.
-export const UNIT_PRICES: Record<string, number> = {
-    flatsCount: 5000,
-    miniFlatsCount: 5000,
-    studioCount: 5000,
-    shopsCount: 2000,
-    duplexCount: 8000,
-    bungalowCount: 7000,
-    terraceCount: 10000,
-};
+export const UNIT_PRICES: Record<string, number> = BUSINESS.billing.unitPrices;
 
 // Vacant units (the landlord tells the company a tenant has moved out, the
 // admin records it) aren't billed.
@@ -130,12 +124,12 @@ export function monthRangeLabel(months: string[]): string {
 // The day of the month (Lagos time) each month's invoice is created. Until
 // then the current invoice is still last month's: on 5 October it is
 // September's, and from 25 October it is October's.
-export const INVOICE_DAY = 25;
+export const INVOICE_DAY = BUSINESS.billing.invoiceDay;
 
 // The billing month as "YYYY-MM" (see INVOICE_DAY): on 5 October it is
 // "2026-09", from 25 October "2026-10".
 export function billingMonthKey(now: Date = new Date()) {
-    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);
+    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: TIMEZONE }).split("-").map(Number);
     const first = new Date(Date.UTC(y, d < INVOICE_DAY ? m - 2 : m - 1, 1));
     return first.toISOString().slice(0, 7);
 }
@@ -182,7 +176,7 @@ export function tooEarlyToBill(label: string | null | undefined, now: Date = new
 
 // The month whose invoice is the current one right now (see INVOICE_DAY).
 export function billingMonthLabel(now: Date = new Date()) {
-    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" }).split("-").map(Number);
+    const [y, m, d] = now.toLocaleDateString("en-CA", { timeZone: TIMEZONE }).split("-").map(Number);
     const monthIndex = d < INVOICE_DAY ? m - 2 : m - 1;
 
     return new Date(Date.UTC(y, monthIndex, 15)).toLocaleString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });

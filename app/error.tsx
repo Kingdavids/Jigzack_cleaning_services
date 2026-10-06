@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import Link from "next/link";
+import { BUSINESS } from "@/lib/config/business";
 
 // Shown when a page fails while loading, instead of a blank screen.
 export default function ErrorPage({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -16,7 +17,7 @@ export default function ErrorPage({ error, reset }: { error: Error & { digest?: 
                 <h1 className="mt-3 text-3xl font-black tracking-tight md:text-4xl">This page didn&apos;t load</h1>
                 <p className="mt-3 text-white/65">
                     It&apos;s probably a temporary problem on our side. Try again, and if it keeps happening please
-                    call us on 0703 433 9721.
+                    call us on {BUSINESS.contact.phone.display}.
                 </p>
                 {error.digest && <p className="mt-2 text-xs text-white/35">Reference: {error.digest}</p>}
                 <div className="mt-8 flex flex-wrap justify-center gap-3">

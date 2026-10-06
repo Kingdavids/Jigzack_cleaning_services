@@ -3,8 +3,9 @@ import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { BANK_ACCOUNT } from "@/lib/bank-details";
 import RegistrationFeeForm from "@/components/auth/RegistrationFeeForm";
+import { REGISTRATION_FEE_NGN } from "@/lib/config/business";
+import { BUSINESS } from "@/lib/config/business";
 
-const REGISTRATION_FEE_NGN = Number(process.env.REGISTRATION_FEE_NGN ?? "5000");
 
 export default async function RegistrationFeePage() {
     const profile = await getUserProfile();
@@ -59,7 +60,7 @@ export default async function RegistrationFeePage() {
                 <p className="mt-3 text-sm leading-6 text-white/60">
                     Hi {customer.full_name ?? profile.full_name ?? "there"}, new customers pay a one-off registration fee of{" "}
                     <span className="font-bold text-white">₦{REGISTRATION_FEE_NGN.toLocaleString()}</span> to unlock their dashboard.
-                    Already with Jigzack before this app? Choose that below, no fee needed.
+                    Already with {BUSINESS.shortName} before this app? Choose that below, no fee needed.
                 </p>
 
                 <div className="mt-6 rounded-xl border border-white/10 bg-black/25 p-4 text-left">
@@ -90,7 +91,7 @@ export default async function RegistrationFeePage() {
                 )}
 
                 <p className="mt-6 text-xs text-white/40">
-                    Questions? Call us on 0703 433 9721 or email info@jigzack.com.
+                    Questions? Call us on {BUSINESS.contact.phone.display} or email {BUSINESS.contact.email}.
                 </p>
             </div>
         </div>

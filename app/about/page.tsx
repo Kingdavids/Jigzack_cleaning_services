@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import JsonLd from "@/components/JsonLd";
 import { SITE, absoluteUrl, breadcrumbJsonLd, pageMetadata } from "@/lib/seo";
 import Image from "next/image";
+import { BUSINESS } from "@/lib/config/business";
 
 const LEADERS = [
     { name: "Bikun Ishaku Bello", role: "Field Coordinator", img: "/images/team/bikun-ishaku-bello-field-coordinator.jpg" },
@@ -17,7 +18,7 @@ const CREW = [
 export const metadata: Metadata = pageMetadata({
     title: "About Us",
     description:
-        "Jigzack Cleaning Services is a LAWMA-approved solid waste disposal company serving homes and commercial facilities in Lagos and Port Harcourt, with waste education programs across Nigeria.",
+        `${BUSINESS.name} is a ${BUSINESS.regulator.short}-approved solid waste disposal company serving homes and commercial facilities in ${BUSINESS.cities.join(" and ")}, with waste education programs across Nigeria.`,
     path: "/about",
 });
 
@@ -58,7 +59,7 @@ export default function AboutPage() {
                             </h1>
 
                             <p className="mt-5 text-white/80 leading-relaxed text-base md:text-lg">
-                                Jigzack Cleaning Services is a solid waste disposal company approved by the Lagos Waste Management Authority (LAWMA). That approval sets the standard we follow when we collect, transport and dispose of waste.
+                                {BUSINESS.name} is a solid waste disposal company approved by the {BUSINESS.regulator.name} ({BUSINESS.regulator.short}). That approval sets the standard we follow when we collect, transport and dispose of waste.
                             </p>
 
                             <p className="mt-4 text-white/80 leading-relaxed text-base md:text-lg">

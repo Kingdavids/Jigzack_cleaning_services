@@ -3,6 +3,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import ClearActivityCard from "@/components/dashboard/ClearActivityCard";
 import { isOwner } from "@/lib/auth/roles";
+import { TIMEZONE } from "@/lib/config/business";
 
 type LogRow = {
     id: string;
@@ -15,7 +16,7 @@ type LogRow = {
 
 const when = (value: string) =>
     new Date(value).toLocaleString("en-GB", {
-        timeZone: "Africa/Lagos",
+        timeZone: TIMEZONE,
         day: "numeric",
         month: "short",
         year: "numeric",

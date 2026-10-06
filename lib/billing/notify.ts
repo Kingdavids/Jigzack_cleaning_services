@@ -5,6 +5,7 @@ import { newInvoiceEmail, reminderEmail } from "@/lib/billing-email";
 import { sendEmail } from "@/lib/send-email";
 import { SITE } from "@/lib/seo";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
+import { TIMEZONE } from "@/lib/config/business";
 
 // Emails customers about their invoices: one when an automatic invoice is new,
 // then reminders 7 and 21 days later if it is still unpaid. What has already
@@ -35,7 +36,7 @@ type InvoiceRow = {
 };
 
 const lagosDay = (value: string | Date) =>
-    new Date(value).toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    new Date(value).toLocaleDateString("en-CA", { timeZone: TIMEZONE });
 
 const dayNumber = (key: string) => Math.floor(Date.UTC(+key.slice(0, 4), +key.slice(5, 7) - 1, +key.slice(8, 10)) / 86_400_000);
 
