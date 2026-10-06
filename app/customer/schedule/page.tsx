@@ -27,8 +27,6 @@ type UploadRow = ServicePhoto & { task_id: string | null };
 
 const HISTORY_LIMIT = 30;
 
-const badgeStatus = (status: string | null) => (status ?? "pending").toLowerCase().replace(" ", "_");
-
 function duration(startedAt: string | null, completedAt: string | null) {
     if (!startedAt || !completedAt) return null;
 

@@ -29,6 +29,9 @@ export function buildLineItems(facilityDetails: FacilityDetails, vacancies: Faci
 
         const vacant = Math.min(facilityCount(vacancies, facility.key), registered);
 
+        // Every unit of this type is vacant, so there is nothing to bill for it.
+        if (registered - vacant <= 0) continue;
+
         items.push({
             label: facility.unitLabel,
             quantity: registered - vacant,

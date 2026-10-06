@@ -21,13 +21,16 @@ npm run dev
 
 Open http://localhost:3000.
 
-Checks before pushing:
+Checks before pushing (GitHub runs the first three on every push):
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npm run lint
+npm test
 npm run build
 ```
+
+The tests in `tests/` cover the logic that handles money, dates and stock: the billing month, invoices and arrears, balances, discounts, pickup schedules, cash flow and recyclables stock. They run without a database; `tests/helpers/fakeSupabase.ts` stands in for Supabase. When you change that logic, add or update a test next to it.
 
 ## Database
 

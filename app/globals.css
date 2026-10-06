@@ -136,12 +136,6 @@ html {
   }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-
 @keyframes serviceBg {
   0% {
     transform: scale(1.06) translate3d(0px, 0px, 0);
@@ -244,71 +238,6 @@ html {
   will-change: transform;
 }
 
-
-/* About bg animation (team-6) */
-@keyframes teamBg {
-  0% { transform: scale(1.06) translate3d(0, 0, 0); filter: saturate(1.05); }
-  50% { transform: scale(1.12) translate3d(-18px, -10px, 0); filter: saturate(1.15); }
-  100% { transform: scale(1.06) translate3d(0, 0, 0); filter: saturate(1.05); }
-}
-.animate-teamBg {
-  animation: teamBg 20s ease-in-out infinite;
-  will-change: transform;
-}
-
-/* Contact bg animation */
-@keyframes contactBg {
-  0% { transform: scale(1.06) translate3d(0, 0, 0); filter: contrast(1.05); }
-  50% { transform: scale(1.12) translate3d(12px, -10px, 0); filter: contrast(1.12); }
-  100% { transform: scale(1.06) translate3d(0, 0, 0); filter: contrast(1.05); }
-}
-.animate-contactBg {
-  animation: contactBg 18s ease-in-out infinite;
-  will-change: transform;
-}
-
-/* Shared rise-in */
-@keyframes riseIn {
-  from { opacity: 0; transform: translateY(14px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-riseIn {
-  animation: riseIn 650ms cubic-bezier(.2,.65,.3,1) both;
-}
-
-/* TEAM slideshow */
-@keyframes slideshowFade {
-  0%   { opacity: 0; transform: scale(1.06); }
-  8%   { opacity: 1; transform: scale(1.02); }
-  30%  { opacity: 1; transform: scale(1.00); }
-  40%  { opacity: 0; transform: scale(1.04); }
-  100% { opacity: 0; transform: scale(1.06); }
-}
-.slideshow-slide {
-  opacity: 0;
-  animation: slideshowFade 20s ease-in-out infinite;
-  will-change: transform, opacity;
-}
-.slideshow-delay-0 { animation-delay: 0s; }
-.slideshow-delay-1 { animation-delay: 4s; }
-.slideshow-delay-2 { animation-delay: 8s; }
-.slideshow-delay-3 { animation-delay: 12s; }
-.slideshow-delay-4 { animation-delay: 16s; }
-
-/* slideshow dots */
-@keyframes dotPulse {
-  0%, 100% { opacity: .35; transform: scale(1); }
-  10% { opacity: 1; transform: scale(1.25); }
-  30% { opacity: 1; transform: scale(1.1); }
-  40% { opacity: .35; transform: scale(1); }
-}
-.slideshow-dot { opacity: .35; }
-.slideshow-dot-0 { animation: dotPulse 20s ease-in-out infinite; animation-delay: 0s; }
-.slideshow-dot-1 { animation: dotPulse 20s ease-in-out infinite; animation-delay: 4s; }
-.slideshow-dot-2 { animation: dotPulse 20s ease-in-out infinite; animation-delay: 8s; }
-.slideshow-dot-3 { animation: dotPulse 20s ease-in-out infinite; animation-delay: 12s; }
-.slideshow-dot-4 { animation: dotPulse 20s ease-in-out infinite; animation-delay: 16s; }
-
 /* Testimonials slideshow */
 @keyframes testimonialFade {
   0%   { opacity: 0; transform: translateY(10px); }
@@ -331,17 +260,6 @@ html {
 .tdot-0 { animation: dotPulse 18s ease-in-out infinite; animation-delay: 0s; }
 .tdot-1 { animation: dotPulse 18s ease-in-out infinite; animation-delay: 6s; }
 .tdot-2 { animation: dotPulse 18s ease-in-out infinite; animation-delay: 12s; }
-
-/* Contact side panel animation */
-@keyframes contactPanel {
-  0%   { transform: scale(1.06) translate3d(0, 0, 0); filter: saturate(1.05) contrast(1.05); }
-  50%  { transform: scale(1.12) translate3d(-14px, -10px, 0); filter: saturate(1.15) contrast(1.1); }
-  100% { transform: scale(1.06) translate3d(0, 0, 0); filter: saturate(1.05) contrast(1.05); }
-}
-.animate-contactPanel {
-  animation: contactPanel 18s ease-in-out infinite;
-  will-change: transform;
-}
 
 /* Preloader: garbage truck driving in place -- spinning wheels, a gentle
    bounce, trailing exhaust puffs, and a moving dashed "road" line. */

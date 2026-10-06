@@ -47,3 +47,6 @@ next-env.d.ts
 
 # one-off scripts that name real accounts
 /cleanup-local/
+
+# IDE settings
+.idea/

@@ -11,7 +11,7 @@ import { siteOrigin } from "@/lib/site-origin";
 import { approvalEmail } from "@/lib/approval-email";
 import { ALL_FACILITIES, DOMESTIC_FACILITIES, facilityCount } from "@/lib/customer/facilities";
 import { billingMonthLabel, itemsTotal, normalizeLineItems, tooEarlyToBill, type LineItem } from "@/lib/billing/pricing";
-import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
+import { EXPENSE_CATEGORIES, EXPENSE_STEPS_FROM, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
 import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
 import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
@@ -26,7 +26,6 @@ import {
     loadEstateUnits,
     planSchedule,
     recalculateOpenInvoice,
-    type BillableCustomer,
 } from "@/lib/billing/generate";
 import { runInvoiceGeneration, runScheduleGeneration } from "@/lib/billing/run";
 import { removeUnreferencedAttachments, saveMessageAttachment } from "@/lib/message-attachments";
@@ -2489,15 +2488,6 @@ export async function deleteRecyclable(id: string): Promise<{ success: boolean; 
 
     return { success: true };
 }
-
-// Which statuses an expense may move to each status from: waiting → approved
-// or rejected; approved → reimbursed or rejected; a rejected one can be
-// reconsidered. Reimbursed is final: the money has been paid back.
-const EXPENSE_STEPS_FROM: Record<"approved" | "reimbursed" | "rejected", string[]> = {
-    approved: ["submitted", "rejected"],
-    rejected: ["submitted", "approved"],
-    reimbursed: ["approved"],
-};
 
 export async function reviewExpense(
     expenseId: string,
