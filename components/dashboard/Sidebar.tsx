@@ -20,6 +20,7 @@ import {
     Eye,
     X,
     type LucideIcon,
+    Scale,
 } from "lucide-react";
 import { UserRole } from "@/lib/dashboard-types";
 import { useViewer } from "@/components/dashboard/ViewerContext";
@@ -36,6 +37,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: LucideIco
         { label: "Messages", href: "/admin/messages", icon: MessageSquare },
         { label: "Payments", href: "/admin/payments", icon: CreditCard },
         { label: "Expenses", href: "/admin/expenses", icon: Receipt },
+        { label: "Money in & out", href: "/admin/finance", icon: Scale },
         { label: "Admins", href: "/admin/admins", icon: ShieldCheck },
         { label: "Activity", href: "/admin/activity", icon: History },
     ],

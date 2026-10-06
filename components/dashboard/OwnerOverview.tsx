@@ -50,9 +50,13 @@ export default async function OwnerOverview({
         supabase.from("profiles").select("id, read_only, is_owner").eq("role", "admin").eq("status", "approved"),
     ]);
 
-    const spent = (expenses.data ?? [])
-        .filter((e) => e.status !== "rejected")
+    // Only spending an admin has approved (or already paid back) is deducted.
+    // Claims still waiting for review are shown, but not taken off.
+    const expenseRows = expenses.data ?? [];
+    const spent = expenseRows
+        .filter((e) => e.status === "approved" || e.status === "reimbursed")
         .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
+    const waiting = expenseRows.filter((e) => e.status === "submitted").reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
 
     const totalPickups = planned.count ?? 0;
     const donePickups = done.count ?? 0;
@@ -75,12 +79,12 @@ export default async function OwnerOverview({
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                 <StatCard icon={Coins} label="Collected this month" value={naira(collected)} helper="Payments received since the 1st" href="/admin/payments" />
                 <StatCard icon={Receipt} label="Still owed" value={naira(outstanding)} helper="All unpaid invoices" href="/admin/payments" />
-                <StatCard icon={PiggyBank} label="Staff expenses this month" value={naira(spent)} helper="Not counting rejected entries" href="/admin/expenses" />
+                <StatCard icon={PiggyBank} label="Staff expenses this month" value={naira(spent)} helper={waiting > 0 ? `Approved only · ${naira(waiting)} waiting for review` : "Approved and paid-back entries"} href="/admin/expenses" />
                 <StatCard
                     icon={TrendingUp}
                     label="Net after expenses"
                     value={naira(collected - spent)}
-                    helper="Collected minus staff expenses"
+                    helper="Collected minus approved staff expenses"
                     tone={collected - spent < 0 ? "alert" : "default"}
                 />
             </div>

@@ -38,6 +38,16 @@ export default function ExpenseReviewControls({
 
     const button = "rounded-lg px-3 py-1.5 text-xs font-bold transition disabled:opacity-50";
 
+    // Only the next steps: approve or reject what's waiting, pay back or reject
+    // what's approved, reconsider what's rejected. Paid back is final.
+    const canApprove = current === "submitted" || current === "rejected";
+    const canReimburse = current === "approved";
+    const canReject = current === "submitted" || current === "approved";
+
+    if (current === "reimbursed") {
+        return <p className="mt-3 border-t border-white/10 pt-3 text-xs text-white/45">Paid back. Nothing more to do.</p>;
+    }
+
     return (
         <div className="mt-3 border-t border-white/10 pt-3">
             <input
@@ -49,16 +59,16 @@ export default function ExpenseReviewControls({
                 className="mb-2 h-9 w-full rounded-lg border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50"
             />
             <div className="flex flex-wrap gap-2">
-                {current !== "approved" && (
+                {canApprove && (
                     <button
                         disabled={busy !== null}
                         onClick={() => decide("approved")}
                         className={`${button} bg-sky-500/90 text-black hover:bg-sky-400`}
                     >
-                        {busy === "approved" ? "Saving..." : "Approve"}
+                        {busy === "approved" ? "Saving..." : current === "rejected" ? "Approve after all" : "Approve"}
                     </button>
                 )}
-                {current !== "reimbursed" && (
+                {canReimburse && (
                     <button
                         disabled={busy !== null}
                         onClick={() => decide("reimbursed")}
@@ -67,7 +77,7 @@ export default function ExpenseReviewControls({
                         {busy === "reimbursed" ? "Saving..." : "Mark reimbursed"}
                     </button>
                 )}
-                {current !== "rejected" && (
+                {canReject && (
                     <button
                         disabled={busy !== null}
                         onClick={() => decide("rejected")}

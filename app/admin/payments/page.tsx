@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { generateAllInvoices } from "../actions";
 import { formatDate, naira } from "@/lib/customer/billing";
@@ -29,7 +30,24 @@ const PAID_LIMIT = 300;
 
 type PaymentRow = AdminInvoiceRow & { customer: ProfileRef };
 
-export default async function AdminPaymentsPage() {
+// How the customer groups on this page are ordered (?sort=).
+const SORTS = [
+    { key: "action", label: "Needs action first" },
+    { key: "owed", label: "Most owed" },
+    { key: "newest", label: "Newest" },
+    { key: "oldest", label: "Oldest" },
+    { key: "name", label: "Name A–Z" },
+] as const;
+
+type SortKey = (typeof SORTS)[number]["key"];
+
+export default async function AdminPaymentsPage({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
+    const { sort: sortParam } = await searchParams;
+    const sort: SortKey = SORTS.some((s) => s.key === sortParam) ? (sortParam as SortKey) : "action";
+
+    // The newest invoice first inside each customer's group.
+    const newestFirst = (a: { created_at: string }, b: { created_at: string }) => b.created_at.localeCompare(a.created_at);
+
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
 
     const { data: directoryData } = await supabase
@@ -147,8 +165,19 @@ export default async function AdminPaymentsPage() {
     }
 
     // Whoever owes most first; unpaid invoices before settled ones inside each group.
-    const personGroups = [...people.values()].sort((a, b) => b.owed - a.owed || a.name.localeCompare(b.name));
-    for (const group of personGroups) group.items.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid"));
+    const personNewest = (g: PersonGroup) => g.items.reduce((latest, i) => (i.created_at > latest ? i.created_at : latest), "");
+    const personOldest = (g: PersonGroup) => g.items.reduce((first, i) => (!first || i.created_at < first ? i.created_at : first), "");
+    const personGroups = [...people.values()].sort((a, b) =>
+        sort === "newest"
+            ? personNewest(b).localeCompare(personNewest(a))
+            : sort === "oldest"
+                ? personOldest(a).localeCompare(personOldest(b))
+                : sort === "name"
+                    ? a.name.localeCompare(b.name)
+                    : b.owed - a.owed || a.name.localeCompare(b.name)
+    );
+    // Unpaid invoices first inside each group, newest first within each.
+    for (const group of personGroups) group.items.sort((a, b) => Number(a.status === "paid") - Number(b.status === "paid") || newestFirst(a, b));
 
     const unregisteredTotals = personGroups.reduce(
         (sum, g) => ({ billed: sum.billed + g.billed, paid: sum.paid + g.paid, owed: sum.owed + g.owed }),
@@ -194,7 +223,18 @@ export default async function AdminPaymentsPage() {
     const installmentsByInvoice = groupInstallments(await loadInstallmentsChunked(supabase, payments.map((p) => p.id)));
 
     // Group by customer. Unpaid: customers who reported a payment first, then the largest balance.
-    type InvoiceGroup = { key: string; name: string; items: PaymentRow[]; owed: number; total: number; reported: number };
+    type InvoiceGroup = {
+        key: string;
+        name: string;
+        items: PaymentRow[];
+        owed: number;
+        total: number;
+        reported: number;
+        // When their newest and oldest invoices were made, and their latest payment.
+        newest: string;
+        oldest: string;
+        lastPaid: string;
+    };
     const groupBy = (list: PaymentRow[]) => {
         const map = new Map<string, InvoiceGroup>();
 
@@ -202,25 +242,42 @@ export default async function AdminPaymentsPage() {
             const billTo = billToOf(invoice);
             const name = invoice.customer?.full_name ?? (billTo ? `${billTo.full_name} (not registered)` : "Unknown customer");
             const key = invoice.customer_id ?? `bill-to:${name}`;
-            const group = map.get(key) ?? { key, name, items: [], owed: 0, total: 0, reported: 0 };
+            const group = map.get(key) ?? { key, name, items: [], owed: 0, total: 0, reported: 0, newest: "", oldest: "", lastPaid: "" };
 
             group.items.push(invoice);
+            if (invoice.created_at > group.newest) group.newest = invoice.created_at;
+            if (!group.oldest || invoice.created_at < group.oldest) group.oldest = invoice.created_at;
+            if ((invoice.paid_at ?? "") > group.lastPaid) group.lastPaid = invoice.paid_at ?? "";
             group.owed += balanceOf(invoice);
             group.total += invoiceTotal(invoice);
             if (invoice.transfer_reported_at) group.reported += 1;
             map.set(key, group);
         }
 
-        return [...map.values()];
+        const groups = [...map.values()];
+        for (const group of groups) group.items.sort(newestFirst);
+        return groups;
     };
 
+    // The chosen order, falling back to each list's own "needs action" order.
+    const byChoice = (a: InvoiceGroup, b: InvoiceGroup) =>
+        sort === "owed"
+            ? b.owed - a.owed
+            : sort === "newest"
+                ? b.newest.localeCompare(a.newest)
+                : sort === "oldest"
+                    ? a.oldest.localeCompare(b.oldest)
+                    : sort === "name"
+                        ? a.name.localeCompare(b.name)
+                        : 0;
+
+    // Needs action: customers who reported a payment, then whoever owes most.
     const unpaidGroups = groupBy(unpaidList).sort(
-        (a, b) => Number(b.reported > 0) - Number(a.reported > 0) || b.owed - a.owed || a.name.localeCompare(b.name)
+        (a, b) => byChoice(a, b) || Number(b.reported > 0) - Number(a.reported > 0) || b.owed - a.owed || a.name.localeCompare(b.name)
     );
-    // Part-paid customers (still owing something) come first, so they are not
-    // buried under invoices that are fully settled and need nothing further.
+    // Needs action: part-paid customers (still owing) first, then the most recently paid.
     const paidGroups = groupBy(paidList).sort(
-        (a, b) => Number(b.owed > 0) - Number(a.owed > 0) || a.name.localeCompare(b.name)
+        (a, b) => byChoice(a, b) || Number(b.owed > 0) - Number(a.owed > 0) || b.lastPaid.localeCompare(a.lastPaid) || a.name.localeCompare(b.name)
     );
     const paidTotal = paidList.reduce((sum, invoice) => sum + invoiceTotal(invoice), 0);
     const partPaidCount = partPaidList.length;
@@ -366,6 +423,24 @@ export default async function AdminPaymentsPage() {
                     action={deleteInvoices}
                     noun="invoice"
                 >
+                    <nav aria-label="Sort invoices" className="mb-4 flex flex-wrap items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-[0.15em] text-white/45">Sort by</span>
+                        {SORTS.map((option) => (
+                            <Link
+                                key={option.key}
+                                href={option.key === "action" ? "/admin/payments" : `/admin/payments?sort=${option.key}`}
+                                aria-current={sort === option.key ? "page" : undefined}
+                                className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs transition ${
+                                    sort === option.key
+                                        ? "border-amber-400 bg-amber-400 font-semibold text-black"
+                                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                                }`}
+                            >
+                                {option.label}
+                            </Link>
+                        ))}
+                    </nav>
+
                     <SectionCard
                         title="Needs attention"
                         description="Invoices with nothing paid on them yet, grouped by customer. Customers who say they have paid come first, then whoever owes the most. A part payment moves to Paid below, still flagged there."

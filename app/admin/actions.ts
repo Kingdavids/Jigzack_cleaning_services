@@ -2187,6 +2187,15 @@ export async function deleteTask(taskId: string, unlock = false): Promise<TaskCh
 // Staff expenses
 // ---------------------------------------------------------------------------
 
+// Which statuses an expense may move to each status from: waiting → approved
+// or rejected; approved → reimbursed or rejected; a rejected one can be
+// reconsidered. Reimbursed is final: the money has been paid back.
+const EXPENSE_STEPS_FROM: Record<"approved" | "reimbursed" | "rejected", string[]> = {
+    approved: ["submitted", "rejected"],
+    rejected: ["submitted", "approved"],
+    reimbursed: ["approved"],
+};
+
 export async function reviewExpense(
     expenseId: string,
     status: "approved" | "reimbursed" | "rejected",
@@ -2199,7 +2208,11 @@ export async function reviewExpense(
         return { success: false, error: "Invalid request." };
     }
 
-    const { error } = await supabase
+    // Each step only follows the one before it, so money already paid back
+    // can't be marked rejected, and nothing is paid back without approval.
+    const allowedFrom = EXPENSE_STEPS_FROM[status];
+
+    const { data, error } = await supabase
         .from("expenses")
         .update({
             status,
@@ -2207,11 +2220,25 @@ export async function reviewExpense(
             reviewed_by: admin.id,
             reviewed_at: new Date().toISOString(),
         })
-        .eq("id", expenseId);
+        .eq("id", expenseId)
+        .in("status", allowedFrom)
+        .select("id");
 
     if (error) {
         console.error("reviewExpense error:", error.message);
         return { success: false, error: "Could not update this expense. Please try again." };
+    }
+
+    if (!data || data.length === 0) {
+        return {
+            success: false,
+            error:
+                status === "reimbursed"
+                    ? "Approve this expense before marking it reimbursed."
+                    : status === "rejected"
+                        ? "This expense has already been paid back, so it can't be rejected."
+                        : "This expense has already been paid back.",
+        };
     }
 
     await logActivity(supabase, admin, "expense_" + status, `Marked a staff expense ${status}`, { type: "expense", id: expenseId });

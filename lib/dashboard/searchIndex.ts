@@ -26,6 +26,7 @@ export const ADMIN_SEARCH_INDEX: SearchEntry[] = [
     { label: "Arrears", description: "Add or change arrears carried onto an invoice", href: "/admin/customers", keywords: ["balance forward", "carried over", "owed from before"] },
     { label: "Advance payments", description: "Record a customer who paid several months upfront", href: "/admin/customers", keywords: ["prepay", "prepayment", "paid in advance"] },
     { label: "Registration fee", description: "Confirm or clear a customer's one-off registration fee", href: "/admin/payments#registration-fees", keywords: ["signup fee", "activation fee"] },
+    { label: "Money in & out", description: "Monthly money received and spent, by category", href: "/admin/finance", keywords: ["finance", "cash flow", "inflow", "outflow", "income", "spending", "net", "report"] },
     { label: "Suspend or reactivate a customer", description: "Pause billing and pickups without deleting anything", href: "/admin/customers", keywords: ["pause", "freeze account"] },
     { label: "Email a customer", description: "Send a one-off email to a customer or signup", href: "/admin/customers", keywords: ["contact customer", "send email"] },
     { label: "Preview an invoice before generating", description: "See what this month's invoice will look like before it's created", href: "/admin/customers", keywords: ["invoice preview", "before sending"] },

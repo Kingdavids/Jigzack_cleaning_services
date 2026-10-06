@@ -68,7 +68,9 @@ export default async function AdminExpensesPage({
     const receiptUrl = new Map(signed.map((s) => [s.path, s.signedUrl]));
 
     const canBulk = isOwner(profile);
-    const counted = expenses.filter((e) => e.status !== "rejected");
+    // What the business has actually taken on: approved or already paid back.
+    // Waiting claims aren't spending yet; rejected ones never are.
+    const counted = expenses.filter((e) => e.status === "approved" || e.status === "reimbursed");
     const sum = (list: ExpenseRow[]) => list.reduce((total, e) => total + Number(e.amount), 0);
     const awaiting = expenses.filter((e) => e.status === "submitted");
     const owed = expenses.filter((e) => e.status === "approved");
@@ -97,7 +99,7 @@ export default async function AdminExpensesPage({
                 )}
 
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-                    <StatCard icon={Receipt} label="Total this month" value={naira(sum(counted))} helper="Not counting rejected entries" />
+                    <StatCard icon={Receipt} label="Approved spend this month" value={naira(sum(counted))} helper="Approved and paid back; not waiting or rejected" />
                     <StatCard
                         icon={Clock}
                         label="Waiting for review"
