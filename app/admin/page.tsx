@@ -7,7 +7,9 @@ import StatCard from "@/components/dashboard/StatCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import HighlightPanel, { PanelRow } from "@/components/dashboard/HighlightPanel";
 import OwnerOverview from "@/components/dashboard/OwnerOverview";
-import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
+import NeedsYouQueue, { type ExpenseItem, type FeeItem, type LinkItem, type TransferItem } from "@/components/dashboard/NeedsYouQueue";
+import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
+import { isFullAdmin, isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
 import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from "@/lib/billing/balance";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { billToOf } from "@/lib/billing/billTo";
@@ -17,7 +19,6 @@ import {
     Briefcase,
     CalendarCheck,
     MessageSquare,
-    Receipt,
     TrendingUp,
     UserCheck,
     Users,
@@ -164,7 +165,6 @@ export default async function AdminPage() {
     const unpaid = (unpaidRes.data ?? []) as unknown as UnpaidRow[];
     const recentPhotos = (recentPhotosRes.data ?? []) as PhotoRow[];
     const pendingExpenses = (expensesRes.data ?? []) as { amount: number }[];
-    const pendingExpenseTotal = pendingExpenses.reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
 
     const estates = customers.filter((c) => c.is_estate).length;
     const withVacancies = customers.filter((c) => Object.values(c.vacancies ?? {}).some((n) => Number(n) > 0)).length;
@@ -203,6 +203,91 @@ export default async function AdminPage() {
         advanceThisMonth.length +
         monthInstallments.length + paidThisMonth.filter((row) => !withPayments.has(row.id)).length;
 
+    // What needs a decision, as rows an admin can act on here. Each list is
+    // capped; the full lists are on their own pages. Errors (a column or table
+    // that doesn't exist yet) leave a list empty.
+    const QUEUE_LIMIT = 5;
+    const reportedTransfers = (unpaid as unknown as {
+        id: string;
+        customer: ProfileRef;
+        bill_to?: unknown;
+        invoice_month: string | null;
+        created_at: string;
+        transfer_reported_at?: string | null;
+        transfer_note?: string | null;
+        transfer_receipt_path?: string | null;
+    }[]).filter((row) => row.transfer_reported_at);
+
+    const [feeListRes, expenseListRes] = await Promise.all([
+        supabase
+            .from("customers")
+            .select("profile_id, full_name, registration_fee_submitted_at, registration_fee_note, registration_fee_receipt_path")
+            .not("registration_fee_submitted_at", "is", null)
+            .eq("registration_fee_paid", false)
+            .order("registration_fee_submitted_at", { ascending: true })
+            .limit(QUEUE_LIMIT),
+        supabase
+            .from("expenses")
+            .select("id, employee_id, amount, category, note, expense_date")
+            .eq("status", "submitted")
+            .order("created_at", { ascending: true })
+            .limit(QUEUE_LIMIT),
+    ]);
+
+    const feeRows = (feeListRes.data ?? []) as {
+        profile_id: string;
+        full_name: string | null;
+        registration_fee_submitted_at: string;
+        registration_fee_note: string | null;
+        registration_fee_receipt_path: string | null;
+    }[];
+    const expenseRows = (expenseListRes.data ?? []) as { id: string; employee_id: string; amount: number; category: string; note: string | null; expense_date: string }[];
+    const shownTransfers = reportedTransfers.slice(0, QUEUE_LIMIT);
+
+    const { data: staffNames } = expenseRows.length
+        ? await supabase.from("profiles").select("id, full_name").in("id", [...new Set(expenseRows.map((e) => e.employee_id))])
+        : { data: [] };
+    const staffName = new Map(((staffNames ?? []) as { id: string; full_name: string | null }[]).map((p) => [p.id, p.full_name ?? "Staff member"]));
+
+    // Receipts are private: each opens through a link that expires in an hour.
+    const proofPaths = [...feeRows.map((f) => f.registration_fee_receipt_path), ...shownTransfers.map((t) => t.transfer_receipt_path)].filter((p): p is string => Boolean(p));
+    const signedProofs = proofPaths.length ? (await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).createSignedUrls(proofPaths, 3600)).data ?? [] : [];
+    const proofUrl = new Map(signedProofs.map((p) => [p.path, p.signedUrl]));
+
+    const feeItems: FeeItem[] = feeRows.map((f) => ({
+        profileId: f.profile_id,
+        name: f.full_name ?? "Unknown customer",
+        reportedAt: formatDate(f.registration_fee_submitted_at),
+        note: f.registration_fee_note,
+        receiptUrl: f.registration_fee_receipt_path ? proofUrl.get(f.registration_fee_receipt_path) ?? null : null,
+    }));
+    const transferItems: TransferItem[] = shownTransfers.map((t) => ({
+        paymentId: t.id,
+        name: t.customer?.full_name ?? (billToOf(t as never) ? `${billToOf(t as never)!.full_name} (not registered)` : "Unknown customer"),
+        month: t.invoice_month ?? formatDate(t.created_at),
+        balance: balanceOf(t as never),
+        reportedAt: formatDate(t.transfer_reported_at as string),
+        note: t.transfer_note ?? null,
+        receiptUrl: t.transfer_receipt_path ? proofUrl.get(t.transfer_receipt_path) ?? null : null,
+    }));
+    const expenseItems: ExpenseItem[] = expenseRows.map((e) => ({
+        id: e.id,
+        name: staffName.get(e.employee_id) ?? "Staff member",
+        amount: Number(e.amount),
+        category: e.category,
+        date: formatDate(e.expense_date),
+        note: e.note,
+    }));
+
+    // Decided on their own pages, so only counted here.
+    const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const queueLinks: LinkItem[] = [
+        pending.length > 0 && { label: "Sign-ups to approve", detail: plural(pending.length, "person") + " waiting for you to review", href: "/admin/approvals" },
+        unassigned > 0 && { label: "Pickups without a driver", detail: plural(unassigned, "upcoming pickup") + " not assigned yet", href: "/admin/tasks" },
+        overdue > 0 && { label: "Overdue pickups", detail: plural(overdue, "pickup") + " past their date and not done", href: "/admin/tasks" },
+        unreadCount > 0 && { label: "Unread messages", detail: plural(unreadCount, "message") + " in your inbox", href: "/admin/messages" },
+    ].filter((item): item is LinkItem => Boolean(item));
+
     const owner = isOwner(profile);
     const supervisor = isViewOnlyAdmin(profile);
     const firstName = (profile.full_name ?? "").trim().split(/\s+/)[0] || "there";
@@ -223,6 +308,17 @@ export default async function AdminPage() {
         >
             <LiveRefresh tables={["tasks", "payments", "uploads", "profiles"]} />
             <div className="space-y-6">
+                <NeedsYouQueue
+                    fees={feeItems}
+                    feeTotal={feeReportsRes.count ?? feeItems.length}
+                    transfers={transferItems}
+                    transferTotal={transferReportsRes.count ?? reportedTransfers.length}
+                    expenses={expenseItems}
+                    expenseTotal={pendingExpenses.length}
+                    links={queueLinks}
+                    canAct={isFullAdmin(profile)}
+                />
+
                 {owner && <OwnerOverview supabase={supabase} collected={collected} outstanding={outstanding} />}
 
                 {/* Solid waste and recyclables are kept apart, with the money still owed in total. */}
@@ -323,40 +419,6 @@ export default async function AdminPage() {
                         helper={`${paymentsThisMonth} payment${paymentsThisMonth === 1 ? "" : "s"} received`}
                         href="/admin/payments"
                     />
-
-                    <div className="grid gap-5 sm:col-span-2 sm:grid-cols-2 xl:col-span-4">
-                        <StatCard
-                            icon={Wallet}
-                            label="Registration fees to confirm"
-                            value={String(feeReportsRes.count ?? 0)}
-                            helper={(feeReportsRes.count ?? 0) > 0 ? "Customers say they have paid. Check and confirm." : "Nothing waiting"}
-                            href="/admin/payments#registration-fees"
-                            tone={(feeReportsRes.count ?? 0) > 0 ? "alert" : "default"}
-                        />
-                        <StatCard
-                            icon={Wallet}
-                            label="Invoice transfers to confirm"
-                            value={String(transferReportsRes.count ?? 0)}
-                            helper={(transferReportsRes.count ?? 0) > 0 ? "Customers say they paid an invoice. Check and confirm." : "Nothing waiting"}
-                            href="/admin/payments"
-                            tone={(transferReportsRes.count ?? 0) > 0 ? "alert" : "default"}
-                        />
-                    </div>
-
-                    <div className="sm:col-span-2 xl:col-span-4">
-                        <StatCard
-                            icon={Receipt}
-                            label="Staff expenses to review"
-                            value={naira(pendingExpenseTotal)}
-                            helper={
-                                pendingExpenses.length > 0
-                                    ? `${pendingExpenses.length} entr${pendingExpenses.length === 1 ? "y" : "ies"} waiting for you`
-                                    : "Nothing waiting"
-                            }
-                            href="/admin/expenses"
-                            tone={pendingExpenses.length > 0 ? "alert" : "default"}
-                        />
-                    </div>
                 </div>
 
                 <div className="grid gap-5 lg:grid-cols-2">
