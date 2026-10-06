@@ -17,6 +17,7 @@ export default function RegistrationFeeControls({
                                                     reportedNote,
                                                     reportedAt,
                                                     paidText,
+                                                    waived = false,
                                                 }: {
     profileId: string;
     paid: boolean;
@@ -25,12 +26,13 @@ export default function RegistrationFeeControls({
     reportedNote: string | null;
     reportedAt: string | null;
     paidText: string;
+    waived?: boolean;
 }) {
     const router = useRouter();
     const [note, setNote] = useState("");
-    const [busy, setBusy] = useState<"confirm" | "reject" | null>(null);
+    const [busy, setBusy] = useState<"confirm" | "waive" | "reject" | null>(null);
 
-    const run = async (action: "confirm" | "reject") => {
+    const run = async (action: "confirm" | "waive" | "reject") => {
         setBusy(action);
         const result = await setRegistrationFee(profileId, action, note);
         setBusy(null);
@@ -55,6 +57,18 @@ export default function RegistrationFeeControls({
                 >
                     View receipt
                 </Link>
+                {!waived && (
+                    <div className="pt-2">
+                        <button
+                            disabled={busy !== null}
+                            onClick={() => run("waive")}
+                            className="rounded-xl border border-white/15 px-3 py-2 text-xs font-bold text-white/75 hover:bg-white/10 disabled:opacity-50"
+                        >
+                            {busy === "waive" ? "Saving..." : "No fee was paid: existing customer"}
+                        </button>
+                        <p className="mt-1 text-xs text-white/40">Use this if the fee was marked as paid by mistake. It stops counting as money received.</p>
+                    </div>
+                )}
             </div>
         );
     }
@@ -97,6 +111,13 @@ export default function RegistrationFeeControls({
                     className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-bold text-black hover:bg-emerald-400 disabled:opacity-50"
                 >
                     {busy === "confirm" ? "Saving..." : reported ? "Confirm payment" : "Mark as paid"}
+                </button>
+                <button
+                    disabled={busy !== null}
+                    onClick={() => run("waive")}
+                    className="rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white/80 hover:bg-white/10 disabled:opacity-50"
+                >
+                    {busy === "waive" ? "Saving..." : "Existing customer, no fee"}
                 </button>
                 {reported && (
                     <button

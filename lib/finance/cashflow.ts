@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { invoiceTotal } from "@/lib/billing/balance";
 import { EXPENSE_CATEGORIES } from "@/lib/expenses";
 import { REGISTRATION_FEE_NGN, TIMEZONE, TIMEZONE_OFFSET } from "@/lib/config/business";
+import { isWaivedFee } from "@/lib/finance/registration";
 
 // Money that came in and went out, month by month (Lagos time), sorted into
 // categories. Money in is counted when it was received; staff spending is
@@ -177,7 +178,7 @@ export async function loadCashflow(supabase: SupabaseClient, months: string[]): 
         .gte("registration_fee_paid_at", from)
         .lt("registration_fee_paid_at", until);
     for (const fee of (feeData ?? []) as { registration_fee_paid_at: string; registration_fee_reference: string | null }[]) {
-        if (/waived/i.test(fee.registration_fee_reference ?? "")) continue;
+        if (isWaivedFee(fee.registration_fee_reference)) continue;
         addIn(fee.registration_fee_paid_at, "registration", "Bank transfer", REGISTRATION_FEE_NGN);
     }
 

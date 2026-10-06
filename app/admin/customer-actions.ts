@@ -9,6 +9,7 @@ import { escapeHtml, sendEmail } from "@/lib/send-email";
 import { siteOrigin } from "@/lib/site-origin";
 import { TIMEZONE } from "@/lib/config/business";
 import { BUSINESS } from "@/lib/config/business";
+import { WAIVED_REFERENCE } from "@/lib/finance/registration";
 
 export type CustomerAccountResult = { success: boolean; error?: string; message?: string };
 
@@ -177,13 +178,15 @@ export async function deleteCustomerAccount(profileId: string, confirmName: stri
 }
 
 // The registration fee is paid by bank transfer. "confirm" covers both a
-// customer who reported paying and one who paid you directly (an existing
-// customer, say). "reject" clears the report so they can send it again.
-export async function setRegistrationFee(profileId: string, action: "confirm" | "reject", note: string): Promise<CustomerAccountResult> {
+// customer who reported paying and one who paid you directly. "waive" is for
+// an existing customer who owes no fee: it opens their account like a payment
+// does, but it is not counted as money received. "reject" clears the report so
+// they can send it again.
+export async function setRegistrationFee(profileId: string, action: "confirm" | "waive" | "reject", note: string): Promise<CustomerAccountResult> {
     const actor = await requireFullAdmin();
     const supabase = await createClient();
 
-    if (!profileId || !["confirm", "reject"].includes(action)) return { success: false, error: "Invalid request." };
+    if (!profileId || !["confirm", "waive", "reject"].includes(action)) return { success: false, error: "Invalid request." };
 
     const { data: customer } = await supabase
         .from("customers")
@@ -202,7 +205,13 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
                   registration_fee_paid_at: new Date().toISOString(),
                   registration_fee_reference: cleanNote || "Confirmed by admin",
               }
-            : {
+            : action === "waive"
+              ? {
+                    registration_fee_paid: true,
+                    registration_fee_paid_at: new Date().toISOString(),
+                    registration_fee_reference: WAIVED_REFERENCE,
+                }
+              : {
                   registration_fee_paid: false,
                   registration_fee_paid_at: null,
                   registration_fee_submitted_at: null,
@@ -221,7 +230,7 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
         };
     }
 
-    if (action === "confirm" && customer.email && !customer.registration_fee_paid) {
+    if (action !== "reject" && customer.email && !customer.registration_fee_paid) {
         await sendEmail({
             to: [customer.email],
             subject: `Your ${BUSINESS.shortName} registration fee is confirmed`,
@@ -237,8 +246,8 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
     await logActivity(
         supabase,
         actor,
-        action === "confirm" ? "registration_fee_confirmed" : "registration_fee_rejected",
-        `${action === "confirm" ? "Confirmed" : "Rejected"} the registration fee for ${customer.full_name}`,
+        action === "confirm" ? "registration_fee_confirmed" : action === "waive" ? "registration_fee_waived" : "registration_fee_rejected",
+        `${action === "confirm" ? "Confirmed" : action === "waive" ? "Waived" : "Rejected"} the registration fee for ${customer.full_name}`,
         { type: "profile", id: profileId }
     );
 
@@ -246,7 +255,10 @@ export async function setRegistrationFee(profileId: string, action: "confirm" | 
     revalidatePath("/admin/customers");
     revalidatePath("/admin");
 
-    return { success: true, message: action === "confirm" ? "Registration fee confirmed." : "Cleared. They can report it again." };
+    return {
+        success: true,
+        message: action === "confirm" ? "Registration fee confirmed." : action === "waive" ? "Marked as an existing customer. No fee." : "Cleared. They can report it again.",
+    };
 }
 
 // The customer said they paid by transfer but nothing arrived. Clear the report

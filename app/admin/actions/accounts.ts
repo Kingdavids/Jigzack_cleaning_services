@@ -10,6 +10,7 @@ import { approvalEmail } from "@/lib/approval-email";
 import { generateInvoiceFor, generateScheduleFor, loadBillable } from "@/lib/billing/generate";
 import { requireAdmin } from "./shared";
 import { BUSINESS } from "@/lib/config/business";
+import { WAIVED_REFERENCE } from "@/lib/finance/registration";
 
 export type InviteActionState = {
     success: boolean;
@@ -206,7 +207,7 @@ export async function setUserApproval(
                     .update({
                         registration_fee_paid: true,
                         registration_fee_paid_at: new Date().toISOString(),
-                        registration_fee_reference: "Existing customer, fee waived",
+                        registration_fee_reference: WAIVED_REFERENCE,
                     })
                     .eq("profile_id", userId)
                     .select("id");

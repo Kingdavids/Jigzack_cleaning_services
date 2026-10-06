@@ -33,6 +33,7 @@ import { billingMonthLabel } from "@/lib/billing/pricing";
 import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/AdminInvoiceCard";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
+import { isWaivedFee } from "@/lib/finance/registration";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
     return (
@@ -261,7 +262,8 @@ export default async function AdminCustomerDetailPage({
                                 receiptUrl={feeReceiptUrl}
                                 reportedNote={(customer as { registration_fee_note?: string | null }).registration_fee_note ?? null}
                                 reportedAt={feeSubmittedAt ? formatDate(feeSubmittedAt) : null}
-                                paidText={`Paid ${formatDate(customer.registration_fee_paid_at)}${customer.registration_fee_reference ? `. ${customer.registration_fee_reference}` : ""}`}
+                                paidText={`${isWaivedFee(customer.registration_fee_reference) ? "No fee" : "Paid"} ${formatDate(customer.registration_fee_paid_at)}${customer.registration_fee_reference ? `. ${customer.registration_fee_reference}` : ""}`}
+                                waived={isWaivedFee(customer.registration_fee_reference)}
                             />
                         ) : (
                             <p className="text-sm text-white/70">
