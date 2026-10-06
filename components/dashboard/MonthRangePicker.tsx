@@ -154,8 +154,8 @@ export default function MonthRangePicker({
     start: string;
     end: string;
     onChange: (range: { start: string; end: string }) => void;
-    // The latest month a range may start in ("YYYY-MM"): the billing month,
-    // since a month isn't billed before its invoices start on the 25th.
+    // The current billing month ("YYYY-MM"). A single month can't be billed
+    // after it, but a range can start later: that is paying ahead.
     latestStart?: string;
 }) {
     const changeStart = (value: string) => {
@@ -165,16 +165,28 @@ export default function MonthRangePicker({
         onChange({ start: value, end: toKey(to) });
     };
 
+    // Paying ahead: the range can start up to MAX_MONTHS after the billing month.
+    const furthestStart = latestStart ? toKey(toIndex(latestStart) + MAX_MONTHS - 1) : undefined;
+    // Months after the billing month can only be billed as a range of two or more.
+    const needsLaterEnd = Boolean(latestStart) && toIndex(start) > toIndex(latestStart as string) && start === end;
+
     return (
-        <div className="flex flex-col gap-3 sm:flex-row">
-            <MonthField label="From" value={start} onChange={changeStart} max={latestStart} />
-            <MonthField
-                label="To"
-                value={end}
-                onChange={(value) => onChange({ start, end: value })}
-                min={start}
-                max={toKey(toIndex(start) + MAX_MONTHS - 1)}
-            />
+        <div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+                <MonthField label="From" value={start} onChange={changeStart} max={furthestStart} />
+                <MonthField
+                    label="To"
+                    value={end}
+                    onChange={(value) => onChange({ start, end: value })}
+                    min={start}
+                    max={toKey(toIndex(start) + MAX_MONTHS - 1)}
+                />
+            </div>
+            {needsLaterEnd && (
+                <p className="mt-2 text-xs text-amber-200/80">
+                    A month ahead can only be invoiced as part of a range. Choose a last month after the first, or start from the current billing month.
+                </p>
+            )}
         </div>
     );
 }
