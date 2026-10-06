@@ -5,7 +5,8 @@ import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { updateBillToDetails, type CustomerActionState } from "@/app/admin/actions";
+import { updateBillToDetails } from "@/app/admin/actions/invoices";
+import type { CustomerActionState } from "@/app/admin/actions/customers";
 import type { BillTo } from "@/lib/billing/billTo";
 import BillToFields from "@/components/dashboard/BillToFields";
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { voidPayment } from "@/app/admin/actions";
+import { voidPayment } from "@/app/admin/actions/payments";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 // For a payment that was entered by mistake. The invoice goes back to what it

@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import type { TaskActionState } from "@/app/admin/actions";
+import type { TaskActionState } from "@/app/admin/actions/tasks";
 
 function SubmitButton() {
     const { pending } = useFormStatus();

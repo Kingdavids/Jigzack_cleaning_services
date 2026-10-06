@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { UserCheck } from "lucide-react";
 import { toast } from "sonner";
-import { moveInvoicesToCustomer } from "@/app/admin/actions";
+import { moveInvoicesToCustomer } from "@/app/admin/actions/invoices";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 // Moves everything billed to someone who wasn't registered onto the customer

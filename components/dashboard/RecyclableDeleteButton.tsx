@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { deleteRecyclable } from "@/app/admin/actions";
+import { deleteRecyclable } from "@/app/admin/actions/recyclables";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 // Removes a recyclables entry that was logged by mistake, after a confirmation.

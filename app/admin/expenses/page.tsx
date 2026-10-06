@@ -11,7 +11,7 @@ import { deleteExpenses } from "../cleanup-actions";
 import { isOwner } from "@/lib/auth/roles";
 import { Clock, HandCoins, Receipt, Wallet } from "lucide-react";
 import ExpenseForm from "@/components/dashboard/ExpenseForm";
-import { logAdminExpense } from "../actions";
+import { logAdminExpense } from "@/app/admin/actions/expenses";
 import { isFullAdmin } from "@/lib/auth/roles";
 
 const STATUSES = ["submitted", "approved", "reimbursed", "rejected"] as const;

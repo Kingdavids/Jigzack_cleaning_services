@@ -8,11 +8,8 @@ import InvitePropertyButton from "@/components/dashboard/InvitePropertyButton";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 import { daysLeft } from "@/lib/admin/deletedCustomers";
-import {
-    generateCustomerBilling,
-    saveVacancies,
-    updateCustomerDetails,
-} from "../../actions";
+import { generateCustomerBilling } from "@/app/admin/actions/billing";
+import { saveVacancies, updateCustomerDetails } from "@/app/admin/actions/customers";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { describeFacilities, facilityCount } from "@/lib/customer/facilities";
 import { customerFrequency, describeFrequency } from "@/lib/billing/schedule";

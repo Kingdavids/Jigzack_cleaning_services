@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { InvoiceActionState } from "@/app/admin/actions";
+import type { InvoiceActionState } from "@/app/admin/actions/invoices";
 import { itemsTotal, type LineItem } from "@/lib/billing/pricing";
 import { applyDiscount, isDiscountLine, readDiscount, type DiscountInput } from "@/lib/billing/discount-line";
 import DiscountFields from "@/components/dashboard/DiscountFields";

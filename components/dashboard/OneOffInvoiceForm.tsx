@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createInvoice, type NewInvoiceState } from "@/app/admin/actions";
+import { createInvoice, type NewInvoiceState } from "@/app/admin/actions/invoices";
 import InvoiceBuilder, { type InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 
 const inputClass =

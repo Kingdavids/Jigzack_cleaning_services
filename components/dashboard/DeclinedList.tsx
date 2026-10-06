@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { reopenApplication } from "@/app/admin/actions";
+import { reopenApplication } from "@/app/admin/actions/accounts";
 import { deleteAllDeclinedSignups, deleteDeclinedSignup } from "@/app/admin/cleanup-actions";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 

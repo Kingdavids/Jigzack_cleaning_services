@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
-import { setUserApproval } from "./actions";
+import { setUserApproval } from "@/app/admin/actions/accounts";
 import { ALL_FACILITIES, FACILITY_TEXT_LABELS } from "@/lib/customer/facilities";
 
 interface PendingUser {

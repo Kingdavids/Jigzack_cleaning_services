@@ -4,7 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
-import type { InviteActionState } from "@/app/admin/actions";
+import type { InviteActionState } from "@/app/admin/actions/accounts";
 
 function SubmitButton() {
     const { pending } = useFormStatus();

@@ -4,7 +4,7 @@ import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createNonCustomerInvoice, type NewInvoiceState } from "@/app/admin/actions";
+import { createNonCustomerInvoice, type NewInvoiceState } from "@/app/admin/actions/invoices";
 import InvoiceBuilder from "@/components/dashboard/InvoiceBuilder";
 import BillToFields from "@/components/dashboard/BillToFields";
 import type { InvoiceKind } from "@/components/dashboard/InvoiceBuilder";

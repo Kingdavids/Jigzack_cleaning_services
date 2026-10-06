@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { recordPrepayment, voidPrepayment } from "@/app/admin/actions";
+import { recordPrepayment, voidPrepayment } from "@/app/admin/actions/payments";
 import { naira } from "@/lib/customer/billing";
 import { coveredMonthsFrom, currentMonthValue } from "@/lib/billing/prepaid";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";

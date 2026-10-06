@@ -1,5 +1,5 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createEmployeeInvite } from "../actions";
+import { createEmployeeInvite } from "@/app/admin/actions/accounts";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import EmployeeInviteForm from "@/components/dashboard/EmployeeInviteForm";

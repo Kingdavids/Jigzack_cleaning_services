@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { logRecyclable } from "@/app/admin/actions";
+import { logRecyclable } from "@/app/admin/actions/recyclables";
 import { MATERIALS } from "@/lib/recyclables";
 
 const fieldClass =

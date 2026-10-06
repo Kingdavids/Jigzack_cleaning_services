@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
-import { adminMoveTaskToNextDay, deleteTask, updateTask } from "@/app/admin/actions";
+import { adminMoveTaskToNextDay, deleteTask, updateTask } from "@/app/admin/actions/tasks";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 import MarkServicedButton from "@/components/dashboard/MarkServicedButton";
 import MoveToNextDayButton from "@/components/dashboard/MoveToNextDayButton";

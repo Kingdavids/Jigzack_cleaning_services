@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { toast } from "sonner";
-import type { GenerateResult } from "@/app/admin/actions";
+import type { GenerateResult } from "@/app/admin/actions/billing";
 
 // Runs a server action that returns { success, message } and reports it. Used
 // for the "generate invoices / schedules" buttons so a double click can't

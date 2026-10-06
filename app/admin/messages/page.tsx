@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Megaphone } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { sendBroadcast, sendMessage } from "../actions";
+import { sendBroadcast, sendMessage } from "@/app/admin/actions/messages";
 import { deleteMessage, replyToMessage, sendMessageToAdmin } from "@/lib/messaging-actions";
 import { loadMessages } from "@/lib/message-attachments";
 import DashboardShell from "@/components/dashboard/DashboardShell";

@@ -1,6 +1,6 @@
 import { Building2 } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { promoteToEstate, createUnit } from "../actions";
+import { promoteToEstate, createUnit } from "@/app/admin/actions/estates";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import PromoteEstateForm from "@/components/dashboard/PromoteEstateForm";

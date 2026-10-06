@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { reviewExpense } from "@/app/admin/actions";
+import { reviewExpense } from "@/app/admin/actions/expenses";
 
 type Status = "approved" | "reimbursed" | "rejected";
 

@@ -42,7 +42,7 @@ See `.env.example` for the full list and what each one does. Never commit real k
 
 ## Project layout
 
-- `app/` routes and server actions (`app/admin/actions.ts`, `app/employee/actions.ts`)
+- `app/` routes and server actions: the admin ones are in `app/admin/actions/`, one file per area (tasks, invoices, payments, messages, estates, accounts, customers, billing, expenses, recyclables), and the employee ones in `app/employee/actions.ts`. Anything exported from one of those files is a public endpoint, so shared helpers go in `app/admin/actions/shared.ts` or `lib/`, never in an action file.
 - `components/` UI, split into `auth`, `dashboard` and `ui`
 - `lib/` billing rules (`lib/billing`), auth helpers, email
 - `proxy.ts` refreshes the Supabase session and sends logged-out visitors from dashboard links to login

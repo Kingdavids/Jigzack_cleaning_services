@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { emailCustomer } from "@/app/admin/actions";
+import { emailCustomer } from "@/app/admin/actions/messages";
 
 // A one-off email to this customer's inbox, sent from the site's own address,
 // separate from the in-app message thread. Handy when they may not open the

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { setCustomerDiscount } from "@/app/admin/actions";
+import { setCustomerDiscount } from "@/app/admin/actions/billing";
 import { naira } from "@/lib/customer/billing";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 

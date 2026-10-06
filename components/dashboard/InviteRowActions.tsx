@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { Check, Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { revokeEmployeeInvite } from "@/app/admin/actions";
+import { revokeEmployeeInvite } from "@/app/admin/actions/accounts";
 
 export default function InviteRowActions({ inviteId, token }: { inviteId: string; token: string }) {
     const [copied, setCopied] = useState(false);

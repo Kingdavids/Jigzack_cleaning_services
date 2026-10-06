@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Lock, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import { reopenTask } from "@/app/admin/actions";
+import { reopenTask } from "@/app/admin/actions/tasks";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 // A serviced pickup is locked. Unlocking it (on purpose, with a confirmation)

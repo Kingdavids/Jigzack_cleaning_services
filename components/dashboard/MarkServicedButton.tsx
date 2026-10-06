@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
-import { markTaskServiced } from "@/app/admin/actions";
+import { markTaskServiced } from "@/app/admin/actions/tasks";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 import { todayLagos } from "@/lib/tasks";
 

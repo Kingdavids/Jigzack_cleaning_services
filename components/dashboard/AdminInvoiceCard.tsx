@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { updateInvoice } from "@/app/admin/actions";
+import { updateInvoice } from "@/app/admin/actions/invoices";
 import { formatDate, invoiceNumber, naira, receiptNumber } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, invoiceTotal, type Installment } from "@/lib/billing/balance";
 import { normalizeLineItems } from "@/lib/billing/pricing";

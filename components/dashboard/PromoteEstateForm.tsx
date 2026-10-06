@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import type { EstateActionState } from "@/app/admin/actions";
+import type { EstateActionState } from "@/app/admin/actions/estates";
 
 function SubmitButton() {
     const { pending } = useFormStatus();

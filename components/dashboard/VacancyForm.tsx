@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
-import type { CustomerActionState } from "@/app/admin/actions";
+import type { CustomerActionState } from "@/app/admin/actions/customers";
 import { DOMESTIC_FACILITIES, facilityCount, type FacilityDetails } from "@/lib/customer/facilities";
 import { UNIT_PRICES } from "@/lib/billing/pricing";
 

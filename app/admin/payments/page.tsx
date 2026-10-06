@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { generateAllInvoices } from "../actions";
+import { generateAllInvoices } from "@/app/admin/actions/billing";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
 import { billingMonthKey, billingMonthLabel } from "@/lib/billing/pricing";

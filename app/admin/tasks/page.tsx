@@ -1,5 +1,5 @@
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
-import { createTask } from "../actions";
+import { createTask } from "@/app/admin/actions/tasks";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";

@@ -3,12 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-    generateCustomerBilling,
-    previewCustomerSchedule,
-    type ScheduleRequest,
-    type SchedulePreview,
-} from "@/app/admin/actions";
+import { generateCustomerBilling, previewCustomerSchedule, type ScheduleRequest, type SchedulePreview } from "@/app/admin/actions/billing";
 import { DAY_SHORT, DAYS_FOR_TIMES, monthWindow, type SchedulePeriod } from "@/lib/billing/schedule";
 
 const WEEK_DAYS = [1, 2, 3, 4, 5, 6];

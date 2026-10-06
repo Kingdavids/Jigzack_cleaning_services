@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { emailCustomer } from "@/app/admin/actions";
+import { emailCustomer } from "@/app/admin/actions/messages";
 
 // A compact "Email" button that opens a subject and message inline, for
 // someone with no customer record yet to open (a signup with no details). It
