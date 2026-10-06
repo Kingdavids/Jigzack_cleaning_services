@@ -7,10 +7,11 @@ import AssignTaskForm from "@/components/dashboard/AssignTaskForm";
 import CustomerScheduleGenerator from "@/components/dashboard/CustomerScheduleGenerator";
 import TaskAdminControls from "@/components/dashboard/TaskAdminControls";
 import { BulkCheckbox, BulkSelectProvider } from "@/components/dashboard/BulkSelect";
+import BulkAssignBar from "@/components/dashboard/BulkAssignBar";
 import { deleteTasks } from "../cleanup-actions";
 import { isFullAdmin } from "@/lib/auth/roles";
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
-import { loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
+import { isPastDate, loadTaskTeams, taskDisplayStatus, teamNames } from "@/lib/tasks";
 import RevertTaskButton from "@/components/dashboard/RevertTaskButton";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import SuspendedTag from "@/components/dashboard/SuspendedTag";
@@ -222,6 +223,10 @@ export default async function AdminTasksPage() {
                         action={deleteTasks}
                         noun="task"
                     >
+                        <BulkAssignBar
+                            employees={employeeOptions.map((e) => ({ id: e.id, full_name: e.full_name }))}
+                            unassignedIds={openTasks.filter((t) => !t.employee_id && (t.status ?? "pending") === "pending" && !isPastDate(t.scheduled_date)).map((t) => t.id)}
+                        />
                         {groups.length === 0 ? (
                             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">No tasks yet.</div>
                         ) : (

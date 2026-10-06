@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity";
-import { isPastDate, moveTaskToNextDay, todayLagos } from "@/lib/tasks";
+import { isPastDate, moveTaskToNextDay, splitAssignable, todayLagos } from "@/lib/tasks";
 import { requireAdmin, duplicateSince } from "./shared";
 import { TIMEZONE_OFFSET } from "@/lib/config/business";
 
@@ -346,3 +346,75 @@ export async function deleteTask(taskId: string, unlock = false): Promise<TaskCh
 // ---------------------------------------------------------------------------
 // Staff expenses
 // ---------------------------------------------------------------------------
+
+// Gives the ticked pickups to one employee (and any others going with them) in
+// one go. Only pickups that have nobody on them yet are changed: anything
+// already assigned, started, serviced or dated in the past is left alone and
+// counted in the message, so nothing is overwritten by accident.
+export async function assignTasks(taskIds: string[], employeeId: string, crewIds: string[] = []): Promise<TaskChangeResult & { assigned?: number }> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const ids = [...new Set((Array.isArray(taskIds) ? taskIds : []).map(String).filter(Boolean))];
+
+    if (ids.length === 0) return { success: false, error: "Tick the pickups to assign first." };
+    if (ids.length > 150) return { success: false, error: "That is too many at once. Assign up to 150 at a time." };
+    if (!employeeId) return { success: false, error: "Choose who they go to." };
+
+    const crew = crewFrom(crewIds, employeeId);
+
+    const { data: people } = await supabase
+        .from("profiles")
+        .select("id")
+        .in("id", [employeeId, ...crew])
+        .eq("role", "employee")
+        .eq("status", "approved");
+
+    if ((people ?? []).length !== 1 + crew.length) return { success: false, error: "Choose approved employees only." };
+
+    const { data: rows } = await supabase.from("tasks").select("id, status, employee_id, scheduled_date").in("id", ids);
+    const { ids: eligible, skipped } = splitAssignable((rows ?? []) as { id: string; status: string | null; employee_id: string | null; scheduled_date: string | null }[], todayLagos());
+
+    const left = [
+        skipped.assigned > 0 && `${skipped.assigned} already assigned`,
+        skipped.past > 0 && `${skipped.past} dated in the past`,
+        skipped.started > 0 && `${skipped.started} started or serviced`,
+    ].filter(Boolean);
+    const leftText = left.length > 0 ? ` Left alone: ${left.join(", ")}.` : "";
+
+    if (eligible.length === 0) return { success: false, error: `Nothing to assign.${leftText}` };
+
+    // The checks on the row are repeated in the update, so a pickup that someone
+    // else assigned a moment ago is not overwritten.
+    const { data: updated, error } = await supabase
+        .from("tasks")
+        .update({ employee_id: employeeId })
+        .in("id", eligible)
+        .is("employee_id", null)
+        .eq("status", "pending")
+        .select("id");
+
+    if (error) {
+        console.error("assignTasks error:", error.message);
+        return { success: false, error: "Could not assign these pickups. Please try again." };
+    }
+
+    const done = (updated ?? []).map((t) => t.id as string);
+
+    if (crew.length > 0) {
+        for (const id of done) {
+            const crewError = await setCrew(supabase, id, crew);
+            if (crewError) return { success: false, error: crewError };
+        }
+    }
+
+    await logActivity(supabase, actor, "tasks_bulk_assigned", `Assigned ${done.length} pickup${done.length === 1 ? "" : "s"} in one go`);
+    revalidatePath("/admin/tasks");
+    revalidatePath("/admin");
+    revalidatePath("/employee");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/customer");
+    revalidatePath("/customer/schedule");
+
+    return { success: true, assigned: done.length, message: `Assigned ${done.length} pickup${done.length === 1 ? "" : "s"}.${leftText}` };
+}

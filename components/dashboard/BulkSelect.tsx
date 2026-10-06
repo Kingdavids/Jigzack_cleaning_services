@@ -128,3 +128,9 @@ export function BulkCheckbox({ id, label = "Select" }: { id: string; label?: str
         />
     );
 }
+
+// What is ticked in the surrounding list, so other bulk actions can sit beside
+// Delete. Only works inside a BulkSelectProvider that is enabled.
+export function useBulkSelection() {
+    return useContext(BulkContext);
+}

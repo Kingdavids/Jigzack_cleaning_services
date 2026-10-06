@@ -126,3 +126,24 @@ export function teamNames(team: TeamMember[] | undefined) {
 
     return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
+
+export type AssignableTask = { id: string; status: string | null; employee_id: string | null; scheduled_date: string | null };
+
+// Of the pickups ticked for a bulk assignment, the ones that can take a driver
+// and a count of why the others can't. Only a pickup that has not started, has
+// nobody on it and is dated today or later (or not dated yet) is touched, so a
+// bulk action never changes someone's existing assignment or marks an old
+// pickup serviced by accident.
+export function splitAssignable(tasks: AssignableTask[], today: string) {
+    const ids: string[] = [];
+    const skipped = { assigned: 0, started: 0, past: 0 };
+
+    for (const task of tasks) {
+        if ((task.status ?? "pending") !== "pending") skipped.started += 1;
+        else if (task.employee_id) skipped.assigned += 1;
+        else if (task.scheduled_date && task.scheduled_date < today) skipped.past += 1;
+        else ids.push(task.id);
+    }
+
+    return { ids, skipped };
+}
