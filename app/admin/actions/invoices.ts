@@ -11,6 +11,7 @@ import { requireAdmin, duplicateSince } from "./shared";
 import { readBuiltInvoice, invoiceDescription, invoiceInsertError, checkSaleStock, logSaleMovements, readBillTo } from "@/lib/admin/invoice-input";
 import type { CustomerActionState } from "./customers";
 import type { TaskChangeResult } from "./tasks";
+import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
 
 export type InvoiceActionState = { success: boolean; error?: string } | null;
 
@@ -438,3 +439,58 @@ async function syncArrearsToOpenInvoice(supabase: Awaited<ReturnType<typeof crea
 // ---------------------------------------------------------------------------
 // Schedule management
 // ---------------------------------------------------------------------------
+
+// Deletes an invoice that was made by mistake, such as one entered twice. Only
+// an invoice with nothing paid against it can go, and one that carries arrears
+// for a registered customer is refused, because deleting it would drop that
+// debt. A paid or part-paid invoice stays: only the owner can delete those,
+// from the tick boxes on the Payments page. The database checks the same rules.
+export async function deleteUnpaidInvoice(paymentId: string): Promise<{ success: boolean; error?: string }> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    if (!paymentId) return { success: false, error: "Missing invoice." };
+
+    const { data: invoice } = await supabase
+        .from("payments")
+        .select("id, status, amount_paid, arrears, customer_id, transfer_receipt_path, invoice_month")
+        .eq("id", paymentId)
+        .maybeSingle();
+
+    if (!invoice) return { success: false, error: "Could not find that invoice. It may already be deleted." };
+    if (invoice.status === "paid" || Number(invoice.amount_paid ?? 0) > 0) {
+        return { success: false, error: "This invoice has payments recorded, so it can't be deleted here. Void the payments first, or ask the owner." };
+    }
+    if (invoice.customer_id && Number(invoice.arrears ?? 0) > 0) {
+        return { success: false, error: "This invoice carries arrears from before, and deleting it would lose them. Edit it instead." };
+    }
+
+    const { error } = await supabase.rpc("delete_unpaid_invoice", { p_payment_id: paymentId });
+
+    if (error) {
+        console.error("deleteUnpaidInvoice error:", error.message);
+        return {
+            success: false,
+            error: /function .*delete_unpaid_invoice|schema cache/i.test(error.message)
+                ? "Not switched on yet. Run supabase/delete-unpaid-invoice-2026-10.sql in Supabase first."
+                : /payments recorded/.test(error.message)
+                    ? "This invoice has payments recorded, so it can't be deleted here."
+                    : "Could not delete this invoice. Please try again.",
+        };
+    }
+
+    if (invoice.transfer_receipt_path) await supabase.storage.from(PAYMENT_RECEIPT_BUCKET).remove([invoice.transfer_receipt_path]);
+
+    await logActivity(supabase, actor, "invoice_deleted", `Deleted an unpaid invoice made by mistake${invoice.invoice_month ? ` (${invoice.invoice_month})` : ""}`, {
+        type: "payment",
+        id: paymentId,
+    });
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin/customers");
+    revalidatePath("/admin/recyclables");
+    revalidatePath("/customer/payments");
+    revalidatePath("/customer");
+    revalidatePath("/admin");
+
+    return { success: true };
+}
