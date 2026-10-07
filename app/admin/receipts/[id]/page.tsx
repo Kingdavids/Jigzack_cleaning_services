@@ -24,15 +24,17 @@ export default async function AdminReceiptPreviewPage({
     const prepayment = await loadPrepayment(supabase, id);
 
     if (prepayment) {
-        const { data: payer } = await supabase.from("customers").select("*").eq("profile_id", prepayment.customer_id).maybeSingle();
+        const { data: payer } = prepayment.customer_id ? await supabase.from("customers").select("*").eq("profile_id", prepayment.customer_id).maybeSingle() : { data: null };
+        // Someone not registered: the details kept on the payment itself.
+        const unregistered = prepayment.customer_id ? null : billToOf(prepayment);
 
         return (
             <PrepaymentReceiptDocument
                 prepayment={prepayment}
-                customer={payer}
-                fallbackName={payer?.full_name ?? null}
+                customer={payer ?? unregistered}
+                fallbackName={payer?.full_name ?? unregistered?.full_name ?? null}
                 basePath="/admin"
-                previewFor={payer?.full_name ?? null}
+                previewFor={payer?.full_name ?? unregistered?.full_name ?? null}
             />
         );
     }

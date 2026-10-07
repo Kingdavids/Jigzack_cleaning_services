@@ -12,11 +12,14 @@ import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 export default function MoveToCustomerControl({
                                                   personName,
                                                   invoiceIds,
+                                                  prepaymentIds = [],
                                                   customers,
                                                   suggested,
                                               }: {
     personName: string;
     invoiceIds: string[];
+    // Their advance payments move too.
+    prepaymentIds?: string[];
     customers: { id: string; full_name: string | null }[];
     // A registered customer with the same phone or email, if there is one.
     suggested: { id: string; full_name: string | null; reason: string } | null;
@@ -29,7 +32,7 @@ export default function MoveToCustomerControl({
 
     const move = async () => {
         setBusy(true);
-        const result = await moveInvoicesToCustomer(invoiceIds, customerId);
+        const result = await moveInvoicesToCustomer(invoiceIds, customerId, prepaymentIds);
         setBusy(false);
         setAsking(false);
 
@@ -87,7 +90,8 @@ export default function MoveToCustomerControl({
                 onCancel={() => setAsking(false)}
             >
                 <p>
-                    {invoiceIds.length} invoice{invoiceIds.length === 1 ? "" : "s"} for {personName}, with every payment and receipt on them, move to{" "}
+                    {invoiceIds.length} invoice{invoiceIds.length === 1 ? "" : "s"}
+                    {prepaymentIds.length > 0 ? ` and ${prepaymentIds.length} advance payment${prepaymentIds.length === 1 ? "" : "s"}` : ""} for {personName}, with every payment and receipt on them, move to{" "}
                     <span className="font-bold text-white">{chosen?.full_name ?? "the customer"}</span>.
                 </p>
                 <p className="mt-2">They then show in that customer&apos;s record and in the customer&apos;s own dashboard.</p>

@@ -40,3 +40,12 @@ export function billToOf(invoice: { bill_to?: unknown } | null | undefined): Bil
         facility_details: value.facility_details && typeof value.facility_details === "object" ? value.facility_details : null,
     };
 }
+
+// The last ten digits of a phone number, so 0803 123 4567 and +234 803 123 4567 match.
+export const phoneKey = (value: string | null | undefined) => (value ?? "").replace(/\D/g, "").slice(-10);
+
+// What makes two invoices or advance payments the same unregistered person:
+// their email, else their phone number, else their name.
+export function personKey(billTo: { email?: string | null; phone?: string | null; full_name: string }) {
+    return billTo.email?.trim().toLowerCase() || phoneKey(billTo.phone) || billTo.full_name.trim().toLowerCase();
+}

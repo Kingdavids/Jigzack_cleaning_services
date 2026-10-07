@@ -26,9 +26,9 @@ function SaveButton() {
 
 // Corrects the name, property name, contact details or address on every
 // invoice for someone not registered on the app. Folded away until opened.
-export default function EditBillToForm({ invoiceIds, defaults }: { invoiceIds: string[]; defaults: BillTo }) {
+export default function EditBillToForm({ invoiceIds, prepaymentIds = [], defaults }: { invoiceIds: string[]; prepaymentIds?: string[]; defaults: BillTo }) {
     const router = useRouter();
-    const [state, formAction] = useActionState<CustomerActionState, FormData>(updateBillToDetails.bind(null, invoiceIds), null);
+    const [state, formAction] = useActionState<CustomerActionState, FormData>(updateBillToDetails.bind(null, invoiceIds, prepaymentIds), null);
 
     useEffect(() => {
         if (!state) return;
@@ -50,7 +50,8 @@ export default function EditBillToForm({ invoiceIds, defaults }: { invoiceIds: s
             <form action={formAction} className="space-y-5 border-t border-white/10 p-4">
                 <BillToFields defaults={defaults} />
                 <p className="text-xs text-white/45">
-                    Changes apply to all {invoiceIds.length} of their invoice{invoiceIds.length === 1 ? "" : "s"}, including ones already paid.
+                    Changes apply to all {invoiceIds.length} of their invoice{invoiceIds.length === 1 ? "" : "s"}, including ones already paid
+                    {prepaymentIds.length > 0 ? `, and their ${prepaymentIds.length} advance payment${prepaymentIds.length === 1 ? "" : "s"}` : ""}.
                 </p>
                 <SaveButton />
             </form>

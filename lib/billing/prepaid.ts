@@ -6,7 +6,9 @@ import { MONTH_NAMES } from "@/lib/billing/schedule";
 
 export type Prepayment = {
     id: string;
-    customer_id: string;
+    // Empty for someone not registered on the app; bill_to says who it is from.
+    customer_id: string | null;
+    bill_to?: unknown;
     months: number;
     amount: number | string;
     covered_months: string[];
@@ -42,6 +44,24 @@ export async function loadPrepayments(supabase: SupabaseClient, customerId: stri
 
     return error ? [] : ((data ?? []) as Prepayment[]);
 }
+
+// Advance payments from people who are not registered. Empty (not an error)
+// before the SQL that allows them has been run.
+export async function loadUnregisteredPrepayments(supabase: SupabaseClient): Promise<Prepayment[]> {
+    const { data, error } = await supabase.from("prepayments").select("*").is("customer_id", null).order("paid_at", { ascending: false });
+
+    return error ? [] : ((data ?? []) as Prepayment[]);
+}
+
+// Who an advance payment from someone not registered is from.
+export type PrepaymentPerson = {
+    full_name: string;
+    property_name: string | null;
+    phone: string | null;
+    whatsapp_number: string | null;
+    email: string | null;
+    address: string | null;
+};
 
 export async function isMonthPrepaid(supabase: SupabaseClient, customerId: string, monthName: string) {
     const { data, error } = await supabase

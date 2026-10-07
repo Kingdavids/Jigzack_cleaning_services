@@ -12,6 +12,7 @@ import { readBuiltInvoice, invoiceDescription, invoiceInsertError, checkSaleStoc
 import type { CustomerActionState } from "./customers";
 import type { TaskChangeResult } from "./tasks";
 import { PAYMENT_RECEIPT_BUCKET } from "@/lib/bank-details";
+import { loadPrepayments } from "@/lib/billing/prepaid";
 
 export type InvoiceActionState = { success: boolean; error?: string } | null;
 
@@ -20,19 +21,20 @@ export type NewInvoiceState = { success: boolean; error?: string; invoiceId?: st
 // Corrects the details on every invoice for someone not registered on the app.
 // Each invoice keeps its own unit counts; only who and where change. Invoices
 // already moved to a customer are left alone.
-export async function updateBillToDetails(invoiceIds: string[], _prevState: CustomerActionState, formData: FormData): Promise<CustomerActionState> {
+export async function updateBillToDetails(invoiceIds: string[], prepaymentIds: string[], _prevState: CustomerActionState, formData: FormData): Promise<CustomerActionState> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
     const ids = [...new Set((invoiceIds ?? []).filter(Boolean))].slice(0, 500);
-    if (ids.length === 0) return { success: false, error: "No invoices to update." };
+    const advanceIds = [...new Set((prepaymentIds ?? []).filter(Boolean))].slice(0, 200);
+    if (ids.length === 0 && advanceIds.length === 0) return { success: false, error: "No invoices to update." };
 
     const read = readBillTo(formData);
     if ("error" in read) return { success: false, error: read.error };
 
-    const { data: rows, error: loadError } = await supabase.from("payments").select("id, bill_to").in("id", ids).is("customer_id", null);
+    const { data: rows, error: loadError } = ids.length > 0 ? await supabase.from("payments").select("id, bill_to").in("id", ids).is("customer_id", null) : { data: [], error: null };
 
-    if (loadError || !rows || rows.length === 0) {
+    if (loadError || (ids.length > 0 && (!rows || rows.length === 0))) {
         console.error("updateBillToDetails load error:", loadError?.message);
         return { success: false, error: "Could not find these invoices." };
     }
@@ -51,11 +53,32 @@ export async function updateBillToDetails(invoiceIds: string[], _prevState: Cust
         }
     }
 
+    // Their advance payments carry the same details.
+    let advanceUpdated = 0;
+    if (advanceIds.length > 0) {
+        const { data: advances } = await supabase.from("prepayments").select("id, bill_to").in("id", advanceIds).is("customer_id", null);
+
+        for (const advance of (advances ?? []) as { id: string; bill_to: Record<string, unknown> | null }[]) {
+            const { error } = await supabase
+                .from("prepayments")
+                .update({ bill_to: { ...(advance.bill_to ?? {}), ...read.billTo } })
+                .eq("id", advance.id)
+                .is("customer_id", null);
+
+            if (!error) advanceUpdated += 1;
+        }
+    }
+
     await logActivity(supabase, actor, "invoice_edited", `Updated the details for ${read.billTo.full_name} (not registered)`);
     revalidatePath("/admin/payments");
     revalidatePath("/admin");
 
-    return { success: true, message: `Details updated on ${rows.length} invoice${rows.length === 1 ? "" : "s"}.` };
+    const count = (rows ?? []).length;
+
+    return {
+        success: true,
+        message: `Details updated on ${count} invoice${count === 1 ? "" : "s"}${advanceUpdated > 0 ? ` and ${advanceUpdated} advance payment${advanceUpdated === 1 ? "" : "s"}` : ""}.`,
+    };
 }
 
 // An invoice for someone who is not registered on the app. Their details are
@@ -144,12 +167,13 @@ export async function createNonCustomerInvoice(_prevState: NewInvoiceState, form
 // invoices (with every payment and receipt on them) move onto that customer,
 // so they show in the customer's record and in the customer's own dashboard.
 // Their details stay on each invoice as a record of who it was first made out to.
-export async function moveInvoicesToCustomer(invoiceIds: string[], customerId: string): Promise<TaskChangeResult> {
+export async function moveInvoicesToCustomer(invoiceIds: string[], customerId: string, prepaymentIds: string[] = []): Promise<TaskChangeResult> {
     const actor = await requireAdmin();
     const supabase = await createClient();
 
     const ids = [...new Set((invoiceIds ?? []).filter(Boolean))].slice(0, 500);
-    if (ids.length === 0 || !customerId) return { success: false, error: "Choose the customer to move these invoices to." };
+    const advanceIds = [...new Set((prepaymentIds ?? []).filter(Boolean))].slice(0, 200);
+    if ((ids.length === 0 && advanceIds.length === 0) || !customerId) return { success: false, error: "Choose the customer to move these invoices to." };
 
     const { data: customer } = await supabase.from("profiles").select("id, full_name, role, status").eq("id", customerId).maybeSingle();
     if (!customer || customer.role !== "customer" || customer.status !== "approved") {
@@ -157,17 +181,47 @@ export async function moveInvoicesToCustomer(invoiceIds: string[], customerId: s
     }
 
     // Only invoices that still belong to nobody, so one already moved is never taken from someone else.
-    const { data, error } = await supabase.from("payments").update({ customer_id: customerId }).in("id", ids).is("customer_id", null).select("id");
+    let moved = 0;
+    if (ids.length > 0) {
+        const { data, error } = await supabase.from("payments").update({ customer_id: customerId }).in("id", ids).is("customer_id", null).select("id");
 
-    if (error) {
-        console.error("moveInvoicesToCustomer error:", error.message);
-        return { success: false, error: "Could not move the invoices. Please try again." };
+        if (error) {
+            console.error("moveInvoicesToCustomer error:", error.message);
+            return { success: false, error: "Could not move the invoices. Please try again." };
+        }
+
+        moved = data?.length ?? 0;
     }
 
-    const moved = data?.length ?? 0;
-    if (moved === 0) return { success: false, error: "These invoices have already been moved." };
+    // Advance payments follow, unless the customer already has cover for one of the same months.
+    let movedAdvance = 0;
+    const heldBack: string[] = [];
+    if (advanceIds.length > 0) {
+        const mine = await loadPrepayments(supabase, customerId);
+        const taken = new Set(mine.flatMap((p) => p.covered_months));
+        const { data: theirs } = await supabase.from("prepayments").select("id, covered_months").in("id", advanceIds).is("customer_id", null);
 
-    await logActivity(supabase, actor, "invoices_moved", `Moved ${moved} invoice${moved === 1 ? "" : "s"} to ${customer.full_name ?? "a customer"}`, {
+        for (const advance of (theirs ?? []) as { id: string; covered_months: string[] }[]) {
+            const clash = advance.covered_months.filter((month) => taken.has(month));
+
+            if (clash.length > 0) {
+                heldBack.push(clash.join(", "));
+                continue;
+            }
+
+            const { data: done } = await supabase.from("prepayments").update({ customer_id: customerId }).eq("id", advance.id).is("customer_id", null).select("id");
+            if (done && done.length > 0) {
+                movedAdvance += 1;
+                advance.covered_months.forEach((month) => taken.add(month));
+            }
+        }
+    }
+
+    if (moved === 0 && movedAdvance === 0) {
+        return { success: false, error: heldBack.length > 0 ? `They already have advance cover for ${heldBack.join("; ")}, so that payment was not moved.` : "These have already been moved." };
+    }
+
+    await logActivity(supabase, actor, "invoices_moved", `Moved ${moved} invoice${moved === 1 ? "" : "s"}${movedAdvance > 0 ? ` and ${movedAdvance} advance payment${movedAdvance === 1 ? "" : "s"}` : ""} to ${customer.full_name ?? "a customer"}`, {
         type: "profile",
         id: customerId,
     });
@@ -179,7 +233,12 @@ export async function moveInvoicesToCustomer(invoiceIds: string[], customerId: s
     revalidatePath("/customer");
     revalidatePath("/customer/payments");
 
-    return { success: true, message: `${moved} invoice${moved === 1 ? "" : "s"} moved to ${customer.full_name ?? "the customer"}.` };
+    return {
+        success: true,
+        message:
+            `${moved} invoice${moved === 1 ? "" : "s"}${movedAdvance > 0 ? ` and ${movedAdvance} advance payment${movedAdvance === 1 ? "" : "s"}` : ""} moved to ${customer.full_name ?? "the customer"}.` +
+            (heldBack.length > 0 ? ` Not moved, because they already have cover for it: ${heldBack.join("; ")}.` : ""),
+    };
 }
 
 export async function createInvoice(_prevState: NewInvoiceState, formData: FormData): Promise<NewInvoiceState> {

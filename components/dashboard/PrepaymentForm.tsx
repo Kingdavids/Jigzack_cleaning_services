@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { recordPrepayment, voidPrepayment } from "@/app/admin/actions/payments";
 import { naira } from "@/lib/customer/billing";
-import { coveredMonthsFrom, currentMonthValue } from "@/lib/billing/prepaid";
+import { coveredMonthsFrom, currentMonthValue, type PrepaymentPerson } from "@/lib/billing/prepaid";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
 
 const METHODS = ["Bank transfer", "Cash", "POS", "Other"];
@@ -32,12 +32,15 @@ export type PrepaymentSummary = {
 // in from their monthly charge and can be changed to what was really received.
 export default function PrepaymentForm({
                                            profileId,
+                                           person,
                                            customName,
                                            monthlyCharge,
                                            canRecord,
                                            payments,
                                        }: {
-    profileId: string;
+    // A registered customer, or (for someone not registered) their details.
+    profileId?: string;
+    person?: PrepaymentPerson;
     customName: string;
     monthlyCharge: number;
     canRecord: boolean;
@@ -64,11 +67,11 @@ export default function PrepaymentForm({
     const amountOk = Number.isFinite(amount) && amount > 0;
     const covered = countOk && firstMonth ? coveredMonthsFrom(firstMonth, count) : [];
     const span = covered.length > 0 ? `${covered[0]}${covered.length > 1 ? ` to ${covered[covered.length - 1]}` : ""}` : "";
-    const valid = countOk && amountOk && covered.length > 0;
+    const valid = countOk && amountOk && covered.length > 0 && Boolean(profileId || person?.full_name.trim());
 
     const save = async () => {
         setSaving(true);
-        const result = await recordPrepayment({ profileId, months: count, firstMonth, amount, method, reference, note, settleExisting: settle });
+        const result = await recordPrepayment({ profileId, person, months: count, firstMonth, amount, method, reference, note, settleExisting: settle });
         setSaving(false);
         setConfirming(false);
 
@@ -245,7 +248,7 @@ export default function PrepaymentForm({
                     <span className="font-bold text-white">{span}</span> ({count} month{count === 1 ? "" : "s"}).
                 </p>
                 <p className="mt-2">
-                    A receipt is issued to the customer, and no invoices are made for those months.
+                    {profileId ? "A receipt is issued to the customer, and no invoices are made for those months." : "A receipt is made that you can print or send. When they register, this moves to their account."}
                     {settle ? " Any invoice that already exists for them is marked paid." : ""}
                 </p>
             </ConfirmDialog>

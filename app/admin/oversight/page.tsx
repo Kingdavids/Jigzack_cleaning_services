@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { billToOf } from "@/lib/billing/billTo";
 import { redirect } from "next/navigation";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { isOwner } from "@/lib/auth/roles";
@@ -62,7 +63,7 @@ export default async function OwnerOversightPage() {
 
     const { data: advanceData } = await supabase
         .from("prepayments")
-        .select("id, amount, months, covered_months, paid_at, method, customer:profiles!prepayments_customer_id_fkey(full_name)")
+        .select("id, amount, months, covered_months, paid_at, method, bill_to, customer:profiles!prepayments_customer_id_fkey(full_name)")
         .order("paid_at", { ascending: false })
         .limit(60);
     const advances = (advanceData ?? []) as unknown as {
@@ -72,6 +73,7 @@ export default async function OwnerOversightPage() {
         covered_months: string[];
         paid_at: string;
         method: string | null;
+        bill_to?: unknown;
         customer: { full_name: string | null } | null;
     }[];
 
@@ -150,7 +152,7 @@ export default async function OwnerOversightPage() {
                                     className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm"
                                 >
                                     <div className="min-w-0">
-                                        <p className="font-semibold">{advance.customer?.full_name ?? "Unknown customer"}</p>
+                                        <p className="font-semibold">{advance.customer?.full_name ?? billToOf(advance)?.full_name ?? "Unknown customer"}</p>
                                         <p className="text-xs text-white/50">
                                             Advance payment · {advance.months} month{advance.months === 1 ? "" : "s"} ({advance.covered_months[0]}
                                             {advance.covered_months.length > 1 ? ` to ${advance.covered_months[advance.covered_months.length - 1]}` : ""}) ·{" "}

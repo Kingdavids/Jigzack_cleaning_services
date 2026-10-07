@@ -24,6 +24,10 @@ import { deleteInvoices } from "../cleanup-actions";
 import { isFullAdmin, isOwner } from "@/lib/auth/roles";
 import RegistrationFeeControls from "@/components/dashboard/RegistrationFeeControls";
 import { CustomerGroup, GroupFilter } from "@/components/dashboard/CustomerGroups";
+import AdvancePaymentChooser from "@/components/dashboard/AdvancePaymentChooser";
+import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
+import { loadUnregisteredPrepayments, type Prepayment } from "@/lib/billing/prepaid";
+import { personKey } from "@/lib/billing/billTo";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -145,12 +149,15 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         billed: number;
         paid: number;
         owed: number;
+        // Advance payments they made before registering.
+        prepayments: Prepayment[];
     };
     const people = new Map<string, PersonGroup>();
+    const unregisteredPrepayments = await loadUnregisteredPrepayments(supabase);
 
     for (const invoice of [...rawUnpaid, ...rawPaid].filter(isUnregistered)) {
         const billTo = billToOf(invoice)!;
-        const key = billTo.email?.toLowerCase() || digits(billTo.phone) || billTo.full_name.trim().toLowerCase();
+        const key = personKey(billTo);
         const group = people.get(key) ?? {
             key,
             name: billTo.property_name ? `${billTo.property_name} (${billTo.full_name})` : billTo.full_name,
@@ -162,12 +169,36 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
             billed: 0,
             paid: 0,
             owed: 0,
+            prepayments: [],
         };
 
         group.items.push(invoice);
         group.billed += invoiceTotal(invoice);
         group.paid += amountPaid(invoice);
         group.owed += balanceOf(invoice);
+        people.set(key, group);
+    }
+
+    for (const advance of unregisteredPrepayments) {
+        const billTo = billToOf(advance);
+        if (!billTo) continue;
+
+        const key = personKey(billTo);
+        const group = people.get(key) ?? {
+            key,
+            name: billTo.property_name ? `${billTo.property_name} (${billTo.full_name})` : billTo.full_name,
+            contact: [billTo.phone, billTo.email, billTo.address].filter(Boolean).join(" · "),
+            details: billTo,
+            email: billTo.email?.toLowerCase() ?? null,
+            phones: [digits(billTo.phone), digits(billTo.whatsapp_number)].filter(Boolean),
+            items: [],
+            billed: 0,
+            paid: 0,
+            owed: 0,
+            prepayments: [],
+        };
+
+        group.prepayments.push(advance);
         people.set(key, group);
     }
 
@@ -609,7 +640,8 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                                                         <div>
                                                             <p className="truncate text-lg font-bold">{group.name}</p>
                                                             <p className="mt-0.5 text-sm text-white/55">
-                                                                {group.items.length} invoice{group.items.length === 1 ? "" : "s"} ·{" "}
+                                                                {group.items.length} invoice{group.items.length === 1 ? "" : "s"}
+                                                                {group.prepayments.length > 0 ? ` · ${group.prepayments.length} advance payment${group.prepayments.length === 1 ? "" : "s"}` : ""} ·{" "}
                                                                 <span className="font-semibold text-amber-300">{naira(group.owed)} owed</span> ·{" "}
                                                                 <span className="text-emerald-300">{naira(group.paid)} paid</span>
                                                                 {match && (
@@ -622,15 +654,44 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                                                         </div>
                                                     }
                                                 >
-                                                    {canAct && <EditBillToForm invoiceIds={group.items.map((i) => i.id)} defaults={group.details} />}
+                                                    {canAct && <EditBillToForm invoiceIds={group.items.map((i) => i.id)} prepaymentIds={group.prepayments.map((p) => p.id)} defaults={group.details} />}
                                                     {canAct && (
                                                         <MoveToCustomerControl
                                                             personName={group.name}
                                                             invoiceIds={group.items.map((i) => i.id)}
+                                                            prepaymentIds={group.prepayments.map((p) => p.id)}
                                                             customers={customerOptions.map((c) => ({ id: c.id, full_name: c.full_name }))}
                                                             suggested={match}
                                                         />
                                                     )}
+                                                    <details open={group.prepayments.length > 0} className="rounded-2xl border border-white/10 bg-black/20">
+                                                        <summary className="cursor-pointer list-none p-4 text-sm font-semibold text-emerald-300 [&::-webkit-details-marker]:hidden">
+                                                            Advance payments ({group.prepayments.length})
+                                                        </summary>
+                                                        <div className="border-t border-white/10 p-4">
+                                                            <PrepaymentForm
+                                                                person={{
+                                                                    full_name: group.details.full_name,
+                                                                    property_name: group.details.property_name,
+                                                                    phone: group.details.phone,
+                                                                    whatsapp_number: group.details.whatsapp_number,
+                                                                    email: group.details.email,
+                                                                    address: group.details.address,
+                                                                }}
+                                                                customName={group.name}
+                                                                monthlyCharge={0}
+                                                                canRecord={canAct}
+                                                                payments={group.prepayments.map((p) => ({
+                                                                    id: p.id,
+                                                                    months: p.months,
+                                                                    amount: Number(p.amount),
+                                                                    span: `${p.covered_months[0]}${p.covered_months.length > 1 ? ` to ${p.covered_months[p.covered_months.length - 1]}` : ""}`,
+                                                                    paidOn: formatDate(p.paid_at),
+                                                                    method: p.method,
+                                                                }))}
+                                                            />
+                                                        </div>
+                                                    </details>
                                                     {group.items.map(renderInvoice)}
                                                 </CustomerGroup>
                                             );
@@ -641,6 +702,18 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                         </SectionCard>
                     </div>
                 </BulkSelectProvider>
+
+                <SectionCard
+                    title="Record an advance payment"
+                    description="For someone who paid several months upfront, a registered customer or not. A receipt is made, and no invoices are made for the months it covers."
+                    collapsible
+                >
+                    {canAct ? (
+                        <AdvancePaymentChooser customers={customerOptions.map((c) => ({ id: c.id, full_name: c.full_name }))} />
+                    ) : (
+                        <p className="text-sm text-white/55">You have view-only access, so payments can&apos;t be recorded from your account.</p>
+                    )}
+                </SectionCard>
 
                 <SectionCard
                     title="Create a one-off invoice"

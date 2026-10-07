@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/utils/supabase/server";
 import { logActivity } from "@/lib/activity";
 import { balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } from "@/lib/billing/balance";
-import { coveredMonthsFrom, loadPrepayments } from "@/lib/billing/prepaid";
+import { coveredMonthsFrom, loadPrepayments, loadUnregisteredPrepayments, type PrepaymentPerson } from "@/lib/billing/prepaid";
 import { naira, receiptNumber } from "@/lib/customer/billing";
 import { requireAdmin } from "./shared";
+import { billToOf, personKey } from "@/lib/billing/billTo";
 
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];
 
@@ -122,7 +123,9 @@ export type PrepaymentResult = { success: boolean; error?: string; message?: str
 // exists for a covered month is settled by it (unless you say otherwise), so the
 // customer is not asked to pay twice.
 export async function recordPrepayment(input: {
-    profileId: string;
+    // A registered customer's profile, or leave it out and give "person" for someone who is not registered.
+    profileId?: string;
+    person?: PrepaymentPerson;
     months: number;
     // The first month covered, as YYYY-MM.
     firstMonth: string;
@@ -138,16 +141,47 @@ export async function recordPrepayment(input: {
     const months = Math.trunc(Number(input.months));
     const amount = round2(Number(input.amount));
 
-    if (!input.profileId) return { success: false, error: "Missing customer." };
+    const cleanText = (value: string | null | undefined, max: number) => String(value ?? "").trim().slice(0, max) || null;
+    const person = input.person
+        ? {
+              full_name: cleanText(input.person.full_name, 120) ?? "",
+              property_name: cleanText(input.person.property_name, 120),
+              phone: cleanText(input.person.phone, 40),
+              whatsapp_number: cleanText(input.person.whatsapp_number, 40),
+              email: cleanText(input.person.email, 120),
+              address: cleanText(input.person.address, 200),
+              landmark: null,
+              lga: null,
+              state: null,
+              property_type: null,
+              facility_details: null,
+          }
+        : null;
+
+    if (!input.profileId && !person) return { success: false, error: "Choose who paid." };
+    if (!input.profileId && !person?.full_name) return { success: false, error: "Enter the name of the person who paid." };
     if (!Number.isFinite(months) || months < 1 || months > 36) return { success: false, error: "Choose between 1 and 36 months." };
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.firstMonth)) return { success: false, error: "Choose the first month it covers." };
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) return { success: false, error: "Enter the amount received." };
 
-    const { data: customer } = await supabase.from("customers").select("full_name").eq("profile_id", input.profileId).maybeSingle();
-    if (!customer) return { success: false, error: "Customer not found." };
+    // Who paid: a registered customer, or someone whose details are kept on the payment.
+    let payerName = "a customer";
+    if (input.profileId) {
+        const { data: customer } = await supabase.from("customers").select("full_name").eq("profile_id", input.profileId).maybeSingle();
+        if (!customer) return { success: false, error: "Customer not found." };
+        payerName = customer.full_name ?? payerName;
+    } else if (person) {
+        payerName = person.full_name;
+    }
+    const personId = person ? personKey(person) : null;
 
     const covered = coveredMonthsFrom(input.firstMonth, months);
-    const existing = await loadPrepayments(supabase, input.profileId);
+    const existing = input.profileId
+        ? await loadPrepayments(supabase, input.profileId)
+        : (await loadUnregisteredPrepayments(supabase)).filter((p) => {
+              const to = billToOf(p);
+              return to && personKey(to) === personId;
+          });
     const clash = covered.filter((month) => existing.some((p) => p.covered_months.includes(month)));
 
     if (clash.length > 0) {
@@ -159,7 +193,8 @@ export async function recordPrepayment(input: {
     const { data: created, error } = await supabase
         .from("prepayments")
         .insert({
-            customer_id: input.profileId,
+            customer_id: input.profileId || null,
+            ...(person ? { bill_to: person } : {}),
             months,
             amount,
             covered_months: covered,
@@ -175,9 +210,11 @@ export async function recordPrepayment(input: {
         console.error("recordPrepayment error:", error?.message);
         return {
             success: false,
-            error: /prepayments|schema cache/.test(error?.message ?? "")
-                ? "Advance payments are not switched on yet. Run supabase/prepaid-2026-09.sql in Supabase first."
-                : "Could not record the advance payment. Please try again.",
+            error: /bill_to|customer_id/.test(error?.message ?? "")
+                ? "Advance payments for people who are not registered are not switched on yet. Run supabase/prepayments-unregistered-2026-10.sql in Supabase first."
+                : /prepayments|schema cache/.test(error?.message ?? "")
+                    ? "Advance payments are not switched on yet. Run supabase/prepaid-2026-09.sql in Supabase first."
+                    : "Could not record the advance payment. Please try again.",
         };
     }
 
@@ -185,14 +222,15 @@ export async function recordPrepayment(input: {
     const settled: string[] = [];
 
     if (input.settleExisting) {
-        const { data: open } = await supabase
-            .from("payments")
-            .select("*")
-            .eq("customer_id", input.profileId)
-            .in("invoice_month", covered)
-            .neq("status", "paid");
+        const { data: open } = input.profileId
+            ? await supabase.from("payments").select("*").eq("customer_id", input.profileId).in("invoice_month", covered).neq("status", "paid")
+            : await supabase.from("payments").select("*").is("customer_id", null).not("bill_to", "is", null).in("invoice_month", covered).neq("status", "paid");
 
-        for (const invoice of open ?? []) {
+        for (const invoice of (open ?? []).filter((row) => {
+            if (input.profileId) return true;
+            const to = billToOf(row);
+            return Boolean(to && personKey(to) === personId);
+        })) {
             const fields = {
                 status: "paid",
                 paid_at: new Date().toISOString(),
@@ -220,10 +258,10 @@ export async function recordPrepayment(input: {
         supabase,
         actor,
         "prepayment_recorded",
-        `Recorded a ${naira(amount)} advance payment from ${customer.full_name ?? "a customer"} covering ${months} month${months === 1 ? "" : "s"}`,
-        { type: "profile", id: input.profileId }
+        `Recorded a ${naira(amount)} advance payment from ${payerName}${input.profileId ? "" : " (not registered)"} covering ${months} month${months === 1 ? "" : "s"}`,
+        input.profileId ? { type: "profile", id: input.profileId } : undefined
     );
-    revalidatePath(`/admin/customers/${input.profileId}`);
+    if (input.profileId) revalidatePath(`/admin/customers/${input.profileId}`);
     revalidatePath("/admin/payments");
     revalidatePath("/admin");
     revalidatePath("/customer");
@@ -271,8 +309,8 @@ export async function voidPrepayment(prepaymentId: string): Promise<PrepaymentRe
         return { success: false, error: "Could not remove that payment. Please try again." };
     }
 
-    await logActivity(supabase, actor, "prepayment_removed", "Removed an advance payment", { type: "profile", id: found.customer_id as string });
-    revalidatePath(`/admin/customers/${found.customer_id}`);
+    await logActivity(supabase, actor, "prepayment_removed", "Removed an advance payment", found.customer_id ? { type: "profile", id: found.customer_id as string } : undefined);
+    if (found.customer_id) revalidatePath(`/admin/customers/${found.customer_id}`);
     revalidatePath("/admin/payments");
     revalidatePath("/admin");
     revalidatePath("/customer");
