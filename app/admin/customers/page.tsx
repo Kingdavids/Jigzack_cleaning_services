@@ -19,6 +19,8 @@ import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
 import { billToOf } from "@/lib/billing/billTo";
 import { customerFilter } from "@/lib/admin/search";
+import EmailStatusBadge, { EmailStatusUnavailable } from "@/components/dashboard/EmailStatusBadge";
+import { loadEmailStatus } from "@/lib/admin/emailStatus.server";
 
 type CustomerRow = {
     id: string;
@@ -49,9 +51,9 @@ type CustomerRow = {
 export default async function AdminCustomersPage({
                                                      searchParams,
                                                  }: {
-    searchParams: Promise<{ q?: string; fee?: string; status?: string }>;
+    searchParams: Promise<{ q?: string; fee?: string; status?: string; email?: string }>;
 }) {
-    const { q, fee, status: statusFilter } = await searchParams;
+    const { q, fee, status: statusFilter, email: emailFilter } = await searchParams;
     // ?status=suspended or ?status=active narrows the list.
     const show = statusFilter === "suspended" || statusFilter === "active" ? statusFilter : "all";
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -90,7 +92,7 @@ export default async function AdminCustomersPage({
 
     const allCustomers = (customersData ?? []) as unknown as CustomerRow[];
     const suspendedCount = allCustomers.filter((c) => isSuspended(c.status)).length;
-    const customers = allCustomers.filter((c) => (show === "suspended" ? isSuspended(c.status) : show === "active" ? !isSuspended(c.status) : true));
+    const byStatus = allCustomers.filter((c) => (show === "suspended" ? isSuspended(c.status) : show === "active" ? !isSuspended(c.status) : true));
 
     // Keeps the search and the other filter when switching between All, Active and Suspended.
     const filterHref = (value: "all" | "active" | "suspended") => {
@@ -98,6 +100,7 @@ export default async function AdminCustomersPage({
         if (term) params.set("q", term);
         if (fee) params.set("fee", fee);
         if (value !== "all") params.set("status", value);
+        if (emailFilter === "unconfirmed") params.set("email", "unconfirmed");
         const query = params.toString();
         return `/admin/customers${query ? `?${query}` : ""}`;
     };
@@ -131,6 +134,16 @@ export default async function AdminCustomersPage({
     const noDetails = ((customerLogins ?? []) as { id: string; full_name: string | null; email: string | null; status: string; created_at: string }[]).filter(
         (person) => !haveRecord.has(person.id) && person.status !== "declined"
     );
+
+    // Only the owner sees whether each email is confirmed, for helping anyone who
+    // can't sign in or never got the email.
+    const ownerView = isOwner(profile);
+    const emailStatus = ownerView ? await loadEmailStatus([...allCustomers.map((c) => c.profile_id as string), ...noDetails.map((p) => p.id)]) : null;
+    const isUnconfirmed = (id: string | null) => Boolean(id && emailStatus?.[id] && !emailStatus[id].confirmed);
+    const unconfirmedCount = byStatus.filter((c) => isUnconfirmed(c.profile_id)).length + noDetails.filter((p) => isUnconfirmed(p.id)).length;
+    const onlyUnconfirmed = emailFilter === "unconfirmed" && Boolean(emailStatus);
+    const customers = onlyUnconfirmed ? byStatus.filter((c) => isUnconfirmed(c.profile_id)) : byStatus;
+    const shownNoDetails = onlyUnconfirmed ? noDetails.filter((p) => isUnconfirmed(p.id)) : noDetails;
 
     // Invoices made out to someone before they had an account, matched to these
     // signups by email (as their property form will be) or else by name.
@@ -219,6 +232,12 @@ export default async function AdminCustomersPage({
                     </button>
                 </form>
 
+                {ownerView && !emailStatus && (
+                    <div className="mb-5">
+                        <EmailStatusUnavailable />
+                    </div>
+                )}
+
                 <nav aria-label="Filter customers" className="mb-5 flex flex-wrap gap-2">
                     {([
                         { value: "all", label: "All", count: allCustomers.length },
@@ -248,6 +267,30 @@ export default async function AdminCustomersPage({
                             </Link>
                         );
                     })}
+                {emailStatus && (
+                        <Link
+                            href={(() => {
+                                const params = new URLSearchParams();
+                                if (term) params.set("q", term);
+                                if (fee) params.set("fee", fee);
+                                if (show !== "all") params.set("status", show);
+                                if (!onlyUnconfirmed) params.set("email", "unconfirmed");
+                                const query = params.toString();
+                                return `/admin/customers${query ? `?${query}` : ""}`;
+                            })()}
+                            aria-current={onlyUnconfirmed ? "page" : undefined}
+                            className={`inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm transition ${
+                                onlyUnconfirmed
+                                    ? "border-amber-400 bg-amber-400 font-semibold text-black"
+                                    : unconfirmedCount > 0
+                                        ? "border-amber-400/40 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"
+                                        : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                            }`}
+                        >
+                            Email not confirmed
+                            <span className={onlyUnconfirmed ? "opacity-70" : "text-white/40"}>{unconfirmedCount}</span>
+                        </Link>
+                    )}
                 </nav>
 
                 {customers.length === 0 ? (
@@ -295,6 +338,7 @@ export default async function AdminCustomersPage({
                                                         {discount.percent}% discount
                                                     </span>
                                                 )}
+                                                {emailStatus && customer.profile_id && <EmailStatusBadge status={emailStatus[customer.profile_id]} />}
                                             </div>
                                             <p className="mt-1 truncate text-sm text-white/55">
                                                 {[customer.address, customer.lga].filter(Boolean).join(", ") || "No address"}
@@ -398,7 +442,7 @@ export default async function AdminCustomersPage({
                         description="These people created a login but have not filled in their property form, so there is no customer record to open. Pending ones can be reviewed in Signup approvals."
                     >
                         <div className="space-y-2">
-                            {noDetails.map((person) => {
+                            {shownNoDetails.map((person) => {
                                 const earlier = earlierInvoicesFor(person);
 
                                 return (
@@ -439,7 +483,8 @@ export default async function AdminCustomersPage({
                                             <span className="text-xs text-white/45">Waiting for them to finish setup</span>
                                         )}
                                         {isFullAdmin(profile) && <EmailProfileButton profileId={person.id} email={person.email} />}
-                                        {isOwner(profile) && (
+                                        {emailStatus && <EmailStatusBadge status={emailStatus[person.id]} showSignIn />}
+                                        {isOwner(profile) && (!emailStatus || !emailStatus[person.id] || !emailStatus[person.id].confirmed) && (
                                             <ConfirmEmailButton profileId={person.id} name={person.full_name ?? person.email ?? "This signup"} />
                                         )}
                                         {isFullAdmin(profile) && (

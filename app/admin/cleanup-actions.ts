@@ -312,7 +312,10 @@ export async function confirmSignupEmail(profileId: string): Promise<BulkResult>
     await logActivity(supabase, actor, "signup_email_confirmed", `Manually confirmed the email for ${person.full_name ?? person.email ?? "a signup"}`);
 
     revalidatePath("/admin/customers");
+    revalidatePath(`/admin/customers/${profileId}`);
     revalidatePath("/admin/approvals");
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin/admins");
 
     return { success: true };
 }

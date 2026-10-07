@@ -6,6 +6,9 @@ import EmployeeInviteForm from "@/components/dashboard/EmployeeInviteForm";
 import InviteRowActions from "@/components/dashboard/InviteRowActions";
 import EmployeeAccessButtons from "@/components/dashboard/EmployeeAccessButtons";
 import { isOwner } from "@/lib/auth/roles";
+import EmailStatusBadge, { EmailStatusUnavailable } from "@/components/dashboard/EmailStatusBadge";
+import { loadEmailStatus } from "@/lib/admin/emailStatus.server";
+import ConfirmEmailButton from "@/components/dashboard/ConfirmEmailButton";
 
 type InviteRow = {
     id: string;
@@ -43,6 +46,8 @@ export default async function AdminEmployeesPage() {
 
     const employees = employeesData ?? [];
     const canManage = isOwner(profile);
+    // Only the owner sees whether each employee's email is confirmed.
+    const emailStatus = canManage ? await loadEmailStatus(employees.map((e) => e.id as string)) : null;
 
     // People an owner removed. Their records stay and they can be restored.
     const { data: removedData } = await supabase
@@ -115,6 +120,8 @@ export default async function AdminEmployeesPage() {
                     )}
                 </SectionCard>
 
+                {canManage && !emailStatus && <EmailStatusUnavailable />}
+
                 <SectionCard title="Active employees" description="Approved staff who can be assigned tasks.">
                     {employees.length === 0 ? (
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 text-sm text-white/60">
@@ -126,6 +133,14 @@ export default async function AdminEmployeesPage() {
                                 <div key={employee.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
                                     <p className="text-sm font-semibold">{employee.full_name}</p>
                                     <p className="mt-0.5 text-xs text-white/45">{employee.email}</p>
+                                    {emailStatus && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                                            <EmailStatusBadge status={emailStatus[employee.id]} showSignIn />
+                                            {emailStatus[employee.id] && !emailStatus[employee.id].confirmed && (
+                                                <ConfirmEmailButton profileId={employee.id} name={employee.full_name ?? "this employee"} />
+                                            )}
+                                        </div>
+                                    )}
                                     {canManage && (
                                         <div className="mt-3">
                                             <EmployeeAccessButtons profileId={employee.id} name={employee.full_name ?? "this employee"} removed={false} />

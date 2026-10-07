@@ -4,6 +4,8 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import DeclinedList, { type DeclinedUser } from "@/components/dashboard/DeclinedList";
 import { isOwner } from "@/lib/auth/roles";
+import { EmailStatusUnavailable } from "@/components/dashboard/EmailStatusBadge";
+import { loadEmailStatus } from "@/lib/admin/emailStatus.server";
 
 export default async function AdminApprovalsPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -74,6 +76,11 @@ export default async function AdminApprovalsPage() {
 
     const declined = (declinedResult.data ?? []) as unknown as DeclinedUser[];
 
+    // The owner sees whether each pending person's email is confirmed, so someone
+    // who can't log in or never got the email stands out.
+    const ownerView = isOwner(profile);
+    const emailStatus = ownerView ? await loadEmailStatus((pendingUsers ?? []).map((p) => p.id as string)) : null;
+
     return (
         <DashboardShell
             role="admin"
@@ -82,8 +89,16 @@ export default async function AdminApprovalsPage() {
             subtitle="Approve or decline new users."
             unreadCount={unreadCount}
         >
+            {ownerView && !emailStatus && (
+                <div className="mb-6">
+                    <EmailStatusUnavailable />
+                </div>
+            )}
+
             <SectionCard title="Signup approvals" description="Approve or decline new users.">
                 <ApprovalsList
+                    emailStatus={emailStatus ?? undefined}
+                    canConfirmEmail={ownerView}
                     users={pendingUsers ?? []}
                     customerDetailsByProfileId={customerDetailsByProfileId}
                     employeeDetailsByProfileId={employeeDetailsByProfileId}

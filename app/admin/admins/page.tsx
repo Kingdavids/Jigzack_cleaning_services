@@ -6,6 +6,9 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import AdminInviteForm from "@/components/dashboard/AdminInviteForm";
 import { AdminAccessButtons, AdminInviteButtons } from "@/components/dashboard/AdminRowActions";
+import EmailStatusBadge, { EmailStatusUnavailable } from "@/components/dashboard/EmailStatusBadge";
+import { loadEmailStatus } from "@/lib/admin/emailStatus.server";
+import ConfirmEmailButton from "@/components/dashboard/ConfirmEmailButton";
 
 type AdminRow = {
     id: string;
@@ -66,6 +69,8 @@ export default async function AdminAdminsPage() {
     // Other admins do not see owners in this list.
     const visible = canManage ? admins : admins.filter((a) => !a.is_owner);
     const active = visible.filter((a) => a.status === "approved");
+    // Only an owner sees whether each admin's email is confirmed.
+    const emailStatus = canManage ? await loadEmailStatus(active.map((a) => a.id)) : null;
     const removed = visible.filter((a) => a.status !== "approved");
 
     return (
@@ -99,6 +104,8 @@ export default async function AdminAdminsPage() {
                     </SectionCard>
                 )}
 
+                {canManage && !emailStatus && <EmailStatusUnavailable />}
+
                 <SectionCard title="Current admins" description={`${active.length} with access.`}>
                     <div className="space-y-3">
                         {active.map((admin) => (
@@ -121,6 +128,14 @@ export default async function AdminAdminsPage() {
                                     </p>
                                     <p className="truncate text-sm text-white/55">{admin.email}</p>
                                     <p className="text-xs text-white/40">Joined {formatDate(admin.created_at)}</p>
+                                    {emailStatus && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-3">
+                                            <EmailStatusBadge status={emailStatus[admin.id]} showSignIn />
+                                            {emailStatus[admin.id] && !emailStatus[admin.id].confirmed && (
+                                                <ConfirmEmailButton profileId={admin.id} name={admin.full_name ?? admin.email ?? "this admin"} />
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {canManage && (

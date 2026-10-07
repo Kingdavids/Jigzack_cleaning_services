@@ -34,6 +34,10 @@ import AdminInvoiceCard, { type AdminInvoiceRow } from "@/components/dashboard/A
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
 import { isWaivedFee } from "@/lib/finance/registration";
+import EmailStatusBadge, { EmailStatusUnavailable } from "@/components/dashboard/EmailStatusBadge";
+import { loadEmailStatus } from "@/lib/admin/emailStatus.server";
+import ConfirmEmailButton from "@/components/dashboard/ConfirmEmailButton";
+import { stuckReason } from "@/lib/admin/emailStatus";
 
 function DetailList({ items }: { items: { label: string; value: React.ReactNode }[] }) {
     return (
@@ -163,6 +167,10 @@ export default async function AdminCustomerDetailPage({
         )
     );
 
+    // The owner sees whether this person's email is confirmed and when they last signed in.
+    const emailLookup = isOwner(profile) ? await loadEmailStatus([profileId]) : null;
+    const emailState = emailLookup?.[profileId];
+
     // The current invoice as it actually stands, which can differ from the
     // standard monthly charge once it has been edited. It changes on the 25th:
     // until then it is last month's. Falls back to their latest invoice.
@@ -215,10 +223,23 @@ export default async function AdminCustomerDetailPage({
                     </div>
                 )}
 
+                {isOwner(profile) && emailLookup === null && <EmailStatusUnavailable />}
+
+                {emailState && (!emailState.confirmed || !emailState.lastSignIn) && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-5 py-4">
+                        <div>
+                            <p className="font-bold text-amber-200">May be having trouble signing in</p>
+                            <p className="mt-0.5 text-sm text-white/65">{stuckReason(emailState)}</p>
+                        </div>
+                        {!emailState.confirmed && <ConfirmEmailButton profileId={profileId} name={customer.full_name} />}
+                    </div>
+                )}
+
                 <SectionCard title="Account" description="Status, codes and how they joined.">
                     <div className="mb-4 flex flex-wrap items-center gap-3">
                         <StatusBadge status={customer.status} />
                         {account?.status && <StatusBadge status={account.status} />}
+                        <EmailStatusBadge status={emailState} showSignIn />
                         {customer.is_estate && (
                             <span className="rounded-full bg-sky-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sky-300">
                                 Estate

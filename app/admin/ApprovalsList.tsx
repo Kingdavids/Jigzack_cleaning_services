@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { setUserApproval } from "@/app/admin/actions/accounts";
 import { ALL_FACILITIES, FACILITY_TEXT_LABELS } from "@/lib/customer/facilities";
 import { BUSINESS } from "@/lib/config/business";
+import EmailStatusBadge from "@/components/dashboard/EmailStatusBadge";
+import ConfirmEmailButton from "@/components/dashboard/ConfirmEmailButton";
+import type { EmailStatusMap } from "@/lib/admin/emailStatus";
 
 interface PendingUser {
     id: string;
@@ -50,8 +53,13 @@ export default function ApprovalsList({
                                           customerDetailsByProfileId = {},
                                           employeeDetailsByProfileId = {},
                                           units = [],
+                                          emailStatus,
+                                          canConfirmEmail = false,
                                       }: {
     users: PendingUser[];
+    // Whether each email is confirmed (owner only), and whether this viewer can confirm one by hand.
+    emailStatus?: EmailStatusMap;
+    canConfirmEmail?: boolean;
     customerDetailsByProfileId?: Record<string, CustomerDetails>;
     employeeDetailsByProfileId?: Record<string, EmployeeDetails>;
     units?: { id: string; label: string; estateName: string }[];
@@ -115,6 +123,14 @@ export default function ApprovalsList({
                             <div>
                                 <p className="text-lg font-bold">{user.full_name}</p>
                                 <p className="text-sm text-white/60">{user.email}</p>
+                                {emailStatus && (
+                                    <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                                        <EmailStatusBadge status={emailStatus[user.id]} showSignIn />
+                                        {canConfirmEmail && emailStatus[user.id] && !emailStatus[user.id].confirmed && (
+                                            <ConfirmEmailButton profileId={user.id} name={user.full_name ?? user.email} />
+                                        )}
+                                    </div>
+                                )}
                                 <p className="mt-2 text-sm text-white/50 capitalize">
                                     Role: <span className="text-amber-300">{user.role}</span>
                                 </p>
