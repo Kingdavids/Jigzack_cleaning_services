@@ -8,7 +8,7 @@ const FilterContext = createContext({ query: "", onlyNeeds: false });
 // A search box, and optionally a "only those that need attention" switch, above
 // a list of folded customer groups.
 export function GroupFilter({
-                                placeholder = "Search by customer",
+                                placeholder = "Search by name, invoice number, phone or email",
                                 onlyLabel,
                                 children,
                             }: {
@@ -53,12 +53,15 @@ export function GroupFilter({
 // One customer and their items, folded away until opened.
 export function CustomerGroup({
                                   name,
+                                  searchText = "",
                                   needs = 0,
                                   defaultOpen,
                                   header,
                                   children,
                               }: {
     name: string;
+    // Anything else the search box should match: invoice numbers, phone, email, address.
+    searchText?: string;
     // How many of their items need attention, for the "only" switch.
     needs?: number;
     defaultOpen: boolean;
@@ -67,7 +70,7 @@ export function CustomerGroup({
 }) {
     const { query, onlyNeeds } = useContext(FilterContext);
 
-    if (query && !name.toLowerCase().includes(query)) return null;
+    if (query && !`${name} ${searchText}`.toLowerCase().includes(query)) return null;
     if (onlyNeeds && needs === 0) return null;
 
     return (

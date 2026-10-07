@@ -18,6 +18,7 @@ import type { EstateUnit } from "@/lib/billing/pricing";
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import SuspendedTag, { isSuspended } from "@/components/dashboard/SuspendedTag";
 import { billToOf } from "@/lib/billing/billTo";
+import { customerFilter } from "@/lib/admin/search";
 
 type CustomerRow = {
     id: string;
@@ -69,16 +70,11 @@ export default async function AdminCustomersPage({
             .from("customers")
             .select(select)
             .neq("status", "deleted")
-            .order("created_at", { ascending: false })
+            .order("full_name", { ascending: true })
             .limit(1000);
 
-        if (term) {
-            q = q.or(
-                ["full_name", "email", "phone", "address", "lga", "account_code", "property_code"]
-                    .map((column) => `${column}.ilike.%${term}%`)
-                    .join(",")
-            );
-        }
+        const filter = customerFilter(term);
+        if (filter) q = q.or(filter);
 
         // ?fee=reported: customers who say they paid the registration fee and are
         // waiting for an admin to confirm it.

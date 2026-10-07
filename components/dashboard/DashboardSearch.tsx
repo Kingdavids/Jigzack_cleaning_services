@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { ADMIN_SEARCH_INDEX, type SearchEntry } from "@/lib/dashboard/searchIndex";
+import { searchRecords, type SearchHit } from "@/app/admin/search-actions";
 
 function matches(entry: SearchEntry, query: string) {
     const haystack = `${entry.label} ${entry.description} ${entry.keywords.join(" ")}`.toLowerCase();
@@ -24,10 +25,47 @@ export default function DashboardSearch() {
     const [highlighted, setHighlighted] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    const results = useMemo(() => {
+    const [hits, setHits] = useState<SearchHit[]>([]);
+    const [searching, setSearching] = useState(false);
+    const latest = useRef(0);
+
+    const pages = useMemo(() => {
         const list = query.trim() ? ADMIN_SEARCH_INDEX.filter((entry) => matches(entry, query)) : ADMIN_SEARCH_INDEX;
-        return list.slice(0, 8);
+        return list.slice(0, query.trim() ? 4 : 8);
     }, [query]);
+
+    // Customers and invoices, looked up a moment after typing stops. A slow
+    // answer to an older search is ignored.
+    useEffect(() => {
+        const term = query.trim();
+        const ticket = ++latest.current;
+
+        if (term.length < 2) {
+            setHits([]);
+            setSearching(false);
+            return;
+        }
+
+        setSearching(true);
+        const timer = setTimeout(async () => {
+            try {
+                const found = await searchRecords(term);
+                if (latest.current === ticket) setHits(found);
+            } catch {
+                if (latest.current === ticket) setHits([]);
+            } finally {
+                if (latest.current === ticket) setSearching(false);
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [query]);
+
+    // One list to move through with the arrow keys: records first, then pages.
+    const results: { key: string; title: string; detail: string; href: string; group: string }[] = [
+        ...hits.map((h) => ({ key: `${h.kind}:${h.href}`, title: h.title, detail: h.detail, href: h.href, group: h.kind === "customer" ? "Customers" : "Invoices" })),
+        ...pages.map((p) => ({ key: `page:${p.label}`, title: p.label, detail: p.description, href: p.href, group: "Pages and features" })),
+    ];
 
     const changeQuery = (value: string) => {
         setQuery(value);
@@ -37,10 +75,11 @@ export default function DashboardSearch() {
     const close = () => {
         setOpen(false);
         setQuery("");
+        setHits([]);
         setHighlighted(0);
     };
 
-    const go = (entry: SearchEntry) => {
+    const go = (entry: { href: string }) => {
         router.push(entry.href);
         close();
     };
@@ -112,7 +151,7 @@ export default function DashboardSearch() {
                                             go(results[highlighted]);
                                         }
                                     }}
-                                    placeholder="Find a page or feature: discount, arrears, estates, broadcast..."
+                                    placeholder="Search a name, invoice number, phone, email, address, or a page..."
                                     className="h-8 w-full bg-transparent text-sm text-white outline-none placeholder:text-white/30"
                                 />
                                 <kbd className="shrink-0 rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
@@ -122,23 +161,30 @@ export default function DashboardSearch() {
 
                             <div className="max-h-[50vh] overflow-y-auto p-2">
                                 {results.length === 0 ? (
-                                    <p className="px-3 py-6 text-center text-sm text-white/40">Nothing matches &quot;{query}&quot;.</p>
+                                    <p className="px-3 py-6 text-center text-sm text-white/40">
+                                        {searching ? "Searching..." : `Nothing matches "${query}".`}
+                                    </p>
                                 ) : (
                                     results.map((entry, index) => (
-                                        <button
-                                            key={entry.label}
-                                            type="button"
-                                            onClick={() => go(entry)}
-                                            onMouseEnter={() => setHighlighted(index)}
-                                            className={`block w-full rounded-xl px-3 py-2.5 text-left transition ${
-                                                index === highlighted ? "bg-amber-400/15" : "hover:bg-white/[0.05]"
-                                            }`}
-                                        >
-                                            <p className={`text-sm font-semibold ${index === highlighted ? "text-amber-300" : "text-white"}`}>
-                                                {entry.label}
-                                            </p>
-                                            <p className="mt-0.5 text-xs text-white/50">{entry.description}</p>
-                                        </button>
+                                        <div key={entry.key}>
+                                            {(index === 0 || results[index - 1].group !== entry.group) && (
+                                                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35">
+                                                    {entry.group}
+                                                    {searching && index === 0 && entry.group === "Pages and features" ? " · searching customers and invoices..." : ""}
+                                                </p>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => go(entry)}
+                                                onMouseEnter={() => setHighlighted(index)}
+                                                className={`block w-full rounded-xl px-3 py-2.5 text-left transition ${
+                                                    index === highlighted ? "bg-amber-400/15" : "hover:bg-white/[0.05]"
+                                                }`}
+                                            >
+                                                <p className={`text-sm font-semibold ${index === highlighted ? "text-amber-300" : "text-white"}`}>{entry.title}</p>
+                                                <p className="mt-0.5 text-xs text-white/50">{entry.detail}</p>
+                                            </button>
+                                        </div>
                                     ))
                                 )}
                             </div>

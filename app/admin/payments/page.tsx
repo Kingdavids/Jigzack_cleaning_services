@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { generateAllInvoices } from "@/app/admin/actions/billing";
-import { formatDate, naira } from "@/lib/customer/billing";
+import { formatDate, invoiceNumber, naira } from "@/lib/customer/billing";
 import { amountPaid, balanceOf, groupInstallments, invoiceTotal, loadInstallmentsChunked } from "@/lib/billing/balance";
 import { billingMonthKey, billingMonthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -33,18 +33,18 @@ type PaymentRow = AdminInvoiceRow & { customer: ProfileRef };
 
 // How the customer groups on this page are ordered (?sort=).
 const SORTS = [
+    { key: "name", label: "Name A–Z" },
     { key: "action", label: "Needs action first" },
     { key: "owed", label: "Most owed" },
     { key: "newest", label: "Newest" },
     { key: "oldest", label: "Oldest" },
-    { key: "name", label: "Name A–Z" },
 ] as const;
 
 type SortKey = (typeof SORTS)[number]["key"];
 
 export default async function AdminPaymentsPage({ searchParams }: { searchParams: Promise<{ sort?: string }> }) {
     const { sort: sortParam } = await searchParams;
-    const sort: SortKey = SORTS.some((s) => s.key === sortParam) ? (sortParam as SortKey) : "action";
+    const sort: SortKey = SORTS.some((s) => s.key === sortParam) ? (sortParam as SortKey) : "name";
 
     // The newest invoice first inside each customer's group.
     const newestFirst = (a: { created_at: string }, b: { created_at: string }) => b.created_at.localeCompare(a.created_at);
@@ -239,6 +239,13 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         oldest: string;
         lastPaid: string;
     };
+    const searchTextOf = (items: PaymentRow[]) =>
+        items
+            .map((i) => {
+                const to = billToOf(i);
+                return [invoiceNumber(i.id), i.invoice_month, to?.phone, to?.email, to?.address, to?.property_name].filter(Boolean).join(" ");
+            })
+            .join(" ");
     const groupBy = (list: PaymentRow[]) => {
         const map = new Map<string, InvoiceGroup>();
 
@@ -432,7 +439,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                         {SORTS.map((option) => (
                             <Link
                                 key={option.key}
-                                href={option.key === "action" ? "/admin/payments" : `/admin/payments?sort=${option.key}`}
+                                href={option.key === "name" ? "/admin/payments" : `/admin/payments?sort=${option.key}`}
                                 aria-current={sort === option.key ? "page" : undefined}
                                 className={`inline-flex min-h-9 items-center rounded-full border px-3 text-xs transition ${
                                     sort === option.key
@@ -460,6 +467,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                                         key={group.key}
                                         name={group.name}
                                         needs={group.reported}
+                                        searchText={searchTextOf(group.items)}
                                         defaultOpen={group.reported > 0 || unpaidGroups.length <= 6}
                                         header={
                                             <div>
@@ -517,6 +525,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                                         <CustomerGroup
                                             key={group.key}
                                             name={group.name}
+                                            searchText={searchTextOf(group.items)}
                                             defaultOpen={group.owed > 0}
                                             header={
                                                 <div>
@@ -583,6 +592,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                                                 <CustomerGroup
                                                     key={group.key}
                                                     name={group.name}
+                                                    searchText={searchTextOf(group.items)}
                                                     defaultOpen={personGroups.length <= 4}
                                                     header={
                                                         <div>
