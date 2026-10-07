@@ -27,6 +27,7 @@ export default function DashboardSearch() {
 
     const [hits, setHits] = useState<SearchHit[]>([]);
     const [searching, setSearching] = useState(false);
+    const [problem, setProblem] = useState<string | null>(null);
     const latest = useRef(0);
 
     const pages = useMemo(() => {
@@ -42,6 +43,7 @@ export default function DashboardSearch() {
 
         if (term.length < 2) {
             setHits([]);
+            setProblem(null);
             setSearching(false);
             return;
         }
@@ -50,9 +52,15 @@ export default function DashboardSearch() {
         const timer = setTimeout(async () => {
             try {
                 const found = await searchRecords(term);
-                if (latest.current === ticket) setHits(found);
+                if (latest.current === ticket) {
+                    setHits(found.hits);
+                    setProblem(found.error ?? null);
+                }
             } catch {
-                if (latest.current === ticket) setHits([]);
+                if (latest.current === ticket) {
+                    setHits([]);
+                    setProblem("The search ran into a problem. Please try again.");
+                }
             } finally {
                 if (latest.current === ticket) setSearching(false);
             }
@@ -160,9 +168,10 @@ export default function DashboardSearch() {
                             </div>
 
                             <div className="max-h-[50vh] overflow-y-auto p-2">
+                                {problem && results.length > 0 && <p className="px-3 pt-2 text-xs text-amber-300">{problem}</p>}
                                 {results.length === 0 ? (
                                     <p className="px-3 py-6 text-center text-sm text-white/40">
-                                        {searching ? "Searching..." : `Nothing matches "${query}".`}
+                                        {searching ? "Searching..." : problem ?? `Nothing matches "${query}".`}
                                     </p>
                                 ) : (
                                     results.map((entry, index) => (

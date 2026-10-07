@@ -66,7 +66,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
     const { data: propertyRows } = customerOptions.length
         ? await supabase
               .from("customers")
-              .select("profile_id, facility_details, vacancies, phone, whatsapp_number, email, status")
+              .select("profile_id, facility_details, vacancies, phone, whatsapp_number, email, status, address, lga, account_code")
               .in("profile_id", customerOptions.map((c) => c.id))
         : { data: [] };
     type PropertyRow = {
@@ -77,6 +77,9 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         whatsapp_number: string | null;
         email: string | null;
         status: string | null;
+        address?: string | null;
+        lga?: string | null;
+        account_code?: string | null;
     };
     const propertyByProfile = new Map(((propertyRows ?? []) as PropertyRow[]).map((row) => [row.profile_id, row]));
     // Suspended customers are tagged wherever their invoices appear.
@@ -239,13 +242,21 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         oldest: string;
         lastPaid: string;
     };
-    const searchTextOf = (items: PaymentRow[]) =>
-        items
-            .map((i) => {
+    // Everything a search box on this page can match for a group: invoice
+    // numbers and months, and the contact details of the customer (registered)
+    // or of the person the invoice was made out to (not registered).
+    const searchTextOf = (items: PaymentRow[]) => {
+        const own = items[0]?.customer_id ? propertyByProfile.get(items[0].customer_id) : undefined;
+        const ownText = own ? [own.phone, own.whatsapp_number, own.email, own.address, own.lga, own.account_code].filter(Boolean).join(" ") : "";
+
+        return [
+            ownText,
+            ...items.map((i) => {
                 const to = billToOf(i);
-                return [invoiceNumber(i.id), i.invoice_month, to?.phone, to?.email, to?.address, to?.property_name].filter(Boolean).join(" ");
-            })
-            .join(" ");
+                return [invoiceNumber(i.id), i.invoice_month, to?.phone, to?.whatsapp_number, to?.email, to?.address, to?.property_name].filter(Boolean).join(" ");
+            }),
+        ].join(" ");
+    };
     const groupBy = (list: PaymentRow[]) => {
         const map = new Map<string, InvoiceGroup>();
 

@@ -19,7 +19,7 @@ export function TaskFilter({ children }: { children: ReactNode }) {
                     <input
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search by customer"
+                        placeholder="Search by name, phone, email or address"
                         className="h-12 w-full rounded-xl border border-white/10 bg-white/8 pl-10 pr-3 text-base text-white outline-none placeholder:text-white/30 focus:border-amber-300/50 sm:h-11 sm:text-sm"
                     />
                 </label>
@@ -41,12 +41,15 @@ export function TaskFilter({ children }: { children: ReactNode }) {
 // One customer and their pickups, folded away until opened.
 export function TaskGroup({
                               name,
+                              searchText = "",
                               needs,
                               defaultOpen,
                               header,
                               children,
                           }: {
     name: string;
+    // Anything else the search box should match: phone, email, address.
+    searchText?: string;
     // How many of their pickups still need someone assigned.
     needs: number;
     defaultOpen: boolean;
@@ -55,7 +58,7 @@ export function TaskGroup({
 }) {
     const { query, onlyNeeds } = useContext(FilterContext);
 
-    if (query && !name.toLowerCase().includes(query)) return null;
+    if (query && !`${name} ${searchText}`.toLowerCase().includes(query)) return null;
     if (onlyNeeds && needs === 0) return null;
 
     return (

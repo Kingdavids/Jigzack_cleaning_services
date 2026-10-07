@@ -112,6 +112,14 @@ export default async function AdminTasksPage() {
         ])
     );
 
+    // Contact details for each customer's group, so the search box can match them.
+    const contactByCustomer = new Map(
+        (patternRows ?? []).map((row) => [
+            row.profile_id as string,
+            [row.phone, row.whatsapp_number, row.email, row.address, row.lga, row.account_code].filter(Boolean).join(" "),
+        ])
+    );
+
     type Group = { key: string; name: string; pattern: string | null; open: TaskRow[]; serviced: TaskRow[] };
     const groupMap = new Map<string, Group>();
 
@@ -239,6 +247,7 @@ export default async function AdminTasksPage() {
                                         <TaskGroup
                                             key={group.key}
                                             name={group.name}
+                                            searchText={contactByCustomer.get(group.key) ?? ""}
                                             needs={needs}
                                             defaultOpen={needs > 0 && groups.length <= 6}
                                             header={
