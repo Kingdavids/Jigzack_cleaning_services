@@ -194,3 +194,22 @@ export function normalizeLineItems(raw: unknown): LineItem[] {
         }))
         .filter((item) => item.label && Number.isFinite(item.quantity) && Number.isFinite(item.unit_price));
 }
+
+// A month's charges laid out for several months paid ahead: every line runs for
+// all of them, so the total is the monthly charge times the months. Matches how
+// the invoice builder words it.
+export function advanceInvoiceItems(items: LineItem[], months: number): LineItem[] {
+    if (months <= 1) return items;
+
+    return items.map((item) => ({ ...item, label: `${item.label} (${months} months)`, quantity: item.quantity * months }));
+}
+
+// How far short of the full price for these months an advance payment is, or 0
+// when it covers them (or when there is no monthly charge to compare with).
+export function advanceShortfall(amount: number, monthlyCharge: number, months: number) {
+    if (!(monthlyCharge > 0) || !(months >= 1) || !(amount > 0)) return 0;
+
+    const shortfall = Math.round((monthlyCharge * months - amount) * 100) / 100;
+
+    return shortfall > 0.005 ? shortfall : 0;
+}

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { recordPrepayment, voidPrepayment } from "@/app/admin/actions/payments";
+import { createAdvanceInvoiceWithPayment, recordPrepayment, voidPrepayment } from "@/app/admin/actions/payments";
+import { advanceShortfall } from "@/lib/billing/pricing";
 import { naira } from "@/lib/customer/billing";
 import { coveredMonthsFrom, currentMonthValue, type PrepaymentPerson } from "@/lib/billing/prepaid";
 import ConfirmDialog from "@/components/dashboard/ConfirmDialog";
@@ -56,6 +57,7 @@ export default function PrepaymentForm({
     const [note, setNote] = useState("");
     const [settle, setSettle] = useState(true);
     const [confirming, setConfirming] = useState(false);
+    const [partConfirming, setPartConfirming] = useState(false);
     const [saving, setSaving] = useState(false);
     const [removing, setRemoving] = useState<PrepaymentSummary | null>(null);
 
@@ -68,6 +70,8 @@ export default function PrepaymentForm({
     const covered = countOk && firstMonth ? coveredMonthsFrom(firstMonth, count) : [];
     const span = covered.length > 0 ? `${covered[0]}${covered.length > 1 ? ` to ${covered[covered.length - 1]}` : ""}` : "";
     const valid = countOk && amountOk && covered.length > 0 && Boolean(profileId || person?.full_name.trim());
+    // Paying less than these months cost: an advance payment would mark them all paid.
+    const shortfall = profileId && countOk && amountOk ? advanceShortfall(amount, monthlyCharge, count) : 0;
 
     const save = async () => {
         setSaving(true);
@@ -81,6 +85,27 @@ export default function PrepaymentForm({
         }
 
         toast.success(result.message ?? "Recorded.");
+        setReference("");
+        setNote("");
+        setTypedAmount(null);
+        router.refresh();
+    };
+
+    // The better way to record part of the price: an invoice for the months with this paid on it.
+    const partPaid = async () => {
+        if (!profileId) return;
+
+        setSaving(true);
+        const result = await createAdvanceInvoiceWithPayment({ profileId, months: count, firstMonth, amount, method, reference, note });
+        setSaving(false);
+        setPartConfirming(false);
+
+        if (!result.success) {
+            toast.error(result.error ?? "Could not create the invoice.");
+            return;
+        }
+
+        toast.success(result.message ?? "Invoice created.");
         setReference("");
         setNote("");
         setTypedAmount(null);
@@ -222,13 +247,39 @@ export default function PrepaymentForm({
                         )}
                     </div>
 
+                    {shortfall > 0 && (
+                        <div className="rounded-xl border border-amber-300/30 bg-amber-300/[0.07] p-4 text-sm">
+                            <p className="font-semibold text-amber-200">
+                                This is {naira(shortfall)} less than {count} month{count === 1 ? "" : "s"} cost ({naira(suggested)}).
+                            </p>
+                            <p className="mt-1 text-white/70">
+                                An advance payment marks every month it covers as fully paid, and keeps no balance. For a part payment, make an invoice for these months and
+                                record what they paid on it. The {naira(shortfall)} then stays owed.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => setPartConfirming(true)}
+                                disabled={saving}
+                                className="mt-3 h-11 rounded-xl bg-amber-400 px-4 text-sm font-bold text-black transition hover:bg-amber-300 disabled:opacity-50"
+                            >
+                                Create an invoice and record {naira(amount)} as a part payment
+                            </button>
+                        </div>
+                    )}
+
+                    {person && (
+                        <p className="text-xs text-white/45">
+                            Paid only part of what the months cost? Make an invoice for them instead (Create a one-off invoice, choose the months) and record the part payment on it.
+                        </p>
+                    )}
+
                     <button
                         type="button"
                         onClick={() => setConfirming(true)}
                         disabled={!valid}
                         className="h-12 w-full rounded-xl bg-emerald-500 px-5 text-sm font-bold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50 sm:h-11 sm:w-auto"
                     >
-                        Record advance payment
+                        {shortfall > 0 ? "Record as fully paid anyway" : "Record advance payment"}
                     </button>
                 </div>
             ) : (
@@ -250,6 +301,23 @@ export default function PrepaymentForm({
                 <p className="mt-2">
                     {profileId ? "A receipt is issued to the customer, and no invoices are made for those months." : "A receipt is made that you can print or send. When they register, this moves to their account."}
                     {settle ? " Any invoice that already exists for them is marked paid." : ""}
+                </p>
+            </ConfirmDialog>
+
+            <ConfirmDialog
+                open={partConfirming}
+                title="Create an invoice with a part payment?"
+                confirmLabel="Yes, create it"
+                busy={saving}
+                onConfirm={partPaid}
+                onCancel={() => setPartConfirming(false)}
+            >
+                <p>
+                    An invoice for <span className="font-bold text-white">{span}</span> is made at {customName}&apos;s usual charge ({naira(suggested)}), and{" "}
+                    <span className="font-bold text-white">{naira(valid ? amount : 0)}</span> by {method} is recorded as paid on it, with a receipt.
+                </p>
+                <p className="mt-2">
+                    The other {naira(shortfall)} stays owed and shows as a part-paid invoice. No monthly invoices are made for those months.
                 </p>
             </ConfirmDialog>
 

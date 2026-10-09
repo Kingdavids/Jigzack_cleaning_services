@@ -7,6 +7,9 @@ import { balanceOf, groupInstallments, invoiceTotal, loadInstallments, round2 } 
 import { coveredMonthsFrom, loadPrepayments, loadUnregisteredPrepayments, type PrepaymentPerson } from "@/lib/billing/prepaid";
 import { naira, receiptNumber } from "@/lib/customer/billing";
 import { requireAdmin } from "./shared";
+import { chargeItems, loadBillable, loadEstateUnits } from "@/lib/billing/generate";
+import { advanceInvoiceItems, itemsTotal, monthRangeLabel, monthsFrom, tooEarlyToBill } from "@/lib/billing/pricing";
+import { invoiceInsertError } from "@/lib/admin/invoice-input";
 import { billToOf, personKey } from "@/lib/billing/billTo";
 
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];
@@ -317,4 +320,128 @@ export async function voidPrepayment(prepaymentId: string): Promise<PrepaymentRe
     revalidatePath("/customer/payments");
 
     return { success: true, message: "Advance payment removed." };
+}
+
+// What a registered customer is charged for one month, after any discount, so
+// the advance payment form can tell when an amount falls short.
+export async function getMonthlyCharge(profileId: string): Promise<number> {
+    await requireAdmin();
+    const supabase = await createClient();
+
+    if (!profileId) return 0;
+
+    const customer = await loadBillable(supabase, profileId);
+    if (!customer) return 0;
+
+    const units = customer.is_estate ? await loadEstateUnits(supabase, profileId) : undefined;
+
+    return itemsTotal(chargeItems(customer, units));
+}
+
+// For a customer who paid only part of what the months they are paying ahead
+// cost. An advance payment marks every month it covers as fully paid, so this
+// makes an invoice for those months instead, at their usual charge, and records
+// what they paid as a part payment on it. The rest is then owed and tracked, and
+// the months are covered so no monthly invoice is made for them.
+export async function createAdvanceInvoiceWithPayment(input: {
+    profileId: string;
+    months: number;
+    firstMonth: string;
+    amount: number;
+    method: string;
+    reference: string;
+    note: string;
+}): Promise<PrepaymentResult & { invoiceId?: string }> {
+    const actor = await requireAdmin();
+    const supabase = await createClient();
+
+    const months = Math.trunc(Number(input.months));
+    const amount = round2(Number(input.amount));
+
+    if (!input.profileId) return { success: false, error: "Missing customer." };
+    if (!Number.isFinite(months) || months < 1 || months > 24) return { success: false, error: "Choose between 1 and 24 months." };
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.firstMonth)) return { success: false, error: "Choose the first month it covers." };
+    if (!Number.isFinite(amount) || amount <= 0) return { success: false, error: "Enter the amount received." };
+
+    const customer = await loadBillable(supabase, input.profileId);
+    if (!customer) return { success: false, error: "Customer not found." };
+
+    const units = customer.is_estate ? await loadEstateUnits(supabase, input.profileId) : undefined;
+    const base = chargeItems(customer, units);
+    if (base.length === 0) return { success: false, error: "This customer has no monthly charge set yet, so there is nothing to invoice." };
+
+    const items = advanceInvoiceItems(base, months);
+    const total = round2(itemsTotal(items));
+
+    if (amount >= total) return { success: false, error: "That covers the full price, so record it as an advance payment instead." };
+
+    const covered = monthsFrom(input.firstMonth, months);
+    const label = monthRangeLabel(covered);
+
+    // A single month ahead can't be billed yet; several months paid at once can.
+    const early = tooEarlyToBill(label);
+    if (early) return { success: false, error: early };
+
+    // None of these months may already be paid or invoiced.
+    const prepaid = (await loadPrepayments(supabase, input.profileId)).flatMap((p) => p.covered_months).filter((month) => covered.includes(month));
+    if (prepaid.length > 0) return { success: false, error: `Already paid in advance for ${prepaid.join(", ")}.` };
+
+    for (const month of covered) {
+        const byMonth = supabase.from("payments").select("id").eq("customer_id", input.profileId);
+        const found = await byMonth.or(`invoice_month.eq."${month}",covered_months.cs.{"${month}"}`).limit(1);
+        const { data: existing } = found.error
+            ? await supabase.from("payments").select("id").eq("customer_id", input.profileId).eq("invoice_month", month).limit(1)
+            : found;
+
+        if (existing && existing.length > 0) return { success: false, error: `There is already an invoice covering ${month}. Record the payment on that invoice instead.` };
+    }
+
+    const { data: created, error } = await supabase
+        .from("payments")
+        .insert({
+            customer_id: input.profileId,
+            amount: total,
+            arrears: 0,
+            units: items.reduce((sum, item) => sum + item.quantity, 0) || 1,
+            line_items: items,
+            description: `Waste management service, ${label}`,
+            invoice_month: label,
+            covered_months: covered,
+            auto_generated: false,
+        })
+        .select("id")
+        .single();
+
+    if (error || !created) {
+        console.error("createAdvanceInvoiceWithPayment error:", error?.message);
+        return { success: false, error: invoiceInsertError(error?.message) };
+    }
+
+    const invoiceId = created.id as string;
+    const paid = await recordPayment(invoiceId, amount, input.method, input.reference, input.note);
+
+    if (!paid.success) {
+        // Nothing paid is left behind: take the invoice back out.
+        await supabase.from("payments").delete().eq("id", invoiceId);
+        return { success: false, error: paid.error ?? "Could not record the payment." };
+    }
+
+    await logActivity(
+        supabase,
+        actor,
+        "invoice_created",
+        `Created an advance invoice for ${label} (${naira(total)}) with ${naira(amount)} paid so far`,
+        { type: "profile", id: input.profileId }
+    );
+    revalidatePath(`/admin/customers/${input.profileId}`);
+    revalidatePath("/admin/payments");
+    revalidatePath("/admin");
+    revalidatePath("/customer");
+    revalidatePath("/customer/payments");
+
+    return {
+        success: true,
+        invoiceId,
+        message: `Invoice made for ${label} (${naira(total)}). ${naira(amount)} is recorded as paid, and ${naira(round2(total - amount))} is still owed.`,
+    };
 }

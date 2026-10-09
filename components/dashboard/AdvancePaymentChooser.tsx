@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getMonthlyCharge } from "@/app/admin/actions/payments";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 
 const fieldClass =
@@ -19,6 +20,21 @@ export default function AdvancePaymentChooser({ customers }: { customers: { id: 
     const [address, setAddress] = useState("");
 
     const chosen = customers.find((c) => c.id === customerId);
+    // What the chosen customer pays a month, so the form can tell when an amount falls short.
+    const [charge, setCharge] = useState<{ id: string; amount: number } | null>(null);
+
+    useEffect(() => {
+        if (!customerId) return;
+
+        let current = true;
+        getMonthlyCharge(customerId)
+            .then((amount) => current && setCharge({ id: customerId, amount }))
+            .catch(() => current && setCharge({ id: customerId, amount: 0 }));
+
+        return () => {
+            current = false;
+        };
+    }, [customerId]);
 
     return (
         <div className="space-y-4">
@@ -60,7 +76,14 @@ export default function AdvancePaymentChooser({ customers }: { customers: { id: 
                         </select>
                     </label>
                     {customerId ? (
-                        <PrepaymentForm key={customerId} profileId={customerId} customName={chosen?.full_name ?? "this customer"} monthlyCharge={0} canRecord payments={[]} />
+                        <PrepaymentForm
+                            key={`${customerId}-${charge?.id === customerId ? charge.amount : "loading"}`}
+                            profileId={customerId}
+                            customName={chosen?.full_name ?? "this customer"}
+                            monthlyCharge={charge?.id === customerId ? charge.amount : 0}
+                            canRecord
+                            payments={[]}
+                        />
                     ) : (
                         <p className="text-sm text-white/50">Choose a customer to record what they paid ahead.</p>
                     )}
