@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { ALL_FACILITIES, COMMERCIAL_FACILITIES, DOMESTIC_FACILITIES, type FacilityDef } from "@/lib/customer/facilities";
-import { itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } from "@/lib/billing/pricing";
+import { INVOICE_DAY, itemsTotal, monthRangeLabel, monthsFrom, UNIT_PRICES, type LineItem } from "@/lib/billing/pricing";
 import MonthRangePicker, { monthSpan } from "@/components/dashboard/MonthRangePicker";
 import DiscountFields from "@/components/dashboard/DiscountFields";
 import { applyDiscount, NO_DISCOUNT, type DiscountInput } from "@/lib/billing/discount-line";
@@ -61,6 +61,12 @@ export default function InvoiceBuilder({
     const months = useMemo(() => monthsFrom(range.start, monthSpan(range.start, range.end)), [range]);
     const period = monthRangeLabel(months);
     const n = months.length || 1;
+
+    // A single month after the current billing month isn't billed until the 25th.
+    // An admin can tick "bill early" to make an exception for this one invoice.
+    const [billEarly, setBillEarly] = useState(false);
+    const isEarlySingleMonth = kind === "service" && range.start === range.end && range.start > defaultStartMonth;
+    const allowEarly = isEarlySingleMonth && billEarly;
 
     const forMonths = (label: string) => (n > 1 ? `${label} (${n} months)` : label);
     const perMonthNote = (price: number) => (n > 1 ? `${naira(price)} a month` : undefined);
@@ -171,6 +177,7 @@ export default function InvoiceBuilder({
             <input type="hidden" name="invoiceKind" value={kind} />
             <input type="hidden" name="lineItems" value={JSON.stringify(lineItems)} />
             <input type="hidden" name="invoiceMonth" value={kind === "service" ? period : ""} />
+            {allowEarly && <input type="hidden" name="allowEarly" value="on" />}
             <input type="hidden" name="coveredMonths" value={JSON.stringify(kind === "service" ? months : [])} />
             <input type="hidden" name="propertyDetails" value={JSON.stringify(kind === "service" ? propertyDetails : {})} />
             <input type="hidden" name="arrears" value={arrearsApplied || ""} />
@@ -356,11 +363,28 @@ export default function InvoiceBuilder({
             <fieldset className="space-y-3">
                 <legend className="mb-2 text-sm font-semibold">Months covered</legend>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                    <MonthRangePicker start={range.start} end={range.end} onChange={setRange} latestStart={defaultStartMonth} />
+                    <MonthRangePicker start={range.start} end={range.end} onChange={setRange} latestStart={defaultStartMonth} allowEarly={allowEarly} />
                     <p className="text-sm text-white/60 lg:pb-3">
                         Covers <span className="font-bold text-white">{period}</span> · {n} month{n === 1 ? "" : "s"}
                     </p>
                 </div>
+                {isEarlySingleMonth && (
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] p-3 text-sm">
+                        <input
+                            type="checkbox"
+                            checked={billEarly}
+                            onChange={(e) => setBillEarly(e.target.checked)}
+                            className="mt-1 h-4 w-4 accent-amber-400"
+                        />
+                        <span>
+                            <span className="font-semibold text-amber-200">Bill {period} early, as a one-off exception</span>
+                            <span className="block text-white/60">
+                                {period} normally starts on {INVOICE_DAY} {period.split(" ")[0]}. This invoice counts as their {period} invoice, so the
+                                automatic one on that day is skipped for them.
+                            </span>
+                        </span>
+                    </label>
+                )}
             </fieldset>
 
             </>)}

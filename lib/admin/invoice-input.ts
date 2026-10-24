@@ -85,8 +85,9 @@ export function readBuiltInvoice(formData: FormData):
 
     const invoiceMonth = String(formData.get("invoiceMonth") ?? "").trim().slice(0, 60) || null;
 
-    // A single month is only billed from the 25th; several months at once is paying ahead.
-    const early = tooEarlyToBill(invoiceMonth);
+    // A single month is only billed from the 25th; several months at once is paying
+    // ahead. An admin can tick "bill early" on a one-off invoice to make an exception.
+    const early = formData.get("allowEarly") === "on" ? null : tooEarlyToBill(invoiceMonth);
     if (early) return { error: early };
 
     return { kind, sales, items, amount, arrears, invoiceMonth, coveredMonths, propertyDetails };

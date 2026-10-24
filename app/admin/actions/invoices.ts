@@ -351,8 +351,9 @@ export async function updateInvoice(
     const cleanArrears = Number.isFinite(arrears) && arrears > 0 ? round2(arrears) : 0;
     const newTotal = round2(itemsTotal(items) + cleanArrears);
 
-    // A month is only billed from the 25th, so an invoice can't be moved into it early either.
-    const early = tooEarlyToBill(String(formData.get("invoiceMonth") || ""));
+    // A month is only billed from the 25th, so an invoice can't be moved into it
+    // early either, unless the admin ticks "bill early" to make an exception.
+    const early = formData.get("allowEarly") === "on" ? null : tooEarlyToBill(String(formData.get("invoiceMonth") || ""));
     if (early) return { success: false, error: early };
 
     // Money may already have been received on this invoice, with receipts

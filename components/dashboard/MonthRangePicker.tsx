@@ -150,6 +150,7 @@ export default function MonthRangePicker({
                                              end,
                                              onChange,
                                              latestStart,
+                                             allowEarly = false,
                                          }: {
     start: string;
     end: string;
@@ -157,6 +158,8 @@ export default function MonthRangePicker({
     // The current billing month ("YYYY-MM"). A single month can't be billed
     // after it, but a range can start later: that is paying ahead.
     latestStart?: string;
+    // An admin has chosen to bill a later single month early, as an exception.
+    allowEarly?: boolean;
 }) {
     const changeStart = (value: string) => {
         const from = toIndex(value);
@@ -168,7 +171,7 @@ export default function MonthRangePicker({
     // Paying ahead: the range can start up to MAX_MONTHS after the billing month.
     const furthestStart = latestStart ? toKey(toIndex(latestStart) + MAX_MONTHS - 1) : undefined;
     // Months after the billing month can only be billed as a range of two or more.
-    const needsLaterEnd = Boolean(latestStart) && toIndex(start) > toIndex(latestStart as string) && start === end;
+    const needsLaterEnd = !allowEarly && Boolean(latestStart) && toIndex(start) > toIndex(latestStart as string) && start === end;
 
     return (
         <div>

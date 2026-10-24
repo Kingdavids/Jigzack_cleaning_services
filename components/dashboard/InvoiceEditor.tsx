@@ -6,7 +6,7 @@ import { useFormStatus } from "react-dom";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { InvoiceActionState } from "@/app/admin/actions/invoices";
-import { itemsTotal, type LineItem } from "@/lib/billing/pricing";
+import { itemsTotal, tooEarlyToBill, type LineItem } from "@/lib/billing/pricing";
 import { applyDiscount, isDiscountLine, readDiscount, type DiscountInput } from "@/lib/billing/discount-line";
 import DiscountFields from "@/components/dashboard/DiscountFields";
 
@@ -55,6 +55,10 @@ export default function InvoiceEditor({
     const [items, setItems] = useState<LineItem[]>(startingItems.filter((item) => !isDiscountLine(item)));
     const [discount, setDiscount] = useState<DiscountInput>(() => readDiscount(startingItems));
     const [arrears, setArrears] = useState(invoice.arrears || 0);
+    // A month before its start date can only be billed as a one-off exception the admin ticks.
+    const [month, setMonth] = useState(invoice.invoice_month ?? "");
+    const [billEarly, setBillEarly] = useState(false);
+    const monthIsEarly = tooEarlyToBill(month) !== null;
 
     useEffect(() => {
         if (!state) return;
@@ -87,13 +91,31 @@ export default function InvoiceEditor({
                 <div className="grid gap-3 sm:grid-cols-3">
                     <label className="block">
                         <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/40">Invoice month</span>
-                        <input name="invoiceMonth" defaultValue={invoice.invoice_month ?? ""} className={inputClass} />
+                        <input name="invoiceMonth" value={month} onChange={(e) => setMonth(e.target.value)} className={inputClass} />
                     </label>
                     <label className="block sm:col-span-2">
                         <span className="mb-1 block text-[11px] uppercase tracking-[0.12em] text-white/40">Description</span>
                         <input name="description" defaultValue={invoice.description ?? ""} className={inputClass} />
                     </label>
                 </div>
+
+                {monthIsEarly && (
+                    <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300/25 bg-amber-300/[0.06] p-3 text-sm">
+                        <input
+                            type="checkbox"
+                            name="allowEarly"
+                            checked={billEarly}
+                            onChange={(e) => setBillEarly(e.target.checked)}
+                            className="mt-1 h-4 w-4 accent-amber-400"
+                        />
+                        <span>
+                            <span className="font-semibold text-amber-200">Bill {month} early, as a one-off exception</span>
+                            <span className="block text-white/60">
+                                That month hasn&apos;t started yet. This invoice counts as their {month} invoice, so the automatic one is skipped for them.
+                            </span>
+                        </span>
+                    </label>
+                )}
 
                 <div className="space-y-2">
                     <div className="hidden grid-cols-[1fr_80px_110px_1fr_36px] gap-2 text-[11px] uppercase tracking-[0.12em] text-white/40 sm:grid">
