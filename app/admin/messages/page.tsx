@@ -12,6 +12,7 @@ import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConv
 import { deletedProfileIds } from "@/lib/admin/deletedCustomers";
 import ClearMessagesCard from "@/components/dashboard/ClearMessagesCard";
 import { isOwner, isViewOnlyAdmin } from "@/lib/auth/roles";
+import { loadAccountHolders } from "@/lib/message-names";
 
 export default async function AdminMessagesPage() {
     const { profile, supabase, unreadCount } = await requireDashboardAccess("admin");
@@ -56,6 +57,13 @@ export default async function AdminMessagesPage() {
 
     const watched = (watchedResult.data ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"];
 
+    // The name a sender typed on their property form, shown beside the name from
+    // signup whenever the two differ, so a message is easy to match to a customer.
+    const accountHolders = await loadAccountHolders(supabase, [
+        ...messages.flatMap((m) => [m.from_profile_id, m.to_profile_id]),
+        ...watched.flatMap((m) => [m.from_profile_id, m.to_profile_id]),
+    ]);
+
     return (
         <DashboardShell
             role="admin"
@@ -71,6 +79,7 @@ export default async function AdminMessagesPage() {
                         currentProfileId={profile.id}
                         replyAction={replyToMessage}
                         deleteAction={deleteMessage}
+                        accountHolders={accountHolders}
                     />
 
                     {supervisor ? (
@@ -184,7 +193,7 @@ export default async function AdminMessagesPage() {
                     title="Staff and customer conversations"
                     description="What staff and customers are saying to each other. This is a read-only view and nobody is notified."
                 >
-                    <StaffCustomerConversations messages={watched} />
+                    <StaffCustomerConversations messages={watched} accountHolders={accountHolders} />
                     {isOwner(profile) && (
                         <p className="mt-4 text-sm text-white/55">
                             As an owner you can see every conversation in the app, including admins with customers and staff, on the{" "}

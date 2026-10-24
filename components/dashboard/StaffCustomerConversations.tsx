@@ -1,5 +1,6 @@
 import type { MessageRow } from "@/components/dashboard/MessageThreadList";
 import AttachmentLink from "@/components/dashboard/AttachmentLink";
+import { nameWithHolder, type AccountHolders } from "@/lib/message-names";
 
 type WatchedMessage = Omit<MessageRow, "from_profile" | "to_profile"> & {
     from_profile: { full_name: string | null; role: string | null } | null;
@@ -21,9 +22,12 @@ const ROLE_LABEL: Record<string, string> = { admin: "admin", employee: "staff", 
 export default function StaffCustomerConversations({
                                                        messages,
                                                        scope = "staff-customer",
+                                                       accountHolders,
                                                    }: {
     messages: WatchedMessage[];
     scope?: "staff-customer" | "everyone";
+    // Profile id -> name on their customer record, shown beside a signup name that differs.
+    accountHolders?: AccountHolders;
 }) {
     const everyone = scope === "everyone";
 
@@ -78,13 +82,16 @@ export default function StaffCustomerConversations({
                 const first = thread[0];
                 const staff = [first.from_profile, first.to_profile].find((p) => p?.role === "employee");
                 const customer = [first.from_profile, first.to_profile].find((p) => p?.role === "customer");
+                const customerId = first.from_profile?.role === "customer" ? first.from_profile_id : first.to_profile_id;
                 const fannedOut = everyone && fanned.has(first.id);
 
                 const label = everyone
-                    ? `${first.from_profile?.full_name ?? "Unknown"} (${ROLE_LABEL[first.from_profile?.role ?? ""] ?? "user"}) to ${
-                        fannedOut ? "all admins" : `${first.to_profile?.full_name ?? "Unknown"} (${ROLE_LABEL[first.to_profile?.role ?? ""] ?? "user"})`
+                    ? `${nameWithHolder(first.from_profile?.full_name, first.from_profile_id, accountHolders) ?? "Unknown"} (${ROLE_LABEL[first.from_profile?.role ?? ""] ?? "user"}) to ${
+                        fannedOut
+                            ? "all admins"
+                            : `${nameWithHolder(first.to_profile?.full_name, first.to_profile_id, accountHolders) ?? "Unknown"} (${ROLE_LABEL[first.to_profile?.role ?? ""] ?? "user"})`
                     }`
-                    : `${staff?.full_name ?? "Staff"} and ${customer?.full_name ?? "customer"}`;
+                    : `${staff?.full_name ?? "Staff"} and ${nameWithHolder(customer?.full_name, customerId, accountHolders) ?? "customer"}`;
 
                 return (
                     <div key={first.parent_message_id ?? first.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -95,7 +102,8 @@ export default function StaffCustomerConversations({
                             {thread.map((message) => (
                                 <div key={message.id} className="rounded-xl bg-black/25 px-3 py-2">
                                     <p className="text-xs text-white/45">
-                                        {message.from_profile?.full_name ?? "Unknown"} · {when(message.created_at)}
+                                        {nameWithHolder(message.from_profile?.full_name, message.from_profile_id, accountHolders) ?? "Unknown"} ·{" "}
+                                        {when(message.created_at)}
                                     </p>
                                     <p className="mt-1 select-text whitespace-pre-wrap text-sm text-white/80 [-webkit-touch-callout:default] [-webkit-user-select:text]">{message.body}</p>
                                     {message.attachment_path && (

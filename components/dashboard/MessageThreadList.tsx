@@ -8,6 +8,7 @@ import { createClient } from "@/utils/supabase/client";
 import { markThreadRead, type MessageActionState } from "@/lib/messaging-actions";
 import { MESSAGE_SELECT, MESSAGE_SELECT_BASE } from "@/lib/message-select";
 import AttachmentLink from "@/components/dashboard/AttachmentLink";
+import { loadAccountHolders, nameWithHolder, type AccountHolders } from "@/lib/message-names";
 
 export type MessageRow = {
     id: string;
@@ -221,8 +222,10 @@ function MessageBubble({
                             currentProfileId,
                             deleteAction,
                             deleteGroupId,
+                            holders,
                         }: {
     message: MessageRow;
+    holders?: AccountHolders;
     currentProfileId: string;
     deleteAction: (formData: FormData) => void;
     deleteGroupId?: string | null;
@@ -236,7 +239,7 @@ function MessageBubble({
             <div className={`flex max-w-[78%] flex-col ${isMine ? "items-end" : "items-start"}`}>
                 {!isMine && (
                     <p className="mb-1 px-1 text-xs font-semibold text-white/50">
-                        {message.from_profile?.full_name ?? "Unknown"}
+                        {nameWithHolder(message.from_profile?.full_name, message.from_profile_id, holders) ?? "Unknown"}
                     </p>
                 )}
 
@@ -272,13 +275,24 @@ export default function MessageThreadList({
                                                currentProfileId,
                                                replyAction,
                                                deleteAction,
+                                               accountHolders,
                                            }: {
     messages: MessageRow[];
     currentProfileId: string;
     replyAction: ReplyAction;
     deleteAction: (formData: FormData) => void;
+    // Admin only: profile id -> name on their customer record, so a sender whose
+    // signup name differs from it shows both.
+    accountHolders?: AccountHolders;
 }) {
     const [messages, setMessages] = useState(initialMessages);
+    const [holders, setHolders] = useState<AccountHolders>(accountHolders ?? {});
+    // Only the admin page passes the map, so only there is a live lookup worth making.
+    const isAdminView = accountHolders !== undefined;
+
+    useEffect(() => {
+        setHolders(accountHolders ?? {});
+    }, [accountHolders]);
     const [openThreadId, setOpenThreadId] = useState<string | null>(null);
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
@@ -304,6 +318,13 @@ export default function MessageThreadList({
 
             const row = data as unknown as MessageRow;
             setMessages((prev) => (prev.some((m) => m.id === row.id) ? prev : [...prev, row]));
+
+            // A sender who arrived after the page loaded has no account-holder name
+            // yet. Quietly nothing for anyone but an admin, who can read customers.
+            if (isAdminView) {
+                const found = await loadAccountHolders(supabase, [row.from_profile_id]);
+                if (Object.keys(found).length > 0) setHolders((prev) => ({ ...prev, ...found }));
+            }
         };
 
         const channel = supabase
@@ -344,7 +365,7 @@ export default function MessageThreadList({
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [currentProfileId]);
+    }, [currentProfileId, isAdminView]);
 
     const repliesByRoot = useMemo(() => {
         const map = new Map<string, MessageRow[]>();
@@ -453,8 +474,8 @@ export default function MessageThreadList({
                             ? `${groupSize} recipients`
                             : `All admins (${groupSize})`
                         : isMineRoot
-                            ? root.to_profile?.full_name
-                            : root.from_profile?.full_name;
+                            ? nameWithHolder(root.to_profile?.full_name, root.to_profile_id, holders)
+                            : nameWithHolder(root.from_profile?.full_name, root.from_profile_id, holders);
                 const avatarName = isBroadcast
                     ? "Broadcast"
                     : groupSize > 1
@@ -549,6 +570,7 @@ export default function MessageThreadList({
                                             currentProfileId={currentProfileId}
                                             deleteAction={deleteAction}
                                             deleteGroupId={groupId}
+                                            holders={holders}
                                         />
 
                                         {replies.map((reply) => (
@@ -557,6 +579,7 @@ export default function MessageThreadList({
                                                 message={reply}
                                                 currentProfileId={currentProfileId}
                                                 deleteAction={deleteAction}
+                                                holders={holders}
                                             />
                                         ))}
                                     </div>

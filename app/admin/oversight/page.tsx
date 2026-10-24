@@ -9,6 +9,7 @@ import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatusBadge from "@/components/dashboard/StatusBadge";
 import StaffCustomerConversations from "@/components/dashboard/StaffCustomerConversations";
+import { loadAccountHolders } from "@/lib/message-names";
 
 type InvoiceRow = {
     id: string;
@@ -47,6 +48,15 @@ export default async function OwnerOversightPage() {
 
     let messagesResult = await messageQuery(`${columns}, attachment_path, attachment_name`);
     if (messagesResult.error) messagesResult = await messageQuery(columns);
+
+    const conversations = (messagesResult.data ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"];
+
+    // The name a sender typed on their property form, shown beside the name from
+    // signup whenever the two differ.
+    const accountHolders = await loadAccountHolders(
+        supabase,
+        conversations.flatMap((m) => [m.from_profile_id, m.to_profile_id])
+    );
 
     const [{ data: invoiceData }, receiptResult] = await Promise.all([
         supabase
@@ -99,7 +109,8 @@ export default async function OwnerOversightPage() {
                 >
                     <StaffCustomerConversations
                         scope="everyone"
-                        messages={(messagesResult.data ?? []) as unknown as Parameters<typeof StaffCustomerConversations>[0]["messages"]}
+                        messages={conversations}
+                        accountHolders={accountHolders}
                     />
                 </SectionCard>
 
