@@ -86,6 +86,7 @@ function ReplySubmit() {
 function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: ReplyAction }) {
     const [state, formAction] = useActionState<MessageActionState, FormData>(replyAction, null);
     const formRef = useRef<HTMLFormElement>(null);
+    const bodyRef = useRef<HTMLTextAreaElement>(null);
     const [fileName, setFileName] = useState<string | null>(null);
 
     useEffect(() => {
@@ -98,21 +99,42 @@ function ReplyForm({ parentId, replyAction }: { parentId: string; replyAction: R
         }
     }, [state]);
 
+    // Grows with what is typed or pasted, up to a limit, then scrolls.
+    const fitHeight = (field: HTMLTextAreaElement) => {
+        field.style.height = "auto";
+        field.style.height = `${Math.min(field.scrollHeight, 240)}px`;
+    };
+
     return (
         <form
             ref={formRef}
             action={formAction}
-            onReset={() => setFileName(null)}
+            onReset={() => {
+                setFileName(null);
+                // The reset empties the box; it should shrink back to one line too.
+                if (bodyRef.current) bodyRef.current.style.height = "auto";
+            }}
             onClick={(e) => e.stopPropagation()}
             className="mt-3"
         >
-            <div className="flex gap-2">
+            <div className="flex items-end gap-2">
                 <input type="hidden" name="parentMessageId" value={parentId} />
-                <input
+                {/* A textarea, not a one-line input: pasting several paragraphs into an
+                    input flattens them into one line. Enter adds a line, Ctrl+Enter sends. */}
+                <textarea
+                    ref={bodyRef}
                     name="body"
                     placeholder="Reply…"
                     required
-                    className="h-9 min-w-0 flex-1 rounded-lg border border-white/10 bg-white/8 px-3 text-xs text-white outline-none placeholder:text-white/30"
+                    rows={1}
+                    onInput={(e) => fitHeight(e.currentTarget)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                            e.preventDefault();
+                            e.currentTarget.form?.requestSubmit();
+                        }
+                    }}
+                    className="min-h-9 min-w-0 flex-1 resize-none rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-xs leading-relaxed text-white outline-none placeholder:text-white/30"
                 />
                 <label
                     title="Attach a photo or PDF"
