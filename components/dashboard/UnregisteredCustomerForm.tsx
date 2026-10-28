@@ -28,7 +28,10 @@ function SaveButton({ editing }: { editing: boolean }) {
 }
 
 // Adds someone to the Unregistered customers list, or edits one already on it.
-export default function UnregisteredCustomerForm({ person }: { person?: UnregisteredCustomer }) {
+// `prefill` starts a new entry from details already known, such as a person's
+// past invoices; nothing is saved until the admin confirms it.
+export default function UnregisteredCustomerForm({ person, prefill }: { person?: UnregisteredCustomer; prefill?: Partial<UnregisteredCustomer> }) {
+    const start = person ?? prefill;
     const router = useRouter();
     const formRef = useRef<HTMLFormElement>(null);
     const [state, formAction] = useActionState<UnregisteredState, FormData>(saveUnregisteredCustomer, null);
@@ -58,7 +61,7 @@ export default function UnregisteredCustomerForm({ person }: { person?: Unregist
                         min="1"
                         step="any"
                         required
-                        defaultValue={person ? Number(person.monthly_rate) : ""}
+                        defaultValue={start?.monthly_rate ? Number(start.monthly_rate) : ""}
                         placeholder="e.g. 15000"
                         className={inputClass}
                     />
@@ -68,7 +71,7 @@ export default function UnregisteredCustomerForm({ person }: { person?: Unregist
                 </p>
             </fieldset>
 
-            <BillToFields defaults={person ?? undefined} />
+            <BillToFields defaults={start} />
 
             <label className="block">
                 <span className={labelClass}>Note (optional, for your own reference)</span>

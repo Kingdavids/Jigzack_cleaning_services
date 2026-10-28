@@ -10,8 +10,10 @@ import UnregisteredCustomerForm from "@/components/dashboard/UnregisteredCustome
 import UnregisteredRowActions from "@/components/dashboard/UnregisteredRowActions";
 import {
     UNREGISTERED_COLUMNS,
+    loadInvoiceHistory,
     monthlyChargeOf,
     registeredEmails,
+    suggestFromInvoices,
     type UnregisteredCustomer,
 } from "@/lib/billing/unregistered";
 
@@ -22,6 +24,8 @@ export default async function UnregisteredCustomersPage() {
     const { data, error } = await supabase.from("unregistered_customers").select(UNREGISTERED_COLUMNS).order("full_name", { ascending: true }).limit(5000);
     const people = (data ?? []) as unknown as UnregisteredCustomer[];
     const registered = error ? new Set<string>() : await registeredEmails(supabase);
+    // People with invoices under "not registered" who are not on the list yet.
+    const suggestions = error ? [] : suggestFromInvoices(await loadInvoiceHistory(supabase), people, registered);
 
     const hasLogin = (person: UnregisteredCustomer) => Boolean(person.email && registered.has(person.email.trim().toLowerCase()));
     const billed = people.filter((person) => !person.paused && !hasLogin(person));
@@ -138,6 +142,74 @@ export default async function UnregisteredCustomersPage() {
                             )}
                         </SectionCard>
                     </div>
+
+                    {suggestions.length > 0 && (
+                        <div className="mt-6">
+                            <SectionCard
+                                title="Not registered, not on the list yet"
+                                description="These people already have invoices under Not registered on the Payments page, but are not billed automatically. The suggested charge is one month on their latest service invoice (a multi-month invoice is shared out per month). Check it, then add them."
+                            >
+                                <div className="space-y-3">
+                                    {suggestions.map((entry) => (
+                                        <div key={entry.key} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                                            <div className="flex flex-wrap items-start justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <p className="font-bold">{entry.billTo.property_name || entry.billTo.full_name}</p>
+                                                    {entry.billTo.property_name && <p className="text-sm text-white/55">{entry.billTo.full_name}</p>}
+                                                    <p className="mt-1 text-xs text-white/40">
+                                                        {[entry.billTo.phone, entry.billTo.email].filter(Boolean).join(" · ") || "No contact details"}
+                                                    </p>
+                                                    <p className="mt-1 text-xs text-white/45">
+                                                        {entry.invoiceCount} invoice{entry.invoiceCount === 1 ? "" : "s"}
+                                                        {entry.latestMonth ? `, latest for ${entry.latestMonth}` : ""}
+                                                    </p>
+                                                </div>
+
+                                                <div className="text-right">
+                                                    {entry.suggested > 0 ? (
+                                                        <>
+                                                            <p className="font-bold text-amber-300">{naira(entry.suggested)}</p>
+                                                            <p className="text-[11px] text-white/35">suggested per month</p>
+                                                            {entry.varies && (
+                                                                <p className="mt-1 text-[11px] text-amber-200/80">Their invoices were not all the same amount</p>
+                                                            )}
+                                                        </>
+                                                    ) : (
+                                                        <p className="text-xs text-white/45">No service invoice to suggest a charge from</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {canEdit && (
+                                                <details className="mt-3 border-t border-white/10 pt-3">
+                                                    <summary className="cursor-pointer text-xs font-semibold text-amber-300 hover:text-amber-200">
+                                                        Add to the list
+                                                    </summary>
+                                                    <div className="mt-4">
+                                                        <UnregisteredCustomerForm
+                                                            prefill={{
+                                                                full_name: entry.billTo.full_name,
+                                                                property_name: entry.billTo.property_name,
+                                                                phone: entry.billTo.phone,
+                                                                whatsapp_number: entry.billTo.whatsapp_number,
+                                                                email: entry.billTo.email,
+                                                                address: entry.billTo.address,
+                                                                landmark: entry.billTo.landmark,
+                                                                lga: entry.billTo.lga,
+                                                                state: entry.billTo.state,
+                                                                property_type: entry.billTo.property_type,
+                                                                monthly_rate: entry.suggested > 0 ? entry.suggested : undefined,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </details>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </SectionCard>
+                        </div>
+                    )}
 
                     {canEdit && (
                         <div className="mt-6">

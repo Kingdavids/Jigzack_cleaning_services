@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { billingMonthLabel, itemsTotal, type LineItem } from "@/lib/billing/pricing";
-import { phoneKey, type BillTo } from "@/lib/billing/billTo";
+import { billToOf, personKey, phoneKey, type BillTo } from "@/lib/billing/billTo";
 
 // People who are not registered on the app but are billed every month. Each has
 // a saved monthly charge, and the billing job on the 25th makes their invoice
@@ -169,4 +169,95 @@ export async function runUnregisteredInvoiceGeneration(supabase: SupabaseClient,
     }
 
     return { people: people.length, ...tally };
+}
+
+// ---------------------------------------------------------------
+// People who already have invoices as "not registered" but are not on the list.
+// ---------------------------------------------------------------
+
+export type InvoiceHistoryRow = {
+    bill_to: unknown;
+    amount: number | string;
+    covered_months?: string[] | null;
+    invoice_kind?: string | null;
+    invoice_month?: string | null;
+    created_at: string;
+};
+
+export type InvoiceHistoryPerson = {
+    key: string;
+    billTo: BillTo;
+    invoiceCount: number;
+    // What one month cost on their latest service invoice; 0 when they have none.
+    suggested: number;
+    // True when their service invoices were not all for the same monthly amount.
+    varies: boolean;
+    latestMonth: string | null;
+};
+
+// A multi-month invoice covers several months at once, so it is shared out per month.
+const perMonth = (row: InvoiceHistoryRow) => {
+    const months = Math.max(1, row.covered_months?.length ?? 1);
+    return Math.round((Number(row.amount) / months) * 100) / 100;
+};
+
+// Groups unregistered invoices by person and works out a suggested monthly
+// charge for each. Only service invoices count towards the charge: a
+// recyclables sale or another one-off says nothing about a monthly rate.
+// Anyone already on the list, or with a login now, is left out.
+export function suggestFromInvoices(rows: InvoiceHistoryRow[], onList: UnregisteredCustomer[], registered: Set<string>): InvoiceHistoryPerson[] {
+    const listed = onList.map(identityKeys);
+    const groups = new Map<string, { billTo: BillTo; rows: InvoiceHistoryRow[] }>();
+
+    const newestFirst = [...rows].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
+    for (const row of newestFirst) {
+        const billTo = billToOf(row);
+        if (!billTo) continue;
+
+        const email = billTo.email?.trim().toLowerCase();
+        if (email && registered.has(email)) continue;
+
+        const keys = identityKeys(billTo);
+        if (listed.some((entry) => sameIdentity(entry, keys))) continue;
+
+        const key = personKey(billTo);
+        const group = groups.get(key) ?? { billTo, rows: [] };
+        group.rows.push(row);
+        groups.set(key, group);
+    }
+
+    return [...groups.entries()]
+        .map(([key, group]) => {
+            const service = group.rows.filter((row) => !row.invoice_kind || row.invoice_kind === "service").filter((row) => Number(row.amount) > 0);
+            const amounts = new Set(service.map(perMonth));
+
+            return {
+                key,
+                billTo: group.billTo,
+                invoiceCount: group.rows.length,
+                suggested: service.length > 0 ? perMonth(service[0]) : 0,
+                varies: amounts.size > 1,
+                latestMonth: group.rows[0].invoice_month ?? null,
+            };
+        })
+        .sort((a, b) => (a.billTo.property_name || a.billTo.full_name).localeCompare(b.billTo.property_name || b.billTo.full_name));
+}
+
+// Invoices made out to people without an account. Asks for fewer columns when
+// the SQL for the newer ones has not been run yet.
+export async function loadInvoiceHistory(supabase: SupabaseClient): Promise<InvoiceHistoryRow[]> {
+    const columns = [
+        "bill_to, amount, covered_months, invoice_kind, invoice_month, created_at",
+        "bill_to, amount, invoice_kind, invoice_month, created_at",
+        "bill_to, amount, covered_months, invoice_month, created_at",
+        "bill_to, amount, invoice_month, created_at",
+    ];
+
+    for (const select of columns) {
+        const { data, error } = await supabase.from("payments").select(select).is("customer_id", null).not("bill_to", "is", null).limit(5000);
+        if (!error) return (data ?? []) as unknown as InvoiceHistoryRow[];
+    }
+
+    return [];
 }

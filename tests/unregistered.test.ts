@@ -5,6 +5,7 @@ import {
     identityKeys,
     monthlyChargeOf,
     sameIdentity,
+    suggestFromInvoices,
     unregisteredLineItems,
     type UnregisteredCustomer,
 } from "@/lib/billing/unregistered";
@@ -113,5 +114,49 @@ describe("unregistered customers", () => {
         const { client } = fakeSupabase({}, "boom");
 
         expect(await generateInvoiceForUnregistered(client, person(), new Set(), "November 2026")).toBe("error");
+    });
+
+    describe("suggesting from past invoices", () => {
+        const invoice = (name: string, amount: number, created_at: string, extra: Record<string, unknown> = {}) => ({
+            bill_to: { full_name: name, phone: name === "Ada Obi" ? "08031234567" : "07010000000" },
+            amount,
+            created_at,
+            invoice_month: "September 2026",
+            ...extra,
+        });
+
+        it("suggests one month from the latest service invoice and flags differing amounts", () => {
+            const [ada] = suggestFromInvoices(
+                [invoice("Ada Obi", 12000, "2026-08-25"), invoice("Ada Obi", 15000, "2026-09-25"), invoice("Ada Obi", 90000, "2026-10-01", { invoice_kind: "recyclables" })],
+                [],
+                new Set()
+            );
+
+            expect(ada).toMatchObject({ suggested: 15000, varies: true, invoiceCount: 3 });
+        });
+
+        it("shares a multi-month invoice out per month", () => {
+            const [ada] = suggestFromInvoices([invoice("Ada Obi", 45000, "2026-09-25", { covered_months: ["October 2026", "November 2026", "December 2026"] })], [], new Set());
+
+            expect(ada).toMatchObject({ suggested: 15000, varies: false });
+        });
+
+        it("has no suggestion when there is no service invoice", () => {
+            const [buyer] = suggestFromInvoices([invoice("Ada Obi", 90000, "2026-10-01", { invoice_kind: "recyclables" })], [], new Set());
+
+            expect(buyer.suggested).toBe(0);
+        });
+
+        it("leaves out people already on the list or with a login", () => {
+            const rows = [
+                invoice("Ada Obi", 15000, "2026-09-25"),
+                invoice("Bola Ade", 8000, "2026-09-25"),
+                { ...invoice("Chi Eze", 5000, "2026-09-25"), bill_to: { full_name: "Chi Eze", email: "chi@example.com" } },
+            ];
+
+            const left = suggestFromInvoices(rows, [person()], new Set(["chi@example.com"]));
+
+            expect(left.map((entry) => entry.billTo.full_name)).toEqual(["Bola Ade"]);
+        });
     });
 });
