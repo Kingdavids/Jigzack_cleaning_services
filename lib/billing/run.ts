@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateInvoiceFor, generateScheduleFor, queryBillable, type BillableCustomer } from "@/lib/billing/generate";
+import { runUnregisteredInvoiceGeneration } from "@/lib/billing/unregistered";
 
 // The bulk runs behind the admin "Generate" buttons and the scheduled job.
 // They take whichever client the caller has (a signed-in admin's, or the
@@ -54,5 +55,8 @@ export async function runInvoiceGeneration(supabase: SupabaseClient) {
         tally[await generateInvoiceFor(supabase, customer)] += 1;
     }
 
-    return { customers: customers.length, ...tally };
+    // People not registered on the app, from the saved Unregistered customers list.
+    const unregistered = await runUnregisteredInvoiceGeneration(supabase);
+
+    return { customers: customers.length, ...tally, unregistered };
 }

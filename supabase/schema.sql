@@ -3751,3 +3751,44 @@ alter table public.recyclable_movements
 create index if not exists recyclable_movements_payment_idx on public.recyclable_movements (payment_id);
 
 select 'done' as result;
+
+-- ============================================================
+-- (also in supabase/unregistered-customers-2026-10.sql for the live project)
+-- ============================================================
+create table if not exists public.unregistered_customers (
+    id uuid primary key default gen_random_uuid(),
+    full_name text not null,
+    -- A commercial property's own name, printed on the invoice instead of full_name.
+    property_name text,
+    phone text,
+    whatsapp_number text,
+    email text,
+    address text,
+    landmark text,
+    lga text,
+    state text,
+    property_type text,
+    -- What goes on their invoice each month.
+    monthly_rate numeric(12, 2) not null check (monthly_rate >= 0),
+    -- While paused, the 25th job leaves them out. Nothing else changes.
+    paused boolean not null default false,
+    note text,
+    created_by uuid references public.profiles (id) on delete set null,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now(),
+    constraint unregistered_customers_reachable check (coalesce(trim(phone), '') <> '' or coalesce(trim(email), '') <> '')
+);
+
+create index if not exists unregistered_customers_name_idx on public.unregistered_customers (lower(full_name));
+
+alter table public.unregistered_customers enable row level security;
+
+drop policy if exists "unregistered_customers_select_reader" on public.unregistered_customers;
+create policy "unregistered_customers_select_reader" on public.unregistered_customers
+    for select to authenticated using (public.is_staff_reader());
+
+drop policy if exists "unregistered_customers_write_admin" on public.unregistered_customers;
+create policy "unregistered_customers_write_admin" on public.unregistered_customers
+    for all to authenticated using (public.is_admin()) with check (public.is_admin());
+
+select 'done' as result;

@@ -192,7 +192,15 @@ export async function generateAllInvoices(): Promise<GenerateResult> {
             (tally["no-pricing"] > 0 ? `, ${tally["no-pricing"]} skipped (no priced property types, add manually)` : "") +
             (tally.prepaid > 0 ? `, ${tally.prepaid} skipped (paid in advance)` : "") +
             (tally.error > 0 ? `, ${tally.error} failed` : "") +
-            ".",
+            "." +
+            (tally.unregistered.people > 0
+                ? ` Not registered on the app: ${tally.unregistered.created} created, ${tally.unregistered.exists} already existed` +
+                  (tally.unregistered.prepaid > 0 ? `, ${tally.unregistered.prepaid} paid in advance` : "") +
+                  (tally.unregistered.paused > 0 ? `, ${tally.unregistered.paused} paused` : "") +
+                  (tally.unregistered.registered > 0 ? `, ${tally.unregistered.registered} now have a login` : "") +
+                  (tally.unregistered.error > 0 ? `, ${tally.unregistered.error} failed` : "") +
+                  "."
+                : ""),
     };
 }
 

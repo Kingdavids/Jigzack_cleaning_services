@@ -213,6 +213,16 @@ export default async function AdminCustomersPage({
         >
             {/* What each customer owes follows invoice edits and payments on the Payments page. */}
             <LiveRefresh tables={["payments"]} />
+            <Link
+                href="/admin/customers/unregistered"
+                className="mb-5 flex items-center justify-between gap-3 rounded-2xl border border-amber-300/25 bg-amber-300/[0.05] p-4 transition hover:bg-amber-300/10"
+            >
+                <span>
+                    <span className="block font-semibold text-amber-200">Unregistered customers</span>
+                    <span className="block text-sm text-white/60">People not on the app who are billed every month, with their monthly charge.</span>
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-amber-200/70" />
+            </Link>
             <SectionCard title="Customers" description="Open a customer to see and edit everything on file.">
                 <form className="mb-5 flex gap-2" action="/admin/customers">
                     <div className="relative flex-1">

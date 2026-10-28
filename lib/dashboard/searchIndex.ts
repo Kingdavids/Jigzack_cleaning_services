@@ -17,6 +17,7 @@ export const ADMIN_SEARCH_INDEX: SearchEntry[] = [
     { label: "Declined signups", description: "Delete a declined signup for good (owner only)", href: "/admin/approvals", keywords: ["decline", "reject", "delete declined"] },
 
     { label: "Customers", description: "Every customer's details, property, schedule and billing", href: "/admin/customers", keywords: ["customer list", "search customer"] },
+    { label: "Unregistered customers", description: "People not on the app who are billed every month: their monthly charge, pause billing", href: "/admin/customers/unregistered", keywords: ["not registered", "no account", "monthly charge", "non customer", "bill without login"] },
     { label: "Signed up, no details yet", description: "Logins with no customer record: email or delete them", href: "/admin/customers", keywords: ["no details", "unfinished signup", "orphan"] },
     { label: "Confirm a stuck signup's email", description: "Manually confirm an email when Supabase's mailer fails (owner only)", href: "/admin/customers", keywords: ["confirm email", "verification", "stuck signup", "not receiving email"] },
     { label: "Recently deleted customers", description: "Restore a deleted customer within 30 days (owner only)", href: "/admin/customers", keywords: ["restore customer", "undelete", "recover"] },

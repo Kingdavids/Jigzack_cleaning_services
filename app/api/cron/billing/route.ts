@@ -72,6 +72,8 @@ export async function POST(request: NextRequest) {
         schedules.created > 0 ||
         (invoices?.created ?? 0) > 0 ||
         (invoices?.error ?? 0) > 0 ||
+        (invoices?.unregistered.created ?? 0) > 0 ||
+        (invoices?.unregistered.error ?? 0) > 0 ||
         emails.newInvoices > 0 ||
         emails.reminders > 0 ||
         emails.failed > 0 ||
@@ -100,6 +102,18 @@ export async function POST(request: NextRequest) {
                     (invoices.error > 0 ? `, <strong>${invoices.error} failed</strong>` : "") +
                     ".</p>"
             );
+
+            if (invoices.unregistered.people > 0) {
+                const people = invoices.unregistered;
+                lines.push(
+                    `<p>Customers not registered on the app: <strong>${people.created}</strong> invoices created, ${people.exists} already existed` +
+                        (people.prepaid > 0 ? `, ${people.prepaid} skipped because they paid in advance` : "") +
+                        (people.paused > 0 ? `, ${people.paused} paused` : "") +
+                        (people.registered > 0 ? `, ${people.registered} skipped because they now have a login` : "") +
+                        (people.error > 0 ? `, <strong>${people.error} failed</strong>` : "") +
+                        ". These are not emailed; share them from Payments.</p>"
+                );
+            }
         }
 
         lines.push(
