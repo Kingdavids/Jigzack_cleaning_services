@@ -261,3 +261,35 @@ export async function loadInvoiceHistory(supabase: SupabaseClient): Promise<Invo
 
     return [];
 }
+
+// True when an invoice for this month, or a multi-month one including it, is
+// already made out to this person.
+export function invoicedForMonth(rows: InvoiceHistoryRow[], person: UnregisteredCustomer, month: string) {
+    const me = identityKeys(person);
+
+    return rows.some(
+        (row) =>
+            (row.invoice_month === month || (row.covered_months ?? []).includes(month)) &&
+            sameIdentity(me, rowIdentity(row))
+    );
+}
+
+// What happened for one person, in words an admin can read.
+export function outcomeMessage(outcome: UnregisteredOutcome, name: string, month: string) {
+    switch (outcome) {
+        case "created":
+            return `${month} invoice created for ${name}.`;
+        case "exists":
+            return `${name} already has an invoice for ${month}.`;
+        case "prepaid":
+            return `${name} paid ${month} in advance, so there is no invoice to make.`;
+        case "registered":
+            return `${name} now has a login with this email, so bill them from their account instead.`;
+        case "paused":
+            return `Monthly billing is paused for ${name}. Resume it first.`;
+        case "no-pricing":
+            return `${name} has no monthly charge set.`;
+        default:
+            return "Could not create the invoice. Please try again.";
+    }
+}

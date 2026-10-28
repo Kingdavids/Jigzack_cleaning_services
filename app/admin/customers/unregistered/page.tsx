@@ -3,13 +3,16 @@ import { ChevronLeft } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { isFullAdmin } from "@/lib/auth/roles";
 import { naira } from "@/lib/customer/billing";
-import { INVOICE_DAY } from "@/lib/billing/pricing";
+import { INVOICE_DAY, billingMonthLabel } from "@/lib/billing/pricing";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import UnregisteredCustomerForm from "@/components/dashboard/UnregisteredCustomerForm";
 import UnregisteredRowActions from "@/components/dashboard/UnregisteredRowActions";
+import UnregisteredGenerateAll from "@/components/dashboard/UnregisteredGenerateAll";
+import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import {
     UNREGISTERED_COLUMNS,
+    invoicedForMonth,
     loadInvoiceHistory,
     monthlyChargeOf,
     registeredEmails,
@@ -25,10 +28,15 @@ export default async function UnregisteredCustomersPage() {
     const people = (data ?? []) as unknown as UnregisteredCustomer[];
     const registered = error ? new Set<string>() : await registeredEmails(supabase);
     // People with invoices under "not registered" who are not on the list yet.
-    const suggestions = error ? [] : suggestFromInvoices(await loadInvoiceHistory(supabase), people, registered);
+    const history = error ? [] : await loadInvoiceHistory(supabase);
+    const suggestions = error ? [] : suggestFromInvoices(history, people, registered);
+    // The month the next invoice is for, and who already has it.
+    const month = billingMonthLabel();
+    const invoiced = new Set(people.filter((person) => invoicedForMonth(history, person, month)).map((person) => person.id));
 
     const hasLogin = (person: UnregisteredCustomer) => Boolean(person.email && registered.has(person.email.trim().toLowerCase()));
     const billed = people.filter((person) => !person.paused && !hasLogin(person));
+    const waiting = billed.filter((person) => !invoiced.has(person.id)).length;
     const monthlyTotal = billed.reduce((sum, person) => sum + monthlyChargeOf(person), 0);
 
     return (
@@ -43,6 +51,9 @@ export default async function UnregisteredCustomersPage() {
                 <ChevronLeft className="h-4 w-4" />
                 Customers
             </Link>
+
+            {/* Invoices made here, on the 25th or from Payments show up without a reload. */}
+            <LiveRefresh tables={["payments", "unregistered_customers"]} />
 
             {error ? (
                 <div className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.06] p-5 text-sm text-amber-100">
@@ -68,6 +79,7 @@ export default async function UnregisteredCustomersPage() {
                                 <dd className="mt-1 text-2xl font-bold text-amber-300">{naira(monthlyTotal)}</dd>
                             </div>
                         </dl>
+                        {canEdit && <UnregisteredGenerateAll month={month} waiting={waiting} />}
                     </SectionCard>
 
                     <div className="mt-6">
@@ -123,7 +135,13 @@ export default async function UnregisteredCustomersPage() {
                                                 {canEdit && (
                                                     <>
                                                         <div className="mt-3 border-t border-white/10 pt-3">
-                                                            <UnregisteredRowActions id={person.id} name={person.full_name} paused={person.paused} />
+                                                            <UnregisteredRowActions
+                                                                id={person.id}
+                                                                name={person.property_name || person.full_name}
+                                                                paused={person.paused}
+                                                                month={month}
+                                                                invoiced={invoiced.has(person.id)}
+                                                            />
                                                         </div>
                                                         <details className="mt-3">
                                                             <summary className="cursor-pointer text-xs font-semibold text-amber-300 hover:text-amber-200">

@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     generateInvoiceForUnregistered,
     identityKeys,
+    invoicedForMonth,
+    outcomeMessage,
     monthlyChargeOf,
     sameIdentity,
     suggestFromInvoices,
@@ -157,6 +159,32 @@ describe("unregistered customers", () => {
             const left = suggestFromInvoices(rows, [person()], new Set(["chi@example.com"]));
 
             expect(left.map((entry) => entry.billTo.full_name)).toEqual(["Bola Ade"]);
+        });
+    });
+
+    describe("this month's invoice", () => {
+        const row = (name: string, extra: Record<string, unknown> = {}) => ({
+            bill_to: { full_name: name, phone: name === "Ada Obi" ? "08031234567" : "07010000000" },
+            amount: 15000,
+            created_at: "2026-10-25",
+            invoice_month: "October 2026",
+            ...extra,
+        });
+
+        it("knows who already has the month's invoice, including multi-month ones", () => {
+            expect(invoicedForMonth([row("Ada Obi")], person(), "October 2026")).toBe(true);
+            expect(invoicedForMonth([row("Ada Obi")], person(), "November 2026")).toBe(false);
+            expect(
+                invoicedForMonth([row("Ada Obi", { invoice_month: "October – December 2026", covered_months: ["October 2026", "November 2026", "December 2026"] })], person(), "November 2026")
+            ).toBe(true);
+            expect(invoicedForMonth([row("Bola Ade")], person(), "October 2026")).toBe(false);
+        });
+
+        it("explains each outcome", () => {
+            expect(outcomeMessage("created", "Ada", "November 2026")).toBe("November 2026 invoice created for Ada.");
+            expect(outcomeMessage("exists", "Ada", "November 2026")).toMatch(/already has an invoice/);
+            expect(outcomeMessage("paused", "Ada", "November 2026")).toMatch(/paused/);
+            expect(outcomeMessage("error", "Ada", "November 2026")).toMatch(/Could not/);
         });
     });
 });
