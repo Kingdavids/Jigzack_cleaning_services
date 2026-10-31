@@ -95,6 +95,13 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                         Show
                     </button>
                     <span className="text-sm text-white/45">{monthName(month)}</span>
+                    <a
+                        href={`/admin/finance/export?month=${month}`}
+                        download
+                        className="ml-auto inline-flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                    >
+                        Download CSV
+                    </a>
                 </form>
 
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
