@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
-import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
+import NonCustomerInvoiceForm, { type KnownPerson } from "@/components/dashboard/NonCustomerInvoiceForm";
 
 const choiceClass = (active: boolean) =>
     `rounded-xl border px-4 py-3 text-left transition ${active ? "border-amber-400 bg-amber-400/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`;
@@ -15,11 +15,14 @@ export default function OneOffInvoiceChooser({
                                                  customers,
                                                  defaultStartMonth,
                                                  stock,
+                                                 knownPeople,
                                              }: {
     customers: InvoiceCustomerOption[];
     defaultStartMonth: string;
     // Kilograms in stock per material, for the recyclables sale.
     stock: Record<string, number>;
+    // People invoiced before without an account, to start a new invoice from.
+    knownPeople: KnownPerson[];
 }) {
     const [kind, setKind] = useState<InvoiceKind>("service");
     const [who, setWho] = useState<"registered" | "unregistered">("registered");
@@ -50,7 +53,7 @@ export default function OneOffInvoiceChooser({
                         {
                             value: "unregistered",
                             label: kind === "recyclables" ? "A buyer who isn't a customer" : "Someone who is not a customer",
-                            hint: "Type in their details; no account needed",
+                            hint: "Pick someone invoiced before, or type in their details. No account needed",
                         },
                     ] as const).map((option) => (
                         <button key={option.value} type="button" onClick={() => setWho(option.value)} aria-pressed={who === option.value} className={choiceClass(who === option.value)}>
@@ -64,7 +67,7 @@ export default function OneOffInvoiceChooser({
             {who === "registered" ? (
                 <OneOffInvoiceForm customers={customers} defaultStartMonth={defaultStartMonth} kind={kind} stock={stock} />
             ) : (
-                <NonCustomerInvoiceForm defaultStartMonth={defaultStartMonth} kind={kind} stock={stock} />
+                <NonCustomerInvoiceForm defaultStartMonth={defaultStartMonth} kind={kind} stock={stock} knownPeople={knownPeople} />
             )}
         </div>
     );

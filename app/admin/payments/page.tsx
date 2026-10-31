@@ -28,6 +28,8 @@ import AdvancePaymentChooser from "@/components/dashboard/AdvancePaymentChooser"
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadUnregisteredPrepayments, type Prepayment } from "@/lib/billing/prepaid";
 import { accountKeyer } from "@/lib/billing/billTo";
+import { UNREGISTERED_COLUMNS, billToOfPerson, sameAccount, type UnregisteredCustomer } from "@/lib/billing/unregistered";
+import type { KnownPerson } from "@/components/dashboard/NonCustomerInvoiceForm";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -207,6 +209,26 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         group.prepayments.push(advance);
         people.set(key, group);
     }
+
+    // Everyone invoiced before as "not registered", and everyone on the Unregistered
+    // customers list, so a one-off invoice can start from their saved details.
+    // People who have since registered are left out; they are picked as customers.
+    const registeredEmails = new Set([...propertyByProfile.values()].map((row) => row.email?.trim().toLowerCase()).filter(Boolean));
+    const earlier = [...people.values()].map((group) => group.details);
+    const { data: listedData } = await supabase.from("unregistered_customers").select(UNREGISTERED_COLUMNS).limit(5000);
+    const listed = ((listedData ?? []) as unknown as UnregisteredCustomer[]).map(billToOfPerson);
+    // A person on the list is the better record of their details than an old invoice.
+    const knownPeople: KnownPerson[] = [...listed, ...earlier.filter((billTo) => !listed.some((entry) => sameAccount(entry, billTo)))]
+        .filter((billTo) => !(billTo.email && registeredEmails.has(billTo.email.trim().toLowerCase())))
+        .map((billTo) => ({
+            label: [billTo.property_name || billTo.full_name, billTo.property_name ? billTo.full_name : null, billTo.phone || billTo.email, billTo.address]
+                .filter(Boolean)
+                .join(" · "),
+            billTo,
+        }))
+        // Two entries reading the same would be indistinguishable in the picker.
+        .filter((person, index, all) => all.findIndex((other) => other.label === person.label) === index)
+        .sort((a, b) => a.label.localeCompare(b.label));
 
     // Whoever owes most first; unpaid invoices before settled ones inside each group.
     const personNewest = (g: PersonGroup) => g.items.reduce((latest, i) => (i.created_at > latest ? i.created_at : latest), "");
@@ -726,7 +748,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                     description="For anything outside the automatic monthly charge: a property for several months, a sale of recyclables, or any other service or item. For a registered customer, or for someone who isn't one."
                     collapsible
                 >
-                    <OneOffInvoiceChooser customers={invoiceCustomers} defaultStartMonth={startMonth} stock={stockByMaterial} />
+                    <OneOffInvoiceChooser customers={invoiceCustomers} defaultStartMonth={startMonth} stock={stockByMaterial} knownPeople={knownPeople} />
                 </SectionCard>
             </div>
         </DashboardShell>
