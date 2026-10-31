@@ -29,7 +29,7 @@ import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadUnregisteredPrepayments, type Prepayment } from "@/lib/billing/prepaid";
 import { accountKeyer } from "@/lib/billing/billTo";
 import { UNREGISTERED_COLUMNS, billToOfPerson, sameAccount, type UnregisteredCustomer } from "@/lib/billing/unregistered";
-import type { KnownPerson } from "@/components/dashboard/NonCustomerInvoiceForm";
+import type { KnownPerson } from "@/components/dashboard/KnownPersonPicker";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -737,7 +737,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
                     collapsible
                 >
                     {canAct ? (
-                        <AdvancePaymentChooser customers={customerOptions.map((c) => ({ id: c.id, full_name: c.full_name }))} />
+                        <AdvancePaymentChooser customers={customerOptions.map((c) => ({ id: c.id, full_name: c.full_name }))} knownPeople={knownPeople} />
                     ) : (
                         <p className="text-sm text-white/55">You have view-only access, so payments can&apos;t be recorded from your account.</p>
                     )}

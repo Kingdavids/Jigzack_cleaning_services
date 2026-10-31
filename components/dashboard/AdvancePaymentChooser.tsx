@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { getMonthlyCharge } from "@/app/admin/actions/payments";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
+import KnownPersonPicker, { type KnownPerson } from "@/components/dashboard/KnownPersonPicker";
 
 const fieldClass =
     "mt-1 h-11 w-full rounded-lg border border-white/10 bg-white/8 px-3 text-base text-white outline-none placeholder:text-white/30 focus:border-amber-300/50 sm:h-10 sm:text-sm";
@@ -10,7 +11,13 @@ const fieldClass =
 // Records an advance payment from the Payments page, for a registered customer
 // or for someone who is not registered (their details are kept on the payment
 // and it moves to their account when they register).
-export default function AdvancePaymentChooser({ customers }: { customers: { id: string; full_name: string | null }[] }) {
+export default function AdvancePaymentChooser({
+    customers,
+    knownPeople = [],
+}: {
+    customers: { id: string; full_name: string | null }[];
+    knownPeople?: KnownPerson[];
+}) {
     const [who, setWho] = useState<"registered" | "unregistered">("registered");
     const [customerId, setCustomerId] = useState("");
     const [name, setName] = useState("");
@@ -18,6 +25,17 @@ export default function AdvancePaymentChooser({ customers }: { customers: { id: 
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
     const [address, setAddress] = useState("");
+
+    // Starts the form from someone invoiced before. Clearing the box leaves what is typed.
+    const pickPerson = (person: KnownPerson | null) => {
+        if (!person) return;
+
+        setName(person.billTo.full_name);
+        setProperty(person.billTo.property_name ?? "");
+        setPhone(person.billTo.phone ?? "");
+        setEmail(person.billTo.email ?? "");
+        setAddress(person.billTo.address ?? "");
+    };
 
     const chosen = customers.find((c) => c.id === customerId);
     // What the chosen customer pays a month, so the form can tell when an amount falls short.
@@ -90,6 +108,7 @@ export default function AdvancePaymentChooser({ customers }: { customers: { id: 
                 </>
             ) : (
                 <>
+                    <KnownPersonPicker people={knownPeople} onPick={pickPerson} title="Paid before? Pick them to fill in their details" />
                     <div className="grid gap-3 sm:grid-cols-2">
                         <label className="text-xs text-white/50">
                             Name of the person who paid

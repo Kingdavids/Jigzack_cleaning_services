@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { InvoiceKind } from "@/components/dashboard/InvoiceBuilder";
 import OneOffInvoiceForm, { type InvoiceCustomerOption } from "@/components/dashboard/OneOffInvoiceForm";
-import NonCustomerInvoiceForm, { type KnownPerson } from "@/components/dashboard/NonCustomerInvoiceForm";
+import NonCustomerInvoiceForm from "@/components/dashboard/NonCustomerInvoiceForm";
+import type { KnownPerson } from "@/components/dashboard/KnownPersonPicker";
 
 const choiceClass = (active: boolean) =>
     `rounded-xl border px-4 py-3 text-left transition ${active ? "border-amber-400 bg-amber-400/15" : "border-white/10 bg-white/5 hover:bg-white/10"}`;
