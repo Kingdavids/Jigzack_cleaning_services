@@ -32,7 +32,8 @@ export type MonthFlow = {
 
 
 // What recyclables made in a month: sales received minus what was paid for the
-// material bought. Cash in the month it moved, like the rest of this page, so a
+// material bought (priced entries on the Recyclables page, and expenses in the
+// Recyclables category). Cash in the month it moved, like the rest of this page, so a
 // sale invoiced but not yet paid is not in it until the money arrives.
 export function recyclablesProfit(flow: MonthFlow) {
     const sold = flow.inBySource.recyclables.amount;

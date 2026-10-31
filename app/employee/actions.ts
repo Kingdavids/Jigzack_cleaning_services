@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@/utils/supabase/server";
 import { getUserProfile } from "@/lib/auth/getUserProfile";
 import { isFullAdmin } from "@/lib/auth/roles";
-import { moveTaskToNextDay, todayLagos, type MoveTaskResult } from "@/lib/tasks";
+import { buildRoute, moveTaskToNextDay, skipToEnd, todayLagos, type MoveTaskResult, type RouteTask } from "@/lib/tasks";
 import { MAX_PHOTOS_PER_SLOT } from "@/lib/upload-constants";
 import { EXPENSE_CATEGORIES, MAX_RECEIPT_BYTES, RECEIPT_BUCKET, RECEIPT_EXTENSIONS } from "@/lib/expenses";
 import { TIMEZONE } from "@/lib/config/business";
@@ -390,7 +390,9 @@ export async function submitExpense(formData: FormData): Promise<ExpenseActionSt
 
         return {
             success: false,
-            error: /relation|does not exist|schema cache/i.test(error.message)
+            error: /expenses_category_check/.test(error.message)
+                ? "The Recyclables category isn't switched on yet. Please tell the admin, or choose another category."
+                : /relation|does not exist|schema cache/i.test(error.message)
                 ? "Expenses aren't switched on yet. Please tell the admin."
                 : `Could not save this expense. Please try again. (code ${error.code || "unknown"})`,
         };
@@ -429,6 +431,111 @@ export async function deleteExpense(expenseId: string): Promise<ExpenseActionSta
     revalidatePath("/employee/expenses");
     revalidatePath("/admin/expenses");
     revalidatePath("/admin");
+
+    return { success: true };
+}
+
+export type RouteResult = { success: boolean; error?: string; message?: string };
+
+const NOT_ON = "Not switched on yet. Ask an admin to run supabase/on-the-way-2026-10.sql in Supabase.";
+
+async function approvedEmployee() {
+    const profile = await getUserProfile();
+
+    return profile.role === "employee" && profile.status === "approved" ? profile : null;
+}
+
+function revalidateRoute() {
+    revalidatePath("/employee");
+    revalidatePath("/employee/tasks");
+    revalidatePath("/admin/tasks");
+    revalidatePath("/customer");
+    revalidatePath("/customer/schedule");
+}
+
+// "Yes, I'm on my way": tells the customer the employee is heading to them. Only
+// one stop is on the way at a time, so any other is cleared first. The database
+// sends the customer's alert.
+export async function markOnTheWay(taskId: string): Promise<RouteResult> {
+    if (!(await approvedEmployee())) return { success: false, error: "Only approved staff can do this." };
+
+    const supabase = await createClient();
+    if (!taskId) return { success: false, error: "Missing pickup." };
+
+    const { data: task } = await supabase.from("tasks").select("id, status, scheduled_date").eq("id", taskId).maybeSingle();
+
+    if (!task) return { success: false, error: "Could not find that pickup." };
+    if (task.status !== "pending") return { success: false, error: "This pickup has already started or been serviced." };
+    if (task.scheduled_date !== todayLagos()) return { success: false, error: "Only today's pickups can be marked as on the way." };
+
+    await supabase.from("tasks").update({ en_route_at: null }).not("en_route_at", "is", null).eq("status", "pending").neq("id", taskId);
+
+    const { data, error } = await supabase
+        .from("tasks")
+        .update({ en_route_at: new Date().toISOString() })
+        .eq("id", taskId)
+        .eq("status", "pending")
+        .select("id");
+
+    if (error) {
+        console.error("markOnTheWay error:", error.message);
+        return { success: false, error: /en_route_at/.test(error.message) ? NOT_ON : "Could not do that. Please try again." };
+    }
+
+    if (!data || data.length === 0) return { success: false, error: "This pickup can't be marked right now." };
+
+    revalidateRoute();
+
+    return { success: true, message: "The customer has been told you are on your way." };
+}
+
+// Takes back "on the way", for example when the plan changes. The customer is
+// not alerted again when they are next marked.
+export async function clearOnTheWay(taskId: string): Promise<RouteResult> {
+    if (!(await approvedEmployee())) return { success: false, error: "Only approved staff can do this." };
+
+    const supabase = await createClient();
+    const { error } = await supabase.from("tasks").update({ en_route_at: null }).eq("id", taskId).eq("status", "pending");
+
+    if (error) {
+        console.error("clearOnTheWay error:", error.message);
+        return { success: false, error: /en_route_at/.test(error.message) ? NOT_ON : "Could not do that. Please try again." };
+    }
+
+    revalidateRoute();
+
+    return { success: true };
+}
+
+// "Skip for now": moves a stop to the end of today's route.
+export async function skipStop(taskId: string): Promise<RouteResult> {
+    if (!(await approvedEmployee())) return { success: false, error: "Only approved staff can do this." };
+
+    const supabase = await createClient();
+    const { data, error } = await supabase.from("tasks").select("id, title, status, scheduled_date, en_route_at, route_order, created_at");
+
+    if (error) {
+        console.error("skipStop error:", error.message);
+        return { success: false, error: /route_order|en_route_at/.test(error.message) ? NOT_ON : "Could not do that. Please try again." };
+    }
+
+    const route = buildRoute((data ?? []) as RouteTask[], todayLagos());
+    const queue = [route.next, ...route.later].filter((t): t is RouteTask => Boolean(t)).map((t) => t.id);
+
+    if (!queue.includes(taskId)) return { success: false, error: "That pickup is not waiting in today's route." };
+
+    const order = skipToEnd(queue, taskId);
+
+    for (const [index, id] of order.entries()) {
+        const { error: updateError } = await supabase.from("tasks").update({ route_order: index }).eq("id", id);
+
+        if (updateError) {
+            console.error("skipStop update error:", updateError.message);
+            return { success: false, error: "Could not change the order. Please try again." };
+        }
+    }
+
+    revalidateRoute();
 
     return { success: true };
 }

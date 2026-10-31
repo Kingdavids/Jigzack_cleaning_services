@@ -158,7 +158,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
 
                 <SectionCard
                     title="Money out by category"
-                    description="Expenses an admin approved or paid back, and recyclables bought. Waiting and rejected claims aren't counted."
+                    description="Expenses an admin approved or paid back, and recyclables bought (priced entries and Recyclables expenses). Waiting and rejected claims aren't counted."
                 >
                     {categories.length === 0 ? (
                         <p className="text-sm text-white/50">No approved expenses this month.</p>
@@ -198,7 +198,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                         </div>
                         <p className="mt-4 text-xs text-white/40">
                             A sale counts when the buyer pays, and a purchase on the day it was logged. Material bought in one month and sold later
-                            shows as a loss first and a larger profit later. Staff costs such as transport are in Money out, not here.
+                            shows as a loss first and a larger profit later. Log each purchase once: with a price on the Recyclables page, or as a Recyclables expense, not both. Other costs such as transport are in Money out, not here.
                         </p>
                         <Link href="/admin/payments" className="mt-3 inline-block text-xs font-semibold text-amber-300 underline underline-offset-2">
                             Sale invoices

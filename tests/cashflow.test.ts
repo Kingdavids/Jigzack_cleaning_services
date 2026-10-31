@@ -130,6 +130,21 @@ describe("recyclables profit", () => {
     });
 });
 
+describe("recyclables bought as an expense", () => {
+    it("is added to what was bought for the profit, and to money out once", async () => {
+        const data = base();
+        data.expenses.push({ amount: 5000, category: "recyclables", status: "approved", expense_date: "2026-10-09" });
+        data.expenses.push({ amount: 700, category: "recyclables", status: "submitted", expense_date: "2026-10-09" });
+        const { client } = fakeSupabase(data);
+        const [, o] = await loadCashflow(client, monthsEndingAt("2026-10", 2));
+
+        expect(o.outByCategory.recyclables).toEqual({ amount: 17000, count: 2 });
+        expect(recyclablesProfit(o)).toMatchObject({ bought: 17000, profit: -8000, boughtCount: 2 });
+        // the waiting claim is not counted yet
+        expect(o.waiting).toEqual({ amount: 1500, count: 2 });
+    });
+});
+
 describe("before the newer SQL has been run", () => {
     it("still works with only the original tables", async () => {
         const { client } = fakeSupabase({

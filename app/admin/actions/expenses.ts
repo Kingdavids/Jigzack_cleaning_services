@@ -59,7 +59,12 @@ export async function logAdminExpense(formData: FormData): Promise<{ success: bo
     if (error) {
         console.error("logAdminExpense error:", error.message);
         if (receiptPath) await supabase.storage.from(RECEIPT_BUCKET).remove([receiptPath]);
-        return { success: false, error: "Could not save this expense. Please try again." };
+        return {
+            success: false,
+            error: /expenses_category_check/.test(error.message)
+                ? "The Recyclables category isn't switched on yet. Run supabase/expense-recyclables-2026-10.sql in Supabase first."
+                : "Could not save this expense. Please try again.",
+        };
     }
 
     await logActivity(supabase, admin, "expense_logged", `Logged an expense of ${naira(amount)} (${category})`);

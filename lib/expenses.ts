@@ -6,6 +6,8 @@ export const EXPENSE_CATEGORIES = [
     { value: "repairs", label: "Repairs" },
     { value: "supplies", label: "Supplies" },
     { value: "meals", label: "Meals" },
+    // Cash paid for material. Counts as the cost in the recyclables profit.
+    { value: "recyclables", label: "Recyclables bought" },
     { value: "other", label: "Other" },
 ] as const;
 

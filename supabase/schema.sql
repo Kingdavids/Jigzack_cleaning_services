@@ -3792,3 +3792,13 @@ create policy "unregistered_customers_write_admin" on public.unregistered_custom
     for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 select 'done' as result;
+
+-- ============================================================
+-- (also in supabase/expense-recyclables-2026-10.sql for the live project)
+-- ============================================================
+alter table public.expenses drop constraint if exists expenses_category_check;
+alter table public.expenses
+    add constraint expenses_category_check
+    check (category in ('fuel', 'transport', 'repairs', 'supplies', 'meals', 'recyclables', 'other'));
+
+select 'done' as result;
