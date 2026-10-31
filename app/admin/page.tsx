@@ -14,6 +14,7 @@ import { balanceOf, invoiceTotal, loadInstallments, loadInstallmentsSince } from
 import LiveRefresh from "@/components/dashboard/LiveRefresh";
 import { billToOf } from "@/lib/billing/billTo";
 import { kgText, loadStock } from "@/lib/recyclables";
+import { loadCashflow, monthName, recyclablesProfit } from "@/lib/finance/cashflow";
 import {
     AlertTriangle,
     Briefcase,
@@ -25,6 +26,7 @@ import {
     Wallet,
     Recycle,
     Scale,
+    PiggyBank,
 } from "lucide-react";
 import { TIMEZONE } from "@/lib/config/business";
 import { TIMEZONE_OFFSET } from "@/lib/config/business";
@@ -180,6 +182,10 @@ export default async function AdminPage() {
     // settled in one go before part payments existed.
     const outstanding = unpaid.reduce((sum, row) => sum + balanceOf(row), 0);
     const recyclables = await loadStock(supabase);
+    // What recyclables made this month, the same figure as on Money in & out.
+    const thisMonth = today.slice(0, 7);
+    const [monthFlow] = await loadCashflow(supabase, [thisMonth]);
+    const trade = recyclablesProfit(monthFlow);
     // Money owed by buyers of recyclables is kept apart from the solid waste service.
     const recyclableInvoices = unpaid.filter((row) => row.invoice_kind === "recyclables");
     const recyclablesOwed = recyclableInvoices.reduce((sum, row) => sum + balanceOf(row), 0);
@@ -353,6 +359,36 @@ export default async function AdminPage() {
                         />
                     </div>
                 </section>
+
+                {(trade.sold > 0 || trade.bought > 0 || recyclables.table) && (
+                    <section aria-label="Recyclables profit" className="space-y-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Recyclables profit · {monthName(thisMonth)}</p>
+                        <div className="grid gap-5 sm:grid-cols-3">
+                            <StatCard
+                                icon={TrendingUp}
+                                label="Sold (received)"
+                                value={naira(trade.sold)}
+                                helper={`${trade.soldCount} payment${trade.soldCount === 1 ? "" : "s"} for recyclables`}
+                                href="/admin/finance"
+                            />
+                            <StatCard
+                                icon={Recycle}
+                                label="Bought"
+                                value={naira(trade.bought)}
+                                helper={`${trade.boughtCount} purchase${trade.boughtCount === 1 ? "" : "s"} of material`}
+                                href="/admin/recyclables"
+                            />
+                            <StatCard
+                                icon={PiggyBank}
+                                label={trade.profit < 0 ? "Loss" : "Profit"}
+                                value={`${trade.profit < 0 ? "−" : ""}${naira(Math.abs(trade.profit))}`}
+                                helper="Sold minus bought, this month"
+                                href="/admin/finance"
+                                tone={trade.profit < 0 ? "alert" : "default"}
+                            />
+                        </div>
+                    </section>
+                )}
 
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                     <StatCard
