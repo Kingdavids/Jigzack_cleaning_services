@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { billingMonthLabel, itemsTotal, type LineItem } from "@/lib/billing/pricing";
-import { billToOf, personKey, phoneKey, type BillTo } from "@/lib/billing/billTo";
+import { accountKeyer, billToOf, phoneKey, sameProperty, type BillTo } from "@/lib/billing/billTo";
 
 // People who are not registered on the app but are billed every month. Each has
 // a saved monthly charge, and the billing job on the 25th makes their invoice
@@ -70,9 +70,18 @@ export function sameIdentity(a: Set<string>, b: Set<string>) {
 
 export type UnregisteredOutcome = "created" | "exists" | "prepaid" | "registered" | "paused" | "no-pricing" | "error";
 
-type BillRow = { bill_to: unknown; covered_months?: string[] | null };
+type BillRow = { bill_to: unknown; covered_months?: string[] | null; invoice_kind?: string | null };
 
-const rowIdentity = (row: BillRow) => identityKeys((row.bill_to ?? {}) as { email?: string; phone?: string; full_name?: string });
+type Account = { email?: string | null; phone?: string | null; full_name?: string | null; property_name?: string | null; address?: string | null };
+
+// The same person AND the same property. Someone who manages two properties is
+// billed for each separately, so a shared phone number or name is not enough.
+export const sameAccount = (a: Account, b: Account) => sameIdentity(identityKeys(a), identityKeys(b)) && sameProperty(a, b);
+
+const rowAccount = (row: BillRow) => (row.bill_to ?? {}) as Account;
+
+// A recyclables sale or another one-off says nothing about the monthly service.
+const isServiceInvoice = (row: { invoice_kind?: string | null }) => !row.invoice_kind || row.invoice_kind === "service";
 
 // Logins that already exist, by email, so someone who has since registered is
 // billed through their account instead of being billed twice.
@@ -99,16 +108,15 @@ export async function generateInvoiceForUnregistered(
     const items = unregisteredLineItems(person);
     if (items.length === 0) return "no-pricing";
 
-    const me = identityKeys(person);
+    // Invoices for this month, or covering it, made out to someone without an
+    // account. Asks without invoice_kind or covered_months if that SQL has not run.
+    const forMonth = (select: string) =>
+        supabase.from("payments").select(select).is("customer_id", null).not("bill_to", "is", null);
+    let found = await forMonth("bill_to, invoice_kind").or(`invoice_month.eq."${month}",covered_months.cs.{"${month}"}`).limit(500);
+    if (found.error) found = await forMonth("bill_to").or(`invoice_month.eq."${month}",covered_months.cs.{"${month}"}`).limit(500);
+    if (found.error) found = await forMonth("bill_to").eq("invoice_month", month).limit(500);
 
-    // Invoices for this month, or covering it, made out to someone without an account.
-    const byMonth = supabase.from("payments").select("bill_to").is("customer_id", null).not("bill_to", "is", null);
-    const covered = await byMonth.or(`invoice_month.eq."${month}",covered_months.cs.{"${month}"}`).limit(500);
-    const found = covered.error
-        ? await supabase.from("payments").select("bill_to").is("customer_id", null).not("bill_to", "is", null).eq("invoice_month", month).limit(500)
-        : covered;
-
-    if (((found.data ?? []) as BillRow[]).some((row) => sameIdentity(me, rowIdentity(row)))) return "exists";
+    if (((found.data ?? []) as unknown as BillRow[]).some((row) => isServiceInvoice(row) && sameAccount(person, rowAccount(row)))) return "exists";
 
     // A month they paid for in advance gets no invoice.
     const { data: advance } = await supabase
@@ -118,7 +126,7 @@ export async function generateInvoiceForUnregistered(
         .contains("covered_months", [month])
         .limit(100);
 
-    if (((advance ?? []) as BillRow[]).some((row) => sameIdentity(me, rowIdentity(row)))) return "prepaid";
+    if (((advance ?? []) as BillRow[]).some((row) => sameAccount(person, rowAccount(row)))) return "prepaid";
 
     const { error } = await supabase.from("payments").insert({
         customer_id: null,
@@ -206,7 +214,7 @@ const perMonth = (row: InvoiceHistoryRow) => {
 // recyclables sale or another one-off says nothing about a monthly rate.
 // Anyone already on the list, or with a login now, is left out.
 export function suggestFromInvoices(rows: InvoiceHistoryRow[], onList: UnregisteredCustomer[], registered: Set<string>): InvoiceHistoryPerson[] {
-    const listed = onList.map(identityKeys);
+    const keyOf = accountKeyer(rows.map(billToOf).filter((billTo): billTo is BillTo => Boolean(billTo)));
     const groups = new Map<string, { billTo: BillTo; rows: InvoiceHistoryRow[] }>();
 
     const newestFirst = [...rows].sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -218,10 +226,9 @@ export function suggestFromInvoices(rows: InvoiceHistoryRow[], onList: Unregiste
         const email = billTo.email?.trim().toLowerCase();
         if (email && registered.has(email)) continue;
 
-        const keys = identityKeys(billTo);
-        if (listed.some((entry) => sameIdentity(entry, keys))) continue;
+        if (onList.some((entry) => sameAccount(entry, billTo))) continue;
 
-        const key = personKey(billTo);
+        const key = keyOf(billTo);
         const group = groups.get(key) ?? { billTo, rows: [] };
         group.rows.push(row);
         groups.set(key, group);
@@ -265,12 +272,11 @@ export async function loadInvoiceHistory(supabase: SupabaseClient): Promise<Invo
 // True when an invoice for this month, or a multi-month one including it, is
 // already made out to this person.
 export function invoicedForMonth(rows: InvoiceHistoryRow[], person: UnregisteredCustomer, month: string) {
-    const me = identityKeys(person);
-
     return rows.some(
         (row) =>
             (row.invoice_month === month || (row.covered_months ?? []).includes(month)) &&
-            sameIdentity(me, rowIdentity(row))
+            isServiceInvoice(row) &&
+            sameAccount(person, rowAccount(row))
     );
 }
 

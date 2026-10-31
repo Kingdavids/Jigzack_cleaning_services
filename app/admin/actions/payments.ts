@@ -10,7 +10,7 @@ import { requireAdmin } from "./shared";
 import { chargeItems, loadBillable, loadEstateUnits } from "@/lib/billing/generate";
 import { advanceInvoiceItems, itemsTotal, monthRangeLabel, monthsFrom, tooEarlyToBill } from "@/lib/billing/pricing";
 import { invoiceInsertError } from "@/lib/admin/invoice-input";
-import { billToOf, personKey } from "@/lib/billing/billTo";
+import { billToOf, personKey, sameProperty } from "@/lib/billing/billTo";
 
 const PAYMENT_METHODS = ["Bank transfer", "Cash", "POS", "Other"];
 
@@ -183,7 +183,7 @@ export async function recordPrepayment(input: {
         ? await loadPrepayments(supabase, input.profileId)
         : (await loadUnregisteredPrepayments(supabase)).filter((p) => {
               const to = billToOf(p);
-              return to && personKey(to) === personId;
+              return to && personKey(to) === personId && sameProperty(to, person!);
           });
     const clash = covered.filter((month) => existing.some((p) => p.covered_months.includes(month)));
 
@@ -232,7 +232,7 @@ export async function recordPrepayment(input: {
         for (const invoice of (open ?? []).filter((row) => {
             if (input.profileId) return true;
             const to = billToOf(row);
-            return Boolean(to && personKey(to) === personId);
+            return Boolean(to && personKey(to) === personId && person && sameProperty(to, person));
         })) {
             const fields = {
                 status: "paid",

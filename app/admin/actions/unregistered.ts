@@ -12,6 +12,7 @@ import {
     monthlyChargeOf,
     outcomeMessage,
     registeredEmails,
+    sameAccount,
     runUnregisteredInvoiceGeneration,
     type UnregisteredCustomer,
 } from "@/lib/billing/unregistered";
@@ -45,12 +46,15 @@ export async function saveUnregisteredCustomer(_prev: UnregisteredState, formDat
 
     if (!Number.isFinite(rate) || rate <= 0 || rate > 1_000_000_000) return { success: false, error: "Enter their monthly charge in naira." };
 
-    // The same person twice would be billed twice.
-    const email = billTo.email?.toLowerCase();
-    if (email) {
-        const { data: sameEmail } = await supabase.from("unregistered_customers").select("id, full_name").ilike("email", email).limit(2);
-        const clash = (sameEmail ?? []).find((row) => row.id !== id);
-        if (clash) return { success: false, error: `${clash.full_name} is already on the list with that email address.` };
+    // The same person and property twice would be billed twice. The same person
+    // with a different property is a separate account, billed separately.
+    const { data: others } = await supabase.from("unregistered_customers").select("id, full_name, property_name, email, phone, address").limit(5000);
+    const clash = ((others ?? []) as unknown as Pick<UnregisteredCustomer, "id" | "full_name" | "property_name" | "email" | "phone" | "address">[]).find(
+        (other) => other.id !== id && sameAccount(other, billTo)
+    );
+
+    if (clash) {
+        return { success: false, error: `${clash.property_name || clash.full_name} is already on the list for this property. Give this one its own property name or address.` };
     }
 
     const row = {

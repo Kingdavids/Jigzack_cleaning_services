@@ -27,7 +27,7 @@ import { CustomerGroup, GroupFilter } from "@/components/dashboard/CustomerGroup
 import AdvancePaymentChooser from "@/components/dashboard/AdvancePaymentChooser";
 import PrepaymentForm from "@/components/dashboard/PrepaymentForm";
 import { loadUnregisteredPrepayments, type Prepayment } from "@/lib/billing/prepaid";
-import { personKey } from "@/lib/billing/billTo";
+import { accountKeyer } from "@/lib/billing/billTo";
 
 type ProfileRef = { full_name: string | null } | null;
 
@@ -154,10 +154,16 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
     };
     const people = new Map<string, PersonGroup>();
     const unregisteredPrepayments = await loadUnregisteredPrepayments(supabase);
+    // Someone with two properties has two accounts, each with its own invoices.
+    const keyOf = accountKeyer(
+        [...[...rawUnpaid, ...rawPaid].filter(isUnregistered), ...unregisteredPrepayments]
+            .map((record) => billToOf(record))
+            .filter((billTo): billTo is BillTo => Boolean(billTo))
+    );
 
     for (const invoice of [...rawUnpaid, ...rawPaid].filter(isUnregistered)) {
         const billTo = billToOf(invoice)!;
-        const key = personKey(billTo);
+        const key = keyOf(billTo);
         const group = people.get(key) ?? {
             key,
             name: billTo.property_name ? `${billTo.property_name} (${billTo.full_name})` : billTo.full_name,
@@ -183,7 +189,7 @@ export default async function AdminPaymentsPage({ searchParams }: { searchParams
         const billTo = billToOf(advance);
         if (!billTo) continue;
 
-        const key = personKey(billTo);
+        const key = keyOf(billTo);
         const group = people.get(key) ?? {
             key,
             name: billTo.property_name ? `${billTo.property_name} (${billTo.full_name})` : billTo.full_name,

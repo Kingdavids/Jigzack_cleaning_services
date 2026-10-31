@@ -5,6 +5,7 @@ import {
     identityKeys,
     invoicedForMonth,
     outcomeMessage,
+    sameAccount,
     monthlyChargeOf,
     sameIdentity,
     suggestFromInvoices,
@@ -185,6 +186,52 @@ describe("unregistered customers", () => {
             expect(outcomeMessage("exists", "Ada", "November 2026")).toMatch(/already has an invoice/);
             expect(outcomeMessage("paused", "Ada", "November 2026")).toMatch(/paused/);
             expect(outcomeMessage("error", "Ada", "November 2026")).toMatch(/Could not/);
+        });
+    });
+
+    describe("one person with two properties", () => {
+        const first = person({ property_name: "Palm Court", address: "12 Palm Street" });
+        const second = person({ id: "u2", property_name: "Lake View", address: "4 Lake Road" });
+
+        it("tells the two properties apart even though phone, email and name match", () => {
+            expect(sameAccount(first, second)).toBe(false);
+            expect(sameAccount(first, { ...first })).toBe(true);
+            expect(sameAccount(first, { ...first, address: "12 palm street", property_name: null })).toBe(true);
+        });
+
+        it("bills the second property when only the first has the month's invoice", async () => {
+            const { client, inserted } = fakeSupabase({ payments: [{ bill_to: { full_name: "Ada Obi", phone: first.phone, email: first.email, property_name: "Palm Court", address: "12 Palm Street" } }] });
+
+            expect(await generateInvoiceForUnregistered(client, first, new Set(), "November 2026")).toBe("exists");
+            expect(await generateInvoiceForUnregistered(client, second, new Set(), "November 2026")).toBe("created");
+            expect(inserted).toHaveLength(1);
+            expect(inserted[0]).toMatchObject({ bill_to: { property_name: "Lake View" } });
+        });
+
+        it("does not let an advance payment for one property cover the other", async () => {
+            const { client } = fakeSupabase({ prepayments: [{ bill_to: { full_name: "Ada Obi", phone: first.phone, property_name: "Palm Court", address: "12 Palm Street" } }] });
+
+            expect(await generateInvoiceForUnregistered(client, first, new Set(), "November 2026")).toBe("prepaid");
+            expect(await generateInvoiceForUnregistered(client, second, new Set(), "November 2026")).toBe("created");
+        });
+
+        it("suggests each property on its own", () => {
+            const row = (property: string, address: string, amount: number) => ({
+                bill_to: { full_name: "Ada Obi", phone: "08031234567", email: "ada@example.com", property_name: property, address },
+                amount,
+                created_at: "2026-09-25",
+                invoice_month: "September 2026",
+            });
+
+            const found = suggestFromInvoices([row("Palm Court", "12 Palm Street", 15000), row("Lake View", "4 Lake Road", 22000)], [], new Set());
+
+            expect(found.map((entry) => [entry.billTo.property_name, entry.suggested])).toEqual([
+                ["Lake View", 22000],
+                ["Palm Court", 15000],
+            ]);
+
+            const left = suggestFromInvoices([row("Palm Court", "12 Palm Street", 15000), row("Lake View", "4 Lake Road", 22000)], [first], new Set());
+            expect(left.map((entry) => entry.billTo.property_name)).toEqual(["Lake View"]);
         });
     });
 });
