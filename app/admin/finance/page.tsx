@@ -3,7 +3,7 @@ import { ArrowDownLeft, ArrowUpRight, Clock, Scale } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import { naira } from "@/lib/customer/billing";
 import { categoryLabel } from "@/lib/expenses";
-import { INFLOW_SOURCES, loadCashflow, monthName, monthsEndingAt, type MonthFlow } from "@/lib/finance/cashflow";
+import { INFLOW_SOURCES, loadCashflow, monthName, monthsEndingAt, recyclablesProfit, type MonthFlow } from "@/lib/finance/cashflow";
 import DashboardShell from "@/components/dashboard/DashboardShell";
 import SectionCard from "@/components/dashboard/SectionCard";
 import StatCard from "@/components/dashboard/StatCard";
@@ -54,6 +54,11 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
     const recyclablesStock = summarise(movements);
     const current = flows[flows.length - 1];
     const net = current.inTotal - current.outTotal;
+    const trade = recyclablesProfit(current);
+    const tradedAny = flows.some((f) => {
+        const t = recyclablesProfit(f);
+        return t.sold > 0 || t.bought > 0;
+    });
 
     const sources = INFLOW_SOURCES.map((s) => ({ ...s, ...current.inBySource[s.key] })).filter((s) => s.amount > 0);
     const methods = Object.entries(current.inByMethod).sort((a, b) => b[1] - a[1]);
@@ -159,6 +164,41 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                     )}
                 </SectionCard>
 
+                {tradedAny && (
+                    <SectionCard
+                        title="Recyclables profit"
+                        description={`What recyclables made in ${monthName(month)}: sales received minus what was paid for the material bought.`}
+                    >
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Sold (received)</p>
+                                <p className="mt-1 text-xl font-bold text-emerald-300">{naira(trade.sold)}</p>
+                                <p className="text-xs text-white/40">{trade.soldCount} payment{trade.soldCount === 1 ? "" : "s"}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Bought</p>
+                                <p className="mt-1 text-xl font-bold text-red-300">{naira(trade.bought)}</p>
+                                <p className="text-xs text-white/40">{trade.boughtCount} purchase{trade.boughtCount === 1 ? "" : "s"}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">{trade.profit < 0 ? "Loss" : "Profit"}</p>
+                                <p className={`mt-1 text-xl font-bold ${trade.profit < 0 ? "text-red-300" : "text-amber-300"}`}>
+                                    {trade.profit < 0 ? "−" : ""}
+                                    {naira(Math.abs(trade.profit))}
+                                </p>
+                                <p className="text-xs text-white/40">Sold minus bought</p>
+                            </div>
+                        </div>
+                        <p className="mt-4 text-xs text-white/40">
+                            A sale counts when the buyer pays, and a purchase on the day it was logged. Material bought in one month and sold later
+                            shows as a loss first and a larger profit later. Staff costs such as transport are in Money out, not here.
+                        </p>
+                        <Link href="/admin/payments" className="mt-3 inline-block text-xs font-semibold text-amber-300 underline underline-offset-2">
+                            Sale invoices
+                        </Link>
+                    </SectionCard>
+                )}
+
                 {!movementError && (
                     <SectionCard
                         title="Recyclable waste"
@@ -193,12 +233,14 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                                     <th className="py-2 pr-4 text-right">In</th>
                                     <th className="py-2 pr-4 text-right">Out</th>
                                     <th className="py-2 pr-4 text-right">Net</th>
+                                    {tradedAny && <th className="py-2 pr-4 text-right">Recyclables profit</th>}
                                     <th className="hidden py-2 sm:table-cell" aria-hidden />
                                 </tr>
                             </thead>
                             <tbody>
                                 {[...flows].reverse().map((f) => {
                                     const n = f.inTotal - f.outTotal;
+                                    const t = recyclablesProfit(f);
 
                                     return (
                                         <tr key={f.month} className={`border-t border-white/10 ${f.month === month ? "bg-white/[0.04]" : ""}`}>
@@ -213,6 +255,12 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                                                 {n < 0 ? "−" : ""}
                                                 {naira(Math.abs(n))}
                                             </td>
+                                            {tradedAny && (
+                                                <td className={`py-2.5 pr-4 text-right ${t.profit < 0 ? "text-red-300" : t.profit > 0 ? "text-amber-300" : "text-white/40"}`}>
+                                                    {t.profit < 0 ? "−" : ""}
+                                                    {naira(Math.abs(t.profit))}
+                                                </td>
+                                            )}
                                             <td className="hidden w-48 py-2.5 sm:table-cell">
                                                 <div className="space-y-1">
                                                     <div className="h-1.5 rounded-full bg-emerald-400" style={{ width: `${(f.inTotal / trendMax) * 100}%` }} />

@@ -31,6 +31,17 @@ export type MonthFlow = {
 };
 
 
+// What recyclables made in a month: sales received minus what was paid for the
+// material bought. Cash in the month it moved, like the rest of this page, so a
+// sale invoiced but not yet paid is not in it until the money arrives.
+export function recyclablesProfit(flow: MonthFlow) {
+    const sold = flow.inBySource.recyclables.amount;
+    const bought = flow.outByCategory.recyclables?.amount ?? 0;
+    const round = (value: number) => Math.round(value * 100) / 100;
+
+    return { sold: round(sold), bought: round(bought), profit: round(sold - bought), soldCount: flow.inBySource.recyclables.count, boughtCount: flow.outByCategory.recyclables?.count ?? 0 };
+}
+
 const lagosMonth = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TIMEZONE }).slice(0, 7);
 
 // "2026-10" and the 5 months before it, oldest first.

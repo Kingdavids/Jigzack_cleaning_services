@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadCashflow, monthsEndingAt } from "@/lib/finance/cashflow";
+import { loadCashflow, monthsEndingAt, recyclablesProfit } from "@/lib/finance/cashflow";
 import { fakeSupabase } from "./helpers/fakeSupabase";
 
 const base = () => ({
@@ -118,6 +118,15 @@ describe("money out", () => {
         const { september } = await october();
 
         expect(september.outByCategory.repairs).toEqual({ amount: 2500, count: 1 });
+    });
+});
+
+describe("recyclables profit", () => {
+    it("is sales received minus material bought, and can be a loss", async () => {
+        const { october: o, september } = await october();
+
+        expect(recyclablesProfit(o)).toEqual({ sold: 9000, bought: 12000, profit: -3000, soldCount: 1, boughtCount: 1 });
+        expect(recyclablesProfit(september)).toMatchObject({ sold: 0, bought: 0, profit: 0 });
     });
 });
 
