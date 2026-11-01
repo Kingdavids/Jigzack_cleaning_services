@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { invoiceTotal } from "@/lib/billing/balance";
-import { EXPENSE_CATEGORIES } from "@/lib/expenses";
+import { EXPENSE_CATEGORIES, RECYCLABLES_COST_CATEGORIES } from "@/lib/expenses";
 import { REGISTRATION_FEE_NGN, TIMEZONE, TIMEZONE_OFFSET } from "@/lib/config/business";
 import { isWaivedFee } from "@/lib/finance/registration";
 
@@ -33,14 +33,30 @@ export type MonthFlow = {
 
 // What recyclables made in a month: sales received minus what was paid for the
 // material bought (priced entries on the Recyclables page, and expenses in the
-// Recyclables category). Cash in the month it moved, like the rest of this page, so a
-// sale invoiced but not yet paid is not in it until the money arrives.
+// Recyclables bought category) and minus the costs of handling it (transport,
+// loading, gate and security, other). Cash in the month it moved, like the rest of
+// this page, so a sale invoiced but not yet paid is not in it until the money arrives.
 export function recyclablesProfit(flow: MonthFlow) {
     const sold = flow.inBySource.recyclables.amount;
     const bought = flow.outByCategory.recyclables?.amount ?? 0;
     const round = (value: number) => Math.round(value * 100) / 100;
 
-    return { sold: round(sold), bought: round(bought), profit: round(sold - bought), soldCount: flow.inBySource.recyclables.count, boughtCount: flow.outByCategory.recyclables?.count ?? 0 };
+    let costs = 0;
+    let costsCount = 0;
+    for (const category of RECYCLABLES_COST_CATEGORIES) {
+        costs += flow.outByCategory[category]?.amount ?? 0;
+        costsCount += flow.outByCategory[category]?.count ?? 0;
+    }
+
+    return {
+        sold: round(sold),
+        bought: round(bought),
+        costs: round(costs),
+        profit: round(sold - bought - costs),
+        soldCount: flow.inBySource.recyclables.count,
+        boughtCount: flow.outByCategory.recyclables?.count ?? 0,
+        costsCount,
+    };
 }
 
 const lagosMonth = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: TIMEZONE }).slice(0, 7);

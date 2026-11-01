@@ -3799,6 +3799,6 @@ select 'done' as result;
 alter table public.expenses drop constraint if exists expenses_category_check;
 alter table public.expenses
     add constraint expenses_category_check
-    check (category in ('fuel', 'transport', 'repairs', 'supplies', 'meals', 'recyclables', 'other'));
+    check (category in ('fuel', 'transport', 'repairs', 'supplies', 'meals', 'recyclables', 'recyclables_transport', 'recyclables_loading', 'recyclables_gate', 'recyclables_other', 'other'));
 
 select 'done' as result;

@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { submitExpense } from "@/app/employee/actions";
-import { EXPENSE_CATEGORIES } from "@/lib/expenses";
+import { GENERAL_EXPENSE_CATEGORIES } from "@/lib/expenses";
 
 const fieldClass =
     "h-11 w-full rounded-xl border border-white/10 bg-white/8 px-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50";
@@ -19,7 +19,8 @@ export default function ExpenseForm({
                                         successMessage = "Expense sent to the admin",
                                         showJob = true,
                                         saveLabel = "Send to admin",
-                                        fixedCategory,
+                                        categories = GENERAL_EXPENSE_CATEGORIES,
+                                        defaultCategory = "",
                                         notePlaceholder = "e.g. Diesel for the truck, Ikeja route",
                                     }: {
     tasks: { id: string; label: string }[];
@@ -31,8 +32,9 @@ export default function ExpenseForm({
     // Admins' expenses aren't tied to one job.
     showJob?: boolean;
     saveLabel?: string;
-    // Pins the category (the form on the Recyclables page), so there is nothing to choose.
-    fixedCategory?: (typeof EXPENSE_CATEGORIES)[number]["value"];
+    // Narrows the choice (the form on the Recyclables page offers only its own), and what starts selected.
+    categories?: readonly { value: string; label: string }[];
+    defaultCategory?: string;
     notePlaceholder?: string;
 }) {
     const router = useRouter();
@@ -100,37 +102,27 @@ export default function ExpenseForm({
                         className={fieldClass}
                     />
                 </div>
-                {fixedCategory ? (
-                    <div>
-                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Category</span>
-                        <input type="hidden" name="category" value={fixedCategory} />
-                        <p className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
-                            {EXPENSE_CATEGORIES.find((c) => c.value === fixedCategory)?.label}
-                        </p>
-                    </div>
-                ) : (
-                    <div>
-                        <label htmlFor="expense-category" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                            Category
-                        </label>
-                        <select
-                            id="expense-category"
-                            name="category"
-                            required
-                            defaultValue=""
-                            className={`${fieldClass} bg-[#141518]`}
-                        >
-                            <option value="" disabled>
-                                Choose one
+                <div>
+                    <label htmlFor="expense-category" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
+                        Category
+                    </label>
+                    <select
+                        id="expense-category"
+                        name="category"
+                        required
+                        defaultValue={defaultCategory}
+                        className={`${fieldClass} bg-[#141518]`}
+                    >
+                        <option value="" disabled>
+                            Choose one
+                        </option>
+                        {categories.map((c) => (
+                            <option key={c.value} value={c.value}>
+                                {c.label}
                             </option>
-                            {EXPENSE_CATEGORIES.map((c) => (
-                                <option key={c.value} value={c.value}>
-                                    {c.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                        ))}
+                    </select>
+                </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">

@@ -29,8 +29,9 @@ describe("money in & out CSV", () => {
         expect(rows).toContain("Net,4000");
         expect(rows).toContain("Recyclables sold (received),9000");
         expect(rows).toContain("Recyclables bought,12000");
+        expect(rows).toContain("Recyclables handling costs,0");
         expect(rows).toContain("Recyclables profit,-3000");
-        expect(rows).toContain("October 2026,19000,15000,4000,9000,12000,-3000");
+        expect(rows).toContain("October 2026,19000,15000,4000,9000,12000,0,-3000");
     });
 
     it("quotes commas and neutralises formulas typed into a payment method", async () => {

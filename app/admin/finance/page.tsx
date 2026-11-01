@@ -57,7 +57,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
     const trade = recyclablesProfit(current);
     const tradedAny = flows.some((f) => {
         const t = recyclablesProfit(f);
-        return t.sold > 0 || t.bought > 0;
+        return t.sold > 0 || t.bought > 0 || t.costs > 0;
     });
 
     const sources = INFLOW_SOURCES.map((s) => ({ ...s, ...current.inBySource[s.key] })).filter((s) => s.amount > 0);
@@ -110,7 +110,7 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                         icon={ArrowUpRight}
                         label="Money out"
                         value={naira(current.outTotal)}
-                        helper="Approved staff expenses and recyclables bought"
+                        helper="Approved staff expenses, recyclables bought and their costs"
                         href={`/admin/expenses?month=${month}`}
                     />
                     <StatCard
@@ -174,9 +174,9 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                 {tradedAny && (
                     <SectionCard
                         title="Recyclables profit"
-                        description={`What recyclables made in ${monthName(month)}: sales received minus what was paid for the material bought.`}
+                        description={`What recyclables made in ${monthName(month)}: sales received minus the material bought and the cost of handling it.`}
                     >
-                        <div className="grid gap-4 sm:grid-cols-3">
+                        <div className="grid gap-4 sm:grid-cols-4">
                             <div>
                                 <p className="text-xs uppercase tracking-[0.12em] text-white/40">Sold (received)</p>
                                 <p className="mt-1 text-xl font-bold text-emerald-300">{naira(trade.sold)}</p>
@@ -188,17 +188,22 @@ export default async function AdminFinancePage({ searchParams }: { searchParams:
                                 <p className="text-xs text-white/40">{trade.boughtCount} purchase{trade.boughtCount === 1 ? "" : "s"}</p>
                             </div>
                             <div>
+                                <p className="text-xs uppercase tracking-[0.12em] text-white/40">Other costs</p>
+                                <p className="mt-1 text-xl font-bold text-red-300">{naira(trade.costs)}</p>
+                                <p className="text-xs text-white/40">{trade.costsCount} entr{trade.costsCount === 1 ? "y" : "ies"}: transport, loading, gate</p>
+                            </div>
+                            <div>
                                 <p className="text-xs uppercase tracking-[0.12em] text-white/40">{trade.profit < 0 ? "Loss" : "Profit"}</p>
                                 <p className={`mt-1 text-xl font-bold ${trade.profit < 0 ? "text-red-300" : "text-amber-300"}`}>
                                     {trade.profit < 0 ? "−" : ""}
                                     {naira(Math.abs(trade.profit))}
                                 </p>
-                                <p className="text-xs text-white/40">Sold minus bought</p>
+                                <p className="text-xs text-white/40">Sold minus bought and costs</p>
                             </div>
                         </div>
                         <p className="mt-4 text-xs text-white/40">
                             A sale counts when the buyer pays, and a purchase on the day it was logged. Material bought in one month and sold later
-                            shows as a loss first and a larger profit later. Log each purchase once: with a price on the Recyclables page, or as a Recyclables expense, not both. Other costs such as transport are in Money out, not here.
+                            shows as a loss first and a larger profit later. Log each purchase once: with a price on the Recyclables page, or as a Recyclables expense, not both. Transport, loading, and gate and security costs are logged on the Recyclables page and come off the profit too.
                         </p>
                         <Link href="/admin/payments" className="mt-3 inline-block text-xs font-semibold text-amber-300 underline underline-offset-2">
                             Sale invoices

@@ -27,6 +27,7 @@ export function cashflowCsv(flows: MonthFlow[], month: string) {
         line("Net", current.inTotal - current.outTotal),
         line("Recyclables sold (received)", trade.sold),
         line("Recyclables bought", trade.bought),
+        line("Recyclables handling costs", trade.costs),
         line("Recyclables profit", trade.profit),
         line("Expense claims waiting (not counted)", current.waiting.amount),
         "",
@@ -44,10 +45,10 @@ export function cashflowCsv(flows: MonthFlow[], month: string) {
             .sort((a, b) => b[1].amount - a[1].amount)
             .map(([category, v]) => line(category === "recyclables" ? "Recyclables purchases" : categoryLabel(category), v.amount, v.count)),
         "",
-        line("Month by month", "Money in", "Money out", "Net", "Recyclables sold", "Recyclables bought", "Recyclables profit"),
+        line("Month by month", "Money in", "Money out", "Net", "Recyclables sold", "Recyclables bought", "Recyclables other costs", "Recyclables profit"),
         ...flows.map((f) => {
             const t = recyclablesProfit(f);
-            return line(monthName(f.month), f.inTotal, f.outTotal, f.inTotal - f.outTotal, t.sold, t.bought, t.profit);
+            return line(monthName(f.month), f.inTotal, f.outTotal, f.inTotal - f.outTotal, t.sold, t.bought, t.costs, t.profit);
         }),
     ];
 

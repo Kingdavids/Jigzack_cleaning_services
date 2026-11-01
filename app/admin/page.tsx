@@ -27,6 +27,7 @@ import {
     Recycle,
     Scale,
     PiggyBank,
+    Truck,
 } from "lucide-react";
 import { TIMEZONE } from "@/lib/config/business";
 import { TIMEZONE_OFFSET } from "@/lib/config/business";
@@ -360,10 +361,10 @@ export default async function AdminPage() {
                     </div>
                 </section>
 
-                {(trade.sold > 0 || trade.bought > 0 || recyclables.table) && (
+                {(trade.sold > 0 || trade.bought > 0 || trade.costs > 0 || recyclables.table) && (
                     <section aria-label="Recyclables profit" className="space-y-3">
                         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/40">Recyclables profit · {monthName(thisMonth)}</p>
-                        <div className="grid gap-5 sm:grid-cols-3">
+                        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
                             <StatCard
                                 icon={TrendingUp}
                                 label="Sold (received)"
@@ -379,10 +380,17 @@ export default async function AdminPage() {
                                 href="/admin/recyclables"
                             />
                             <StatCard
+                                icon={Truck}
+                                label="Other costs"
+                                value={naira(trade.costs)}
+                                helper={`${trade.costsCount} for transport, loading, gate and so on`}
+                                href="/admin/recyclables"
+                            />
+                            <StatCard
                                 icon={PiggyBank}
                                 label={trade.profit < 0 ? "Loss" : "Profit"}
                                 value={`${trade.profit < 0 ? "−" : ""}${naira(Math.abs(trade.profit))}`}
-                                helper="Sold minus bought, this month"
+                                helper="Sold minus bought and costs, this month"
                                 href="/admin/finance"
                                 tone={trade.profit < 0 ? "alert" : "default"}
                             />

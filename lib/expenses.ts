@@ -8,8 +8,20 @@ export const EXPENSE_CATEGORIES = [
     { value: "meals", label: "Meals" },
     // Cash paid for material. Counts as the cost in the recyclables profit.
     { value: "recyclables", label: "Recyclables bought" },
+    // What it costs to handle the material, apart from buying it. Also a cost in the recyclables profit.
+    { value: "recyclables_transport", label: "Recyclables: transport" },
+    { value: "recyclables_loading", label: "Recyclables: loading and offloading" },
+    { value: "recyclables_gate", label: "Recyclables: gate and security" },
+    { value: "recyclables_other", label: "Recyclables: other costs" },
     { value: "other", label: "Other" },
 ] as const;
+
+// Every category that belongs to recyclables, and the ones that are costs of handling rather than buying.
+export const RECYCLABLES_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => c.value.startsWith("recyclables"));
+export const RECYCLABLES_COST_CATEGORIES = RECYCLABLES_CATEGORIES.filter((c) => c.value !== "recyclables").map((c) => c.value);
+
+// What the general expense forms offer: the handling costs are logged on the Recyclables page instead.
+export const GENERAL_EXPENSE_CATEGORIES = EXPENSE_CATEGORIES.filter((c) => !(RECYCLABLES_COST_CATEGORIES as string[]).includes(c.value));
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number]["value"];
 export type ExpenseStatus = "submitted" | "approved" | "reimbursed" | "rejected";

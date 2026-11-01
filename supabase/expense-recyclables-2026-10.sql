@@ -1,5 +1,7 @@
--- Adds "Recyclables bought" as an expense category, for cash paid out for
--- material. It counts as money out and as the cost in the recyclables profit.
+-- Adds the recyclables expense categories: "Recyclables bought" for cash paid out
+-- for material, and Recyclables transport, loading and offloading, gate and
+-- security, and other costs for handling it. All count as money out and as costs
+-- in the recyclables profit.
 -- Log each purchase once: either here, or on the Recyclables page with a price
 -- per kilogram, not both. Run supabase/declined-and-expenses-2026-09.sql first.
 -- Safe to run more than once. Run it in the Supabase SQL editor.
@@ -15,6 +17,6 @@ end $$;
 alter table public.expenses drop constraint if exists expenses_category_check;
 alter table public.expenses
     add constraint expenses_category_check
-    check (category in ('fuel', 'transport', 'repairs', 'supplies', 'meals', 'recyclables', 'other'));
+    check (category in ('fuel', 'transport', 'repairs', 'supplies', 'meals', 'recyclables', 'recyclables_transport', 'recyclables_loading', 'recyclables_gate', 'recyclables_other', 'other'));
 
 select 'done' as result;

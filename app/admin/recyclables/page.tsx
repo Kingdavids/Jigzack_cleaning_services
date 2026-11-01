@@ -1,8 +1,9 @@
-import { ArrowDownLeft, ArrowUpRight, Boxes, Coins, HandCoins } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Boxes, Coins, HandCoins, Truck } from "lucide-react";
 import { requireDashboardAccess } from "@/lib/dashboard/requireDashboardAccess";
 import Link from "next/link";
 import { formatDate, naira } from "@/lib/customer/billing";
 import { isFullAdmin } from "@/lib/auth/roles";
+import { categoryLabel, RECYCLABLES_CATEGORIES } from "@/lib/expenses";
 import { COMMON_MATERIALS, kgText, loadBuyPrices, materialLabel, MATERIALS, summarise, type Movement } from "@/lib/recyclables";
 import { monthName } from "@/lib/finance/cashflow";
 import DashboardShell from "@/components/dashboard/DashboardShell";
@@ -52,14 +53,15 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
     const canAct = isFullAdmin(profile);
     const prices = await loadBuyPrices(supabase);
 
-    // Recyclables expenses of the month: cash paid for material that isn't a priced entry above.
+    // Recyclables expenses of the month: cash paid for material that isn't a priced entry above,
+    // and what handling it cost (transport, loading, gate and security).
     // Approved and paid-back ones count as spent, the same as on Money in & out.
     const [year, mon] = month.split("-").map(Number);
     const nextMonth = mon === 12 ? `${year + 1}-01` : `${year}-${String(mon + 1).padStart(2, "0")}`;
     const { data: expenseData } = await supabase
         .from("expenses")
-        .select("id, amount, note, expense_date, status, employee:profiles!expenses_employee_id_fkey(full_name)")
-        .eq("category", "recyclables")
+        .select("id, amount, category, note, expense_date, status, employee:profiles!expenses_employee_id_fkey(full_name)")
+        .in("category", RECYCLABLES_CATEGORIES.map((c) => c.value))
         .gte("expense_date", `${month}-01`)
         .lt("expense_date", `${nextMonth}-01`)
         .order("expense_date", { ascending: false })
@@ -68,13 +70,16 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
     const expenses = (expenseData ?? []) as unknown as {
         id: string;
         amount: number;
+        category: string;
         note: string | null;
         expense_date: string;
         status: string;
         employee: { full_name: string | null } | null;
     }[];
     const countedExpenses = expenses.filter((e) => e.status === "approved" || e.status === "reimbursed");
-    const expenseSpent = countedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+    const sum = (list: typeof expenses) => list.reduce((total, e) => total + Number(e.amount), 0);
+    const expenseSpent = sum(countedExpenses.filter((e) => e.category === "recyclables"));
+    const costs = sum(countedExpenses.filter((e) => e.category !== "recyclables"));
     const totalSpent = spent + expenseSpent;
 
     const monthLabel = monthName(month);
@@ -97,11 +102,12 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                     </div>
                 )}
 
-                <div className={`grid gap-5 sm:grid-cols-3 ${hasMoney ? "xl:grid-cols-5" : ""}`}>
+                <div className="grid gap-5 sm:grid-cols-3">
                     <StatCard icon={Boxes} label="In stock now" value={kgText(stock.stock)} helper="All time: collected minus sold or dispatched" />
                     <StatCard icon={ArrowDownLeft} label={`Came in · ${monthLabel}`} value={kgText(monthly.inKg)} helper="Collected or received" />
                     <StatCard icon={ArrowUpRight} label={`Went out · ${monthLabel}`} value={kgText(monthly.outKg)} helper="Sold or dispatched" />
                     {hasMoney && <StatCard icon={Coins} label={`Spent buying · ${monthLabel}`} value={naira(totalSpent)} helper={expenseSpent > 0 ? `${naira(spent)} on entries + ${naira(expenseSpent)} in expenses` : "Money out"} />}
+                    {hasMoney && <StatCard icon={Truck} label={`Other costs · ${monthLabel}`} value={naira(costs)} helper="Transport, loading, gate and security" />}
                     {hasMoney && <StatCard icon={HandCoins} label={`Sold for · ${monthLabel}`} value={naira(sold)} helper="Value of sale invoices" href="/admin/payments" />}
                 </div>
 
@@ -151,11 +157,11 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                 {canAct && (
                     <SectionCard
                         title="Recyclables expenses"
-                        description="Money spent on recyclables that isn't a priced entry above, such as cash paid to a collector. It is approved as you save it and counts as money out for recyclables."
+                        description="Material bought for cash, and what it costs to move and handle it: transport, loading, gate and security. It is approved as you save it and counts against the recyclables profit."
                         collapsible
                     >
                         <p className="mb-4 rounded-xl border border-amber-300/20 bg-amber-300/5 p-3 text-xs text-amber-100/80">
-                            Log each purchase once. If you already gave the material a price in Log recyclables, don&apos;t enter the same payment here, or it counts twice.
+                            Log each purchase once. If you already gave the material a price in Log recyclables, don&apos;t enter the same payment here as Recyclables bought, or it counts twice. Transport, loading and gate costs are separate and are always logged here.
                         </p>
                         <ExpenseForm
                             tasks={[]}
@@ -165,8 +171,9 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                             action={logAdminExpense}
                             successMessage="Recyclables expense logged"
                             saveLabel="Save expense"
-                            fixedCategory="recyclables"
-                            notePlaceholder="e.g. Paid Musa for 120 kg of PET bottles"
+                            categories={RECYCLABLES_CATEGORIES}
+                            defaultCategory="recyclables"
+                            notePlaceholder="e.g. Paid Musa for 120 kg of PET bottles, or Tipper hire to the buyer"
                         />
                     </SectionCard>
                 )}
@@ -182,7 +189,9 @@ export default async function AdminRecyclablesPage({ searchParams }: { searchPar
                             {expenses.map((e) => (
                                 <li key={e.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm">
                                     <div className="min-w-0">
-                                        <p className="font-semibold text-red-300">{naira(Number(e.amount))}</p>
+                                        <p className="font-semibold">
+                                            <span className="text-red-300">{naira(Number(e.amount))}</span> · {categoryLabel(e.category)}
+                                        </p>
                                         <p className="truncate text-xs text-white/50">
                                             {formatDate(e.expense_date)}
                                             {e.employee?.full_name ? ` · ${e.employee.full_name}` : ""}

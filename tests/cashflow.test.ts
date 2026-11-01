@@ -125,8 +125,23 @@ describe("recyclables profit", () => {
     it("is sales received minus material bought, and can be a loss", async () => {
         const { october: o, september } = await october();
 
-        expect(recyclablesProfit(o)).toEqual({ sold: 9000, bought: 12000, profit: -3000, soldCount: 1, boughtCount: 1 });
+        expect(recyclablesProfit(o)).toEqual({ sold: 9000, bought: 12000, costs: 0, profit: -3000, soldCount: 1, boughtCount: 1, costsCount: 0 });
         expect(recyclablesProfit(september)).toMatchObject({ sold: 0, bought: 0, profit: 0 });
+    });
+});
+
+describe("recyclables handling costs", () => {
+    it("come off the profit as well as the material bought, and count in money out", async () => {
+        const data = base();
+        data.expenses.push({ amount: 2000, category: "recyclables_transport", status: "approved", expense_date: "2026-10-09" });
+        data.expenses.push({ amount: 500, category: "recyclables_gate", status: "reimbursed", expense_date: "2026-10-10" });
+        data.expenses.push({ amount: 900, category: "recyclables_loading", status: "submitted", expense_date: "2026-10-10" });
+        const { client } = fakeSupabase(data);
+        const [, o] = await loadCashflow(client, monthsEndingAt("2026-10", 2));
+
+        expect(recyclablesProfit(o)).toMatchObject({ bought: 12000, costs: 2500, costsCount: 2, profit: -5500 });
+        // a waiting claim is not counted yet
+        expect(o.outByCategory.recyclables_loading).toEqual({ amount: 0, count: 0 });
     });
 });
 
