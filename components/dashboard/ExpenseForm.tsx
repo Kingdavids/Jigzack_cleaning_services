@@ -19,6 +19,8 @@ export default function ExpenseForm({
                                         successMessage = "Expense sent to the admin",
                                         showJob = true,
                                         saveLabel = "Send to admin",
+                                        fixedCategory,
+                                        notePlaceholder = "e.g. Diesel for the truck, Ikeja route",
                                     }: {
     tasks: { id: string; label: string }[];
     today: string;
@@ -29,6 +31,9 @@ export default function ExpenseForm({
     // Admins' expenses aren't tied to one job.
     showJob?: boolean;
     saveLabel?: string;
+    // Pins the category (the form on the Recyclables page), so there is nothing to choose.
+    fixedCategory?: (typeof EXPENSE_CATEGORIES)[number]["value"];
+    notePlaceholder?: string;
 }) {
     const router = useRouter();
     const formRef = useRef<HTMLFormElement>(null);
@@ -95,27 +100,37 @@ export default function ExpenseForm({
                         className={fieldClass}
                     />
                 </div>
-                <div>
-                    <label htmlFor="expense-category" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
-                        Category
-                    </label>
-                    <select
-                        id="expense-category"
-                        name="category"
-                        required
-                        defaultValue=""
-                        className={`${fieldClass} bg-[#141518]`}
-                    >
-                        <option value="" disabled>
-                            Choose one
-                        </option>
-                        {EXPENSE_CATEGORIES.map((c) => (
-                            <option key={c.value} value={c.value}>
-                                {c.label}
+                {fixedCategory ? (
+                    <div>
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Category</span>
+                        <input type="hidden" name="category" value={fixedCategory} />
+                        <p className="flex h-11 items-center rounded-xl border border-white/10 bg-white/5 px-3 text-sm text-white/80">
+                            {EXPENSE_CATEGORIES.find((c) => c.value === fixedCategory)?.label}
+                        </p>
+                    </div>
+                ) : (
+                    <div>
+                        <label htmlFor="expense-category" className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-white/50">
+                            Category
+                        </label>
+                        <select
+                            id="expense-category"
+                            name="category"
+                            required
+                            defaultValue=""
+                            className={`${fieldClass} bg-[#141518]`}
+                        >
+                            <option value="" disabled>
+                                Choose one
                             </option>
-                        ))}
-                    </select>
-                </div>
+                            {EXPENSE_CATEGORIES.map((c) => (
+                                <option key={c.value} value={c.value}>
+                                    {c.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                )}
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -159,7 +174,7 @@ export default function ExpenseForm({
                     required
                     minLength={3}
                     maxLength={500}
-                    placeholder="e.g. Diesel for the truck, Ikeja route"
+                    placeholder={notePlaceholder}
                     className="min-h-[80px] w-full rounded-xl border border-white/10 bg-white/8 px-3 py-2 text-sm text-white outline-none placeholder:text-white/30 focus:border-amber-300/50"
                 />
             </div>

@@ -70,6 +70,7 @@ export async function logAdminExpense(formData: FormData): Promise<{ success: bo
     await logActivity(supabase, admin, "expense_logged", `Logged an expense of ${naira(amount)} (${category})`);
     revalidatePath("/admin/expenses");
     revalidatePath("/admin/finance");
+    revalidatePath("/admin/recyclables");
     revalidatePath("/admin");
 
     return { success: true };
